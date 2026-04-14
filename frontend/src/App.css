@@ -1,34 +1,92 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* ShiftMaster - Shift Roster Dashboard */
+
+/* Transition utilities */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+.animate-slide-in {
+  animation: slideIn 0.2s ease-out;
 }
 
-.App-link {
-    color: #61dafb;
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Calendar grid */
+.shift-calendar-grid {
+  display: grid;
+  grid-template-columns: 80px repeat(7, 1fr);
+  gap: 1px;
+  background: hsl(var(--border));
+}
+
+.shift-calendar-cell {
+  background: hsl(var(--card));
+  min-height: 100px;
+  position: relative;
+  padding: 4px;
+}
+
+/* Sticky note styles */
+.sticky-note {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.sticky-note:hover {
+  transform: scale(1.02);
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.sticky-note.pinned {
+  border-left: 3px solid hsl(var(--primary));
+}
+
+/* Presence dot */
+.presence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  border: 2px solid hsl(var(--background));
+}
+.presence-dot.active { background: #10B981; }
+.presence-dot.idle { background: #F59E0B; }
+.presence-dot.away { background: #94A3B8; }
+
+/* Shift block colors */
+.shift-block {
+  @apply rounded px-2 py-1 text-xs font-medium truncate cursor-pointer;
+  transition: all 0.15s ease;
+}
+.shift-block:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Sidebar */
+.sidebar-link {
+  @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200;
+}
+.sidebar-link:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+.sidebar-link.active {
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  font-weight: 500;
+}
+
+/* Glass header */
+.glass-header {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
