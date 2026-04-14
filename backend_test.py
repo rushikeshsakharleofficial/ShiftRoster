@@ -318,6 +318,204 @@ class ShiftMasterAPITester:
         
         return success
 
+    def test_shift_drag_drop(self) -> bool:
+        """Test drag-and-drop shift move functionality"""
+        # First create a shift to move
+        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%dT09:00:00")
+        end_time = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%dT17:00:00")
+        
+        shift_data = {
+            "title": f"Movable Shift {datetime.now().strftime('%H%M%S')}",
+            "start_time": tomorrow,
+            "end_time": end_time,
+            "required_count": 1,
+            "location": "Test Location"
+        }
+        
+        success, created_shift = self.make_request('POST', '/shifts', shift_data)
+        if not success:
+            self.log_result("Create Shift for Move", False, f"Failed to create: {created_shift}")
+            return False
+        
+        shift_id = created_shift.get('id')
+        if not shift_id:
+            self.log_result("Create Shift for Move", False, "No shift ID returned")
+            return False
+        
+        # Test moving the shift to next day
+        next_day = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%dT10:00:00")
+        next_end = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%dT18:00:00")
+        
+        move_data = {
+            "new_start_time": next_day,
+            "new_end_time": next_end
+        }
+        
+        success, move_response = self.make_request('PUT', f'/shifts/{shift_id}/move', move_data)
+        self.log_result("Shift Drag-Drop Move", success, 
+                       f"Move response: {move_response}")
+        
+        return success
+
+    def test_conflict_detection(self) -> bool:
+        """Test shift conflict detection"""
+        # Create a user first to test conflicts
+        timestamp = datetime.now().strftime("%H%M%S")
+        user_data = {
+            "email": f"conflict_test_{timestamp}@example.com",
+            "password": "TestPass123!",
+            "full_name": f"Conflict Test User {timestamp}",
+            "phone": "5555555555",
+            "system_role": "employee"
+        }
+        
+        success, created_user = self.make_request('POST', '/users', user_data)
+        if not success:
+            self.log_result("Create User for Conflict Test", False, f"Failed: {created_user}")
+            return False
+        
+        user_id = created_user.get('id')
+        
+        # Test conflict detection
+        conflict_data = {
+            "user_id": user_id,
+            "start_time": "2024-12-20T09:00:00",
+            "end_time": "2024-12-20T17:00:00"
+        }
+        
+        success, conflict_response = self.make_request('POST', '/shifts/check-conflicts', conflict_data)
+        self.log_result("Conflict Detection", success and 'has_conflicts' in conflict_response, 
+                       f"Conflict check: {conflict_response}")
+        
+        return success
+
+    def test_recurring_shifts(self) -> bool:
+        """Test recurring shift creation"""
+        recurring_data = {
+            "title": f"Recurring Test Shift {datetime.now().strftime('%H%M%S')}",
+            "start_time": "09:00",
+            "end_time": "17:00",
+            "rrule": "FREQ=WEEKLY;BYDAY=MO,WE,FR",
+            "range_start": "2024-12-20",
+            "range_end": "2024-12-27",
+            "required_count": 1,
+            "location": "Test Location"
+        }
+        
+        success, recurring_response = self.make_request('POST', '/shifts/recurring', recurring_data)
+        
+        if success and 'created_count' in recurring_response:
+            created_count = recurring_response.get('created_count', 0)
+            self.log_result("Recurring Shifts", True, 
+                           f"Created {created_count} recurring shifts")
+        else:
+            self.log_result("Recurring Shifts", False, f"Failed: {recurring_response}")
+        
+        return success
+
+    def test_csv_export(self) -> bool:
+        """Test CSV export functionality"""
+        export_types = ['attendance', 'employees', 'shifts']
+        all_success = True
+        
+        for export_type in export_types:
+            success, response = self.make_request('GET', f'/reports/export/csv?report_type={export_type}')
+            
+            # For CSV export, we expect either success or a specific response
+            if success or (isinstance(response, dict) and response.get('status_code') == 200):
+                self.log_result(f"CSV Export ({export_type})", True, 
+                               f"Export successful for {export_type}")
+            else:
+                self.log_result(f"CSV Export ({export_type})", False, 
+                               f"Export failed: {response}")
+                all_success = False
+        
+        return all_success
+
+    def test_chart_data_endpoints(self) -> bool:
+        """Test chart data endpoints for reports"""
+        chart_endpoints = [
+            ('/reports/attendance-chart', 'Attendance Chart'),
+            ('/reports/shift-coverage', 'Shift Coverage Chart'),
+            ('/reports/department-breakdown', 'Department Breakdown Chart')
+        ]
+        
+        all_success = True
+        
+        for endpoint, name in chart_endpoints:
+            success, data = self.make_request('GET', endpoint)
+            
+            if success and isinstance(data, list):
+                self.log_result(name, True, f"Chart data: {len(data)} items")
+            else:
+                self.log_result(name, False, f"Failed: {data}")
+                all_success = False
+        
+        return all_success
+
+    def test_manager_nominations(self) -> bool:
+        """Test manager nomination workflow"""
+        # List nominations
+        success, nominations_list = self.make_request('GET', '/manager-nominations')
+        if not success:
+            self.log_result("List Manager Nominations", False, f"Failed: {nominations_list}")
+            return False
+        
+        initial_count = len(nominations_list) if isinstance(nominations_list, list) else 0
+        self.log_result("List Manager Nominations", True, f"Found {initial_count} nominations")
+        
+        # Create a test user to nominate
+        timestamp = datetime.now().strftime("%H%M%S")
+        user_data = {
+            "email": f"nominee_{timestamp}@example.com",
+            "password": "TestPass123!",
+            "full_name": f"Nominee {timestamp}",
+            "phone": "7777777777",
+            "system_role": "employee"
+        }
+        
+        success, created_user = self.make_request('POST', '/users', user_data)
+        if not success:
+            self.log_result("Create Nominee User", False, f"Failed: {created_user}")
+            return False
+        
+        nominee_id = created_user.get('id')
+        
+        # Create a manager group first
+        group_data = {
+            "name": f"Test Manager Group {timestamp}"
+        }
+        
+        success, created_group = self.make_request('POST', '/manager-groups', group_data)
+        if not success:
+            self.log_result("Create Manager Group", False, f"Failed: {created_group}")
+            return False
+        
+        group_id = created_group.get('id')
+        
+        # Create nomination
+        nomination_data = {
+            "nominee_id": nominee_id,
+            "group_id": group_id,
+            "reason": "Test nomination for automated testing"
+        }
+        
+        success, created_nomination = self.make_request('POST', '/manager-nominations', nomination_data)
+        if not success:
+            self.log_result("Create Manager Nomination", False, f"Failed: {created_nomination}")
+            return False
+        
+        nomination_id = created_nomination.get('id')
+        self.log_result("Create Manager Nomination", True, f"Created nomination ID: {nomination_id}")
+        
+        # Test approval
+        if nomination_id:
+            review_data = {"status": "approved"}
+            success, review_response = self.make_request('PUT', f'/manager-nominations/{nomination_id}/review', review_data)
+            self.log_result("Approve Manager Nomination", success, f"Review response: {review_response}")
+        
+        return True
+
     def run_all_tests(self) -> bool:
         """Run all backend tests"""
         print("🚀 Starting ShiftMaster Backend API Tests")
@@ -340,6 +538,12 @@ class ShiftMasterAPITester:
             self.test_departments_crud,
             self.test_users_crud,
             self.test_shifts_crud,
+            self.test_shift_drag_drop,
+            self.test_conflict_detection,
+            self.test_recurring_shifts,
+            self.test_csv_export,
+            self.test_chart_data_endpoints,
+            self.test_manager_nominations,
             self.test_attendance_operations,
             self.test_notifications,
             self.test_reports_overview,

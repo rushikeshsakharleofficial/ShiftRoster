@@ -106,6 +106,9 @@ export const shiftsApi = {
   get: (id) => api.get(`/shifts/${id}`),
   update: (id, data) => api.put(`/shifts/${id}`, data),
   delete: (id) => api.delete(`/shifts/${id}`),
+  move: (id, data) => api.put(`/shifts/${id}/move`, data),
+  checkConflicts: (data) => api.post("/shifts/check-conflicts", data),
+  createRecurring: (data) => api.post("/shifts/recurring", data),
 };
 
 // Shift Templates
@@ -177,6 +180,17 @@ export const auditApi = {
 export const reportsApi = {
   overview: () => api.get("/reports/overview"),
   attendance: (params) => api.get("/reports/attendance", { params }),
+  attendanceChart: (params) => api.get("/reports/attendance-chart", { params }),
+  shiftCoverage: (params) => api.get("/reports/shift-coverage", { params }),
+  departmentBreakdown: () => api.get("/reports/department-breakdown"),
+  exportCsv: (type) => api.get(`/reports/export/csv?report_type=${type}`, { responseType: "blob" }),
+};
+
+// Manager Nominations
+export const nominationsApi = {
+  list: () => api.get("/manager-nominations"),
+  create: (data) => api.post("/manager-nominations", data),
+  review: (id, data) => api.put(`/manager-nominations/${id}/review`, data),
 };
 
 // Organization

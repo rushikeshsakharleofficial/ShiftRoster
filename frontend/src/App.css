@@ -65,10 +65,19 @@
 .shift-block {
   @apply rounded px-2 py-1 text-xs font-medium truncate cursor-pointer;
   transition: all 0.15s ease;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .shift-block:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.shift-block[draggable="true"] {
+  cursor: grab;
+}
+.shift-block[draggable="true"]:active {
+  cursor: grabbing;
+  opacity: 0.7;
 }
 
 /* Sidebar */
@@ -89,4 +98,26 @@
 .glass-header {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  .shift-calendar-grid {
+    grid-template-columns: repeat(7, 1fr);
+    font-size: 10px;
+  }
+  .shift-block {
+    font-size: 9px;
+    padding: 2px 4px;
+  }
+}
+
+/* Touch-friendly tap targets */
+@media (hover: none) {
+  .sidebar-link {
+    min-height: 44px;
+  }
+  button, [role="button"] {
+    min-height: 36px;
+  }
 }

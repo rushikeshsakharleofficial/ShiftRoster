@@ -47,6 +47,26 @@ class AssignmentCreate(BaseModel):
     user_id: str
 
 
+class ShiftMoveRequest(BaseModel):
+    new_start_time: str
+    new_end_time: str
+
+
+class RecurringShiftCreate(BaseModel):
+    title: str
+    department_id: Optional[str] = None
+    position_id: Optional[str] = None
+    location: Optional[str] = None
+    start_time: str  # time portion: HH:MM
+    end_time: str    # time portion: HH:MM
+    notes: Optional[str] = None
+    is_open: bool = False
+    required_count: int = 1
+    rrule: str  # e.g. "FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=12"
+    range_start: str  # YYYY-MM-DD
+    range_end: str    # YYYY-MM-DD
+
+
 # ── Shift Templates ──
 
 @router.get("/shift-templates")
@@ -271,6 +291,133 @@ async def list_claims(request: Request, shift_id: Optional[str] = None):
         query["shift_id"] = shift_id
     claims = await db.open_shift_claims.find(query).to_list(100)
     return serialize_list(claims)
+
+
+# ── Drag-and-Drop Move ──
+
+@router.put("/shifts/{shift_id}/move")
+async def move_shift(shift_id: str, data: ShiftMoveRequest, request: Request):
+    current = await get_current_user(request)
+    if current["system_role"] not in ("admin", "manager"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    shift = await db.shifts.find_one({"_id": ObjectId(shift_id)})
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    # Check conflicts for assigned users
+    assignments = await db.shift_assignments.find({"shift_id": shift_id}).to_list(50)
+    conflicts = []
+    for a in assignments:
+        overlapping = await db.shifts.find({
+            "_id": {"$ne": ObjectId(shift_id)},
+            "org_id": current.get("org_id"),
+            "start_time": {"$lt": data.new_end_time},
+            "end_time": {"$gt": data.new_start_time},
+        }).to_list(100)
+        for ov in overlapping:
+            ov_assignments = await db.shift_assignments.find({"shift_id": str(ov["_id"]), "user_id": a["user_id"]}).to_list(1)
+            if ov_assignments:
+                user = await db.users.find_one({"_id": ObjectId(a["user_id"])}, {"full_name": 1})
+                conflicts.append({
+                    "user_id": a["user_id"],
+                    "user_name": user.get("full_name", "") if user else "",
+                    "conflicting_shift": serialize_doc(ov),
+                })
+
+    await db.shifts.update_one(
+        {"_id": ObjectId(shift_id)},
+        {"$set": {"start_time": data.new_start_time, "end_time": data.new_end_time, "updated_at": datetime.now(timezone.utc)}},
+    )
+    updated = await db.shifts.find_one({"_id": ObjectId(shift_id)})
+    await log_audit(current.get("org_id"), current["id"], "move", "shift", shift_id)
+
+    result = serialize_doc(updated)
+    result["conflicts"] = conflicts
+    return result
+
+
+# ── Conflict Detection ──
+
+@router.post("/shifts/check-conflicts")
+async def check_conflicts(request: Request):
+    current = await get_current_user(request)
+    body = await request.json()
+    user_id = body.get("user_id")
+    start_time = body.get("start_time")
+    end_time = body.get("end_time")
+    exclude_shift_id = body.get("exclude_shift_id")
+
+    if not user_id or not start_time or not end_time:
+        raise HTTPException(status_code=400, detail="user_id, start_time, end_time required")
+
+    query = {
+        "org_id": current.get("org_id"),
+        "start_time": {"$lt": end_time},
+        "end_time": {"$gt": start_time},
+    }
+    if exclude_shift_id:
+        query["_id"] = {"$ne": ObjectId(exclude_shift_id)}
+
+    overlapping_shifts = await db.shifts.find(query).to_list(100)
+    conflicts = []
+    for s in overlapping_shifts:
+        sid = str(s["_id"])
+        assignment = await db.shift_assignments.find_one({"shift_id": sid, "user_id": user_id})
+        if assignment:
+            conflicts.append(serialize_doc(s))
+
+    return {"has_conflicts": len(conflicts) > 0, "conflicts": conflicts}
+
+
+# ── Recurring Shifts ──
+
+@router.post("/shifts/recurring")
+async def create_recurring_shifts(data: RecurringShiftCreate, request: Request):
+    current = await get_current_user(request)
+    if current["system_role"] not in ("admin", "manager"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    from dateutil.rrule import rrulestr
+    from dateutil.parser import parse as dtparse
+
+    try:
+        range_start = dtparse(data.range_start)
+        range_end = dtparse(data.range_end)
+        rule = rrulestr(f"DTSTART:{data.range_start.replace('-', '')}T{data.start_time.replace(':', '')}00\n" +
+                        f"RRULE:{data.rrule}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid RRULE: {str(e)}")
+
+    dates = list(rule.between(range_start, range_end, inc=True))
+    if len(dates) > 100:
+        dates = dates[:100]
+
+    created = []
+    for dt in dates:
+        day_str = dt.strftime("%Y-%m-%d")
+        doc = {
+            "org_id": current.get("org_id"),
+            "title": data.title,
+            "department_id": data.department_id,
+            "position_id": data.position_id,
+            "location": data.location,
+            "start_time": f"{day_str}T{data.start_time}:00",
+            "end_time": f"{day_str}T{data.end_time}:00",
+            "required_count": data.required_count,
+            "notes": data.notes,
+            "is_open": data.is_open,
+            "recurring_rule": data.rrule,
+            "created_by": current["id"],
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        result = await db.shifts.insert_one(doc)
+        doc["_id"] = result.inserted_id
+        created.append(serialize_doc(doc))
+
+    await log_audit(current.get("org_id"), current["id"], "create", "recurring_shifts", None, {"count": len(created)})
+    return {"created_count": len(created), "shifts": created}
 
 
 @router.post("/open-shift-claims")
