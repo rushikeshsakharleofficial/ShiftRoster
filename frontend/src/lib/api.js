@@ -56,10 +56,26 @@ export function formatApiError(detail) {
 // Auth
 export const authApi = {
   login: (data) => api.post("/auth/login", data),
-  register: (data) => api.post("/auth/register", data),
   logout: () => api.post("/auth/logout"),
   me: () => api.get("/auth/me"),
   refresh: () => api.post("/auth/refresh"),
+  // MFA
+  verifyMfa: (data) => api.post("/auth/verify-mfa", data),
+  setupMfa: (data, mfaToken) => {
+    const headers = mfaToken ? { "X-MFA-Token": mfaToken } : {};
+    return api.post("/auth/setup-mfa", data, { headers });
+  },
+  confirmMfa: (data, mfaToken) => {
+    const headers = mfaToken ? { "X-MFA-Token": mfaToken } : {};
+    return api.post("/auth/confirm-mfa", data, { headers });
+  },
+  disableMfa: (data) => api.post("/auth/disable-mfa", data),
+};
+
+// Setup (first-time)
+export const setupApi = {
+  checkStatus: () => api.get("/setup/status"),
+  createSuperAdmin: (data) => api.post("/setup", data),
 };
 
 // Users
@@ -70,6 +86,7 @@ export const usersApi = {
   update: (id, data) => api.put(`/users/${id}`, data),
   delete: (id) => api.delete(`/users/${id}`),
   changeLevel: (id, data) => api.put(`/users/${id}/level`, data),
+  mandateMfa: (data) => api.put("/users/mfa/mandate", data),
 };
 
 // Departments
@@ -155,6 +172,14 @@ export const calendarNotesApi = {
   update: (id, data) => api.put(`/calendar-notes/${id}`, data),
   delete: (id) => api.delete(`/calendar-notes/${id}`),
   addReply: (id, data) => api.post(`/calendar-notes/${id}/replies`, data),
+};
+
+// Sticky Notes
+export const stickyNotesApi = {
+  list: (params) => api.get("/sticky-notes", { params }),
+  create: (data) => api.post("/sticky-notes", data),
+  update: (id, data) => api.put(`/sticky-notes/${id}`, data),
+  delete: (id) => api.delete(`/sticky-notes/${id}`),
 };
 
 // Attendance

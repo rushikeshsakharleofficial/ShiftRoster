@@ -1,6 +1,10 @@
 import bcrypt
 import jwt
 import os
+import pyotp
+import qrcode
+import io
+import base64
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException, Request
 from bson import ObjectId
@@ -114,3 +118,56 @@ async def create_notification(user_id, ntype, title, body=None, link=None):
         "sent_email": False,
         "created_at": datetime.now(timezone.utc),
     })
+
+
+# ── MFA / TOTP Helpers ──
+
+def generate_totp_secret():
+    """Generate a new TOTP secret for Google Authenticator."""
+    return pyotp.random_base32()
+
+
+def get_totp_uri(secret, email, issuer="ShiftRoster"):
+    """Get the otpauth URI for QR code generation."""
+    totp = pyotp.TOTP(secret)
+    return totp.provisioning_uri(name=email, issuer_name=issuer)
+
+
+def verify_totp_code(secret, code):
+    """Verify a TOTP code. Allow 1 window of drift."""
+    totp = pyotp.TOTP(secret)
+    return totp.verify(code, valid_window=1)
+
+
+def generate_qr_base64(uri):
+    """Generate a QR code as a base64 PNG string."""
+    qr = qrcode.QRCode(version=1, box_size=6, border=2)
+    qr.add_data(uri)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+
+def create_mfa_temp_token(user_id: str) -> str:
+    """Create a short-lived token for the MFA verification step."""
+    payload = {
+        "sub": user_id,
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+        "type": "mfa_temp",
+    }
+    return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
+
+
+def verify_mfa_temp_token(token: str) -> str:
+    """Verify a MFA temp token and return the user_id."""
+    try:
+        payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "mfa_temp":
+            raise HTTPException(status_code=401, detail="Invalid MFA token type")
+        return payload["sub"]
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="MFA token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid MFA token")

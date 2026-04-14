@@ -1,4 +1,4 @@
-/* ShiftMaster - Shift Roster Dashboard */
+/* ShiftRoster - Shift Roster Dashboard */
 
 /* Transition utilities */
 .animate-fade-in {
@@ -17,6 +17,15 @@
 @keyframes slideIn {
   from { opacity: 0; transform: translateX(-12px); }
   to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-out;
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 /* Calendar grid */
@@ -41,10 +50,19 @@
 .sticky-note:hover {
   transform: scale(1.02);
   z-index: 10;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 .sticky-note.pinned {
   border-left: 3px solid hsl(var(--primary));
+}
+
+.sticky-note-float {
+  animation: stickyFloat 3s ease-in-out infinite;
+}
+
+@keyframes stickyFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
 }
 
 /* Presence dot */
@@ -63,14 +81,14 @@
 
 /* Shift block colors */
 .shift-block {
-  @apply rounded px-2 py-1 text-xs font-medium truncate cursor-pointer;
+  @apply rounded-md px-2 py-1 text-xs font-medium truncate cursor-pointer;
   transition: all 0.15s ease;
   -webkit-user-select: none;
   user-select: none;
 }
 .shift-block:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 .shift-block[draggable="true"] {
   cursor: grab;
@@ -82,7 +100,15 @@
 
 /* Sidebar */
 .sidebar-link {
-  @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  transition: all 0.2s ease;
+  text-decoration: none;
 }
 .sidebar-link:hover {
   background: hsl(var(--accent));
@@ -96,8 +122,25 @@
 
 /* Glass header */
 .glass-header {
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+/* Card hover lift */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+}
+
+/* Popover calendar cell hover */
+.calendar-cell-hover {
+  transition: background 0.15s ease;
+}
+.calendar-cell-hover:hover {
+  background: hsl(var(--accent) / 0.75);
 }
 
 /* Mobile responsive */

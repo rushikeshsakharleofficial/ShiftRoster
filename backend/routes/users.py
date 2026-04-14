@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request, Query
+from auth_utils import create_notification
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -21,6 +22,7 @@ class CreateUserRequest(BaseModel):
     hourly_rate: Optional[float] = None
     employment_type: str = "full_time"
     skills: List[str] = []
+    mfa_mandated: bool = False
 
 
 class UpdateUserRequest(BaseModel):
@@ -35,6 +37,7 @@ class UpdateUserRequest(BaseModel):
     employment_type: Optional[str] = None
     skills: Optional[List[str]] = None
     status: Optional[str] = None
+    mfa_mandated: Optional[bool] = None
 
 
 class ChangeLevelRequest(BaseModel):
@@ -106,6 +109,9 @@ async def create_user(data: CreateUserRequest, request: Request):
         "employment_type": data.employment_type,
         "skills": data.skills,
         "status": "active",
+        "mfa_enabled": False,
+        "mfa_mandated": data.mfa_mandated,
+        "mfa_secret": None,
         "created_by": current["id"],
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
@@ -204,3 +210,38 @@ async def change_level(user_id: str, data: ChangeLevelRequest, request: Request)
 
     await log_audit(current.get("org_id"), current["id"], "update", "user_level", user_id, {"from": old_level, "to": data.level})
     return {"message": f"Level changed from {old_level} to {data.level}"}
+
+
+class MandateMfaRequest(BaseModel):
+    user_ids: Optional[List[str]] = None  # None = all users
+    mandate: bool = True
+
+
+@router.put("/mfa/mandate")
+async def mandate_mfa(data: MandateMfaRequest, request: Request):
+    """Mandate or un-mandate MFA for specific users or all users."""
+    current = await get_current_user(request)
+    if current["system_role"] not in ("admin", "manager"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    query = {"org_id": current.get("org_id")}
+    if data.user_ids:
+        query["_id"] = {"$in": [ObjectId(uid) for uid in data.user_ids]}
+
+    result = await db.users.update_many(
+        query,
+        {"$set": {"mfa_mandated": data.mandate, "updated_at": datetime.now(timezone.utc)}}
+    )
+
+    # Notify affected users
+    if data.mandate and data.user_ids:
+        for uid in data.user_ids:
+            await create_notification(
+                uid, "security",
+                "MFA Required",
+                "Your administrator has mandated Multi-Factor Authentication for your account. You will be prompted to set it up on your next login.",
+            )
+
+    action = "mandated" if data.mandate else "un-mandated"
+    await log_audit(current.get("org_id"), current["id"], "mfa_mandate", "users", diff={"action": action, "count": result.modified_count})
+    return {"message": f"MFA {action} for {result.modified_count} user(s)"}

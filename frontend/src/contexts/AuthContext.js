@@ -24,6 +24,12 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const { data } = await authApi.login({ email, password });
+
+    // MFA required — return the MFA data for the login page to handle
+    if (data.mfa_required || data.mfa_setup_required) {
+      return data;
+    }
+
     if (data.access_token) localStorage.setItem("access_token", data.access_token);
     if (data.refresh_token) localStorage.setItem("refresh_token", data.refresh_token);
     const { access_token, refresh_token, ...userData } = data;
@@ -31,8 +37,7 @@ export function AuthProvider({ children }) {
     return userData;
   };
 
-  const register = async (formData) => {
-    const { data } = await authApi.register(formData);
+  const completeMfaLogin = (data) => {
     if (data.access_token) localStorage.setItem("access_token", data.access_token);
     if (data.refresh_token) localStorage.setItem("refresh_token", data.refresh_token);
     const { access_token, refresh_token, ...userData } = data;
@@ -48,7 +53,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, checkAuth }}>
+    <AuthContext.Provider value={{ user, loading, login, completeMfaLogin, logout, checkAuth }}>
       {children}
     </AuthContext.Provider>
   );

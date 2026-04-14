@@ -3,8 +3,9 @@ from pathlib import Path
 
 load_dotenv(Path(__file__).parent / '.env')
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from starlette.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from db import db, client
 from auth_utils import hash_password, verify_password, serialize_doc
 from datetime import datetime, timezone
@@ -21,8 +22,9 @@ from routes.manager_groups import router as manager_groups_router
 from routes.shifts import router as shifts_router
 from routes.leave import router as leave_router
 from routes.operations import router as operations_router
+from routes.sticky_notes import router as sticky_notes_router
 
-app = FastAPI(title="ShiftMaster API", version="1.0.0")
+app = FastAPI(title="ShiftRoster API", version="2.0.0")
 
 # CORS - use permissive CORS since auth is via Bearer tokens
 app.add_middleware(
@@ -41,6 +43,7 @@ app.include_router(manager_groups_router)
 app.include_router(shifts_router)
 app.include_router(leave_router)
 app.include_router(operations_router)
+app.include_router(sticky_notes_router)
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -50,7 +53,92 @@ logger = logging.getLogger(__name__)
 # ── Health Check ──
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "service": "ShiftMaster"}
+    return {"status": "ok", "service": "ShiftRoster"}
+
+
+# ── Setup (First-time SuperAdmin) ──
+
+class SetupRequest(BaseModel):
+    org_name: str
+    admin_name: str
+    admin_email: str
+    admin_password: str
+    timezone: str = "Asia/Kolkata"
+
+
+@app.get("/api/setup/status")
+async def setup_status():
+    """Check if initial setup is needed (no users exist)."""
+    user_count = await db.users.count_documents({})
+    return {"setup_required": user_count == 0}
+
+
+@app.post("/api/setup")
+async def initial_setup(data: SetupRequest):
+    """First-time SuperAdmin setup. Only works when database has zero users."""
+    user_count = await db.users.count_documents({})
+    if user_count > 0:
+        raise HTTPException(status_code=403, detail="Setup already completed. System already has users.")
+
+    email = data.admin_email.strip().lower()
+    if len(data.admin_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    # Create organization
+    org_result = await db.organizations.insert_one({
+        "name": data.org_name,
+        "timezone": data.timezone,
+        "locale": "en-IN",
+        "currency": "INR",
+        "work_week_start": 1,
+        "overtime_daily_threshold": 8,
+        "overtime_weekly_threshold": 40,
+        "mfa_org_mandate": False,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    })
+    org_id = str(org_result.inserted_id)
+
+    # Create SuperAdmin user
+    await db.users.insert_one({
+        "org_id": org_id,
+        "email": email,
+        "password_hash": hash_password(data.admin_password),
+        "full_name": data.admin_name,
+        "phone": "",
+        "avatar_url": "",
+        "system_role": "admin",
+        "employee_level": None,
+        "department_id": None,
+        "position_id": None,
+        "hourly_rate": None,
+        "employment_type": "full_time",
+        "skills": [],
+        "status": "active",
+        "mfa_enabled": False,
+        "mfa_mandated": False,
+        "mfa_secret": None,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    })
+
+    # Seed demo departments
+    demo_depts = [
+        {"name": "Engineering", "color_hex": "#10B981"},
+        {"name": "Operations", "color_hex": "#F59E0B"},
+        {"name": "Support", "color_hex": "#3B82F6"},
+        {"name": "Management", "color_hex": "#6366F1"},
+    ]
+    for d in demo_depts:
+        await db.departments.insert_one({
+            "org_id": org_id,
+            "name": d["name"],
+            "color_hex": d["color_hex"],
+            "created_at": datetime.now(timezone.utc),
+        })
+
+    logger.info(f"Initial setup completed: org={data.org_name}, admin={email}")
+    return {"message": "Setup completed successfully", "org_id": org_id}
 
 
 # ── WebSocket Presence ──
@@ -165,7 +253,7 @@ async def get_presence():
 # ── Startup ──
 @app.on_event("startup")
 async def startup():
-    logger.info("Starting ShiftMaster API...")
+    logger.info("Starting ShiftRoster API...")
 
     # Create indexes
     await db.users.create_index("email", unique=True)
@@ -178,103 +266,10 @@ async def startup():
     await db.calendar_notes.create_index([("org_id", 1), ("note_date", 1)])
     await db.notifications.create_index([("user_id", 1), ("is_read", 1)])
     await db.audit_logs.create_index([("entity", 1), ("entity_id", 1)])
+    await db.sticky_notes.create_index([("org_id", 1), ("note_date", 1)])
+    await db.sticky_notes.create_index([("user_id", 1)])
 
-    # Seed default organization
-    org = await db.organizations.find_one()
-    if not org:
-        org_result = await db.organizations.insert_one({
-            "name": "ShiftMaster Corp",
-            "timezone": "Asia/Kolkata",
-            "locale": "en-IN",
-            "currency": "INR",
-            "work_week_start": 1,
-            "overtime_daily_threshold": 8,
-            "overtime_weekly_threshold": 40,
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
-        })
-        org_id = str(org_result.inserted_id)
-        logger.info(f"Created default organization: {org_id}")
-    else:
-        org_id = str(org["_id"])
-
-    # Seed admin
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@shiftmaster.com")
-    admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
-
-    existing_admin = await db.users.find_one({"email": admin_email})
-    if not existing_admin:
-        await db.users.insert_one({
-            "org_id": org_id,
-            "email": admin_email,
-            "password_hash": hash_password(admin_password),
-            "full_name": "System Admin",
-            "phone": "",
-            "avatar_url": "",
-            "system_role": "admin",
-            "employee_level": None,
-            "department_id": None,
-            "position_id": None,
-            "hourly_rate": None,
-            "employment_type": "full_time",
-            "skills": [],
-            "status": "active",
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
-        })
-        logger.info(f"Seeded admin user: {admin_email}")
-    elif not verify_password(admin_password, existing_admin["password_hash"]):
-        await db.users.update_one(
-            {"email": admin_email},
-            {"$set": {"password_hash": hash_password(admin_password)}},
-        )
-        logger.info("Updated admin password")
-
-    # Write test credentials
-    os.makedirs("/app/memory", exist_ok=True)
-    with open("/app/memory/test_credentials.md", "w") as f:
-        f.write("# Test Credentials\n\n")
-        f.write(f"## Admin\n- Email: {admin_email}\n- Password: {admin_password}\n- Role: admin\n\n")
-        f.write("## Auth Endpoints\n")
-        f.write("- POST /api/auth/login\n")
-        f.write("- POST /api/auth/register\n")
-        f.write("- GET /api/auth/me\n")
-        f.write("- POST /api/auth/logout\n")
-        f.write("- POST /api/auth/refresh\n\n")
-        f.write("## Key API Endpoints\n")
-        f.write("- GET/POST /api/users\n")
-        f.write("- GET/POST /api/departments\n")
-        f.write("- GET/POST /api/manager-groups\n")
-        f.write("- GET/POST /api/shifts\n")
-        f.write("- GET/POST /api/shift-templates\n")
-        f.write("- GET/POST /api/leave-requests\n")
-        f.write("- GET/POST /api/calendar-notes\n")
-        f.write("- GET/POST /api/swap-requests\n")
-        f.write("- POST /api/attendance/clock-in\n")
-        f.write("- POST /api/attendance/clock-out\n")
-        f.write("- GET /api/notifications\n")
-        f.write("- GET /api/audit-logs\n")
-        f.write("- GET /api/reports/overview\n")
-
-    # Seed some demo departments if none exist
-    dept_count = await db.departments.count_documents({"org_id": org_id})
-    if dept_count == 0:
-        demo_depts = [
-            {"name": "Engineering", "color_hex": "#10B981"},
-            {"name": "Operations", "color_hex": "#F59E0B"},
-            {"name": "Support", "color_hex": "#3B82F6"},
-            {"name": "Management", "color_hex": "#6366F1"},
-        ]
-        for d in demo_depts:
-            await db.departments.insert_one({
-                "org_id": org_id,
-                "name": d["name"],
-                "color_hex": d["color_hex"],
-                "created_at": datetime.now(timezone.utc),
-            })
-        logger.info("Seeded demo departments")
-
-    logger.info("ShiftMaster API started successfully")
+    logger.info("ShiftRoster API started successfully")
 
 
 @app.on_event("shutdown")

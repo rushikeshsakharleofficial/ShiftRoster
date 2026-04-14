@@ -1,56 +1,65 @@
-import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { Toaster } from "@/components/ui/sonner";
 import AppLayout from "@/components/layout/AppLayout";
 import LoginPage from "@/pages/LoginPage";
-import RegisterPage from "@/pages/RegisterPage";
+import SetupPage from "@/pages/SetupPage";
 import DashboardPage from "@/pages/DashboardPage";
+import ShiftCalendarPage from "@/pages/ShiftCalendarPage";
 import EmployeesPage from "@/pages/EmployeesPage";
 import DepartmentsPage from "@/pages/DepartmentsPage";
 import ManagerGroupsPage from "@/pages/ManagerGroupsPage";
-import ShiftCalendarPage from "@/pages/ShiftCalendarPage";
-import LeaveManagementPage from "@/pages/LeaveManagementPage";
+import LeavePage from "@/pages/LeaveManagementPage";
 import AttendancePage from "@/pages/AttendancePage";
 import SwapRequestsPage from "@/pages/SwapRequestsPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import ReportsPage from "@/pages/ReportsPage";
 import AuditLogPage from "@/pages/AuditLogPage";
 import SettingsPage from "@/pages/SettingsPage";
+import StickyNotesPage from "@/pages/StickyNotesPage";
+import { Toaster } from "sonner";
+import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
-  if (loading) {
+  if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
-  }
   if (!user) return <Navigate to="/login" replace />;
   return children;
 }
 
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
-  if (loading) {
+  if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
-  }
   if (user) return <Navigate to="/" replace />;
   return children;
 }
 
-function App() {
+export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
+    <BrowserRouter>
+      <AuthProvider>
         <Routes>
-          <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-          <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+          {/* Public routes */}
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <LoginPage />
+              </PublicRoute>
+            }
+          />
+          <Route path="/setup" element={<SetupPage />} />
+
+          {/* Protected routes */}
           <Route
             element={
               <ProtectedRoute>
@@ -58,25 +67,26 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<DashboardPage />} />
-            <Route path="employees" element={<EmployeesPage />} />
-            <Route path="departments" element={<DepartmentsPage />} />
-            <Route path="manager-groups" element={<ManagerGroupsPage />} />
-            <Route path="shifts" element={<ShiftCalendarPage />} />
-            <Route path="leave" element={<LeaveManagementPage />} />
-            <Route path="attendance" element={<AttendancePage />} />
-            <Route path="swap-requests" element={<SwapRequestsPage />} />
-            <Route path="notifications" element={<NotificationsPage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="audit-log" element={<AuditLogPage />} />
-            <Route path="settings" element={<SettingsPage />} />
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/shifts" element={<ShiftCalendarPage />} />
+            <Route path="/employees" element={<EmployeesPage />} />
+            <Route path="/departments" element={<DepartmentsPage />} />
+            <Route path="/manager-groups" element={<ManagerGroupsPage />} />
+            <Route path="/leave" element={<LeavePage />} />
+            <Route path="/attendance" element={<AttendancePage />} />
+            <Route path="/swap-requests" element={<SwapRequestsPage />} />
+            <Route path="/sticky-notes" element={<StickyNotesPage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/audit-log" element={<AuditLogPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
+
+          {/* Catch all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
-      <Toaster position="top-right" />
-    </AuthProvider>
+        <Toaster position="top-right" richColors closeButton />
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
-
-export default App;

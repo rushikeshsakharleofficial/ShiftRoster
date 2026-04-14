@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { notificationsApi } from "@/lib/api";
 import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
-  BarChart3, ScrollText, Settings, LogOut, Menu, X, ChevronDown
+  BarChart3, ScrollText, Settings, LogOut, Menu, X, Check
 } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -21,6 +23,7 @@ export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const wsRef = useRef(null);
 
@@ -29,13 +32,15 @@ export default function AppLayout() {
   const isEmployee = user?.system_role === "employee";
   const level = user?.employee_level;
 
+  const fetchNotifs = async () => {
+    try {
+      const { data } = await notificationsApi.list({ unread_only: true });
+      setUnreadCount(data.unread_count || 0);
+      setNotifications((data.notifications || []).slice(0, 5));
+    } catch {}
+  };
+
   useEffect(() => {
-    const fetchNotifs = async () => {
-      try {
-        const { data } = await notificationsApi.list({ unread_only: true });
-        setUnreadCount(data.unread_count || 0);
-      } catch {}
-    };
     fetchNotifs();
     const interval = setInterval(fetchNotifs, 30000);
     return () => clearInterval(interval);
@@ -77,6 +82,30 @@ export default function AppLayout() {
     navigate("/login");
   };
 
+  const handleMarkRead = async (id) => {
+    try {
+      await notificationsApi.markRead(id);
+      fetchNotifs();
+    } catch {}
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationsApi.markAllRead();
+      fetchNotifs();
+    } catch {}
+  };
+
+  const timeAgo = (date) => {
+    if (!date) return "";
+    const diff = Date.now() - new Date(date).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
+
   const navItems = [
     { to: "/", icon: LayoutDashboard, label: "Dashboard", show: true },
     { to: "/shifts", icon: CalendarDays, label: "Shift Calendar", show: true },
@@ -86,6 +115,7 @@ export default function AppLayout() {
     { to: "/leave", icon: ClipboardList, label: "Leave Management", show: isAdmin || isManager || level !== "L1" },
     { to: "/attendance", icon: Clock, label: "Attendance", show: true },
     { to: "/swap-requests", icon: ArrowLeftRight, label: "Swap Requests", show: isAdmin || isManager || level !== "L1" },
+    { to: "/sticky-notes", icon: StickyNote, label: "Sticky Notes", show: true },
     { to: "/notifications", icon: Bell, label: "Notifications", show: true },
     { to: "/reports", icon: BarChart3, label: "Reports", show: isAdmin || isManager },
     { to: "/audit-log", icon: ScrollText, label: "Audit Log", show: isAdmin },
@@ -116,7 +146,7 @@ export default function AppLayout() {
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
             <CalendarDays className="h-4 w-4 text-primary-foreground" />
           </div>
-          {sidebarOpen && <span className="font-semibold text-sm tracking-tight">ShiftMaster</span>}
+          {sidebarOpen && <span className="font-semibold text-sm tracking-tight">ShiftRoster</span>}
         </div>
 
         {/* Nav */}
@@ -224,21 +254,74 @@ export default function AppLayout() {
               </div>
             </TooltipProvider>
 
-            {/* Notifications */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 relative"
-              onClick={() => navigate("/notifications")}
-              data-testid="header-notifications-btn"
-            >
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </Button>
+            {/* Notification Popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 relative"
+                  data-testid="header-notifications-btn"
+                >
+                  <Bell className="h-4 w-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-0" align="end">
+                <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <div>
+                    <p className="text-sm font-semibold">Notifications</p>
+                    <p className="text-xs text-muted-foreground">{unreadCount} unread</p>
+                  </div>
+                  {unreadCount > 0 && (
+                    <Button variant="ghost" size="sm" className="text-xs h-7" onClick={handleMarkAllRead}>
+                      <Check className="h-3 w-3 mr-1" /> Mark all read
+                    </Button>
+                  )}
+                </div>
+                <div className="max-h-[300px] overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="p-6 text-center text-muted-foreground">
+                      <Bell className="h-6 w-6 mx-auto mb-2 opacity-30" />
+                      <p className="text-xs">No notifications</p>
+                    </div>
+                  ) : (
+                    notifications.map((n) => (
+                      <div
+                        key={n.id}
+                        className={`flex items-start gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer border-b last:border-b-0 transition-colors ${
+                          !n.is_read ? "bg-primary/[0.03]" : ""
+                        }`}
+                        onClick={() => !n.is_read && handleMarkRead(n.id)}
+                      >
+                        <div className={`mt-0.5 h-7 w-7 rounded-full flex items-center justify-center shrink-0 ${
+                          !n.is_read ? "bg-primary/10" : "bg-muted"
+                        }`}>
+                          <Bell className={`h-3 w-3 ${!n.is_read ? "text-primary" : "text-muted-foreground"}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className={`text-xs line-clamp-1 ${!n.is_read ? "font-medium" : ""}`}>{n.title}</p>
+                            {!n.is_read && <div className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
+                          </div>
+                          {n.body && <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{n.body}</p>}
+                          <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(n.created_at)}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="border-t px-4 py-2">
+                  <Button variant="ghost" size="sm" className="w-full text-xs h-7" onClick={() => navigate("/notifications")}>
+                    View all notifications
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             <ThemeToggle />
 

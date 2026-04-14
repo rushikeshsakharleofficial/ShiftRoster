@@ -1,14 +1,18 @@
 import { useState, useEffect } from "react";
-import { orgApi, formatApiError } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
+import { orgApi, authApi, usersApi, formatApiError } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Loader2, Save } from "lucide-react";
+import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound } from "lucide-react";
 
 export default function SettingsPage() {
+  const { user } = useAuth();
   const [org, setOrg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -21,6 +25,21 @@ export default function SettingsPage() {
     overtime_daily_threshold: 8,
     overtime_weekly_threshold: 40,
   });
+
+  // MFA state
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [mfaSetupData, setMfaSetupData] = useState(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaPassword, setMfaPassword] = useState("");
+  const [mfaDisableCode, setMfaDisableCode] = useState("");
+  const [mfaDisablePassword, setMfaDisablePassword] = useState("");
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [showMfaSetup, setShowMfaSetup] = useState(false);
+  const [showMfaDisable, setShowMfaDisable] = useState(false);
+
+  // MFA mandate state
+  const [mandateAll, setMandateAll] = useState(false);
+  const [mandateLoading, setMandateLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -36,11 +55,13 @@ export default function SettingsPage() {
           overtime_daily_threshold: data.overtime_daily_threshold ?? 8,
           overtime_weekly_threshold: data.overtime_weekly_threshold ?? 40,
         });
+        setMandateAll(!!data.mfa_org_mandate);
       } catch {}
+      setMfaEnabled(!!user?.mfa_enabled);
       setLoading(false);
     };
     load();
-  }, []);
+  }, [user]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -51,6 +72,78 @@ export default function SettingsPage() {
       toast.error(formatApiError(err.response?.data?.detail));
     }
     setSaving(false);
+  };
+
+  // MFA - Setup
+  const handleStartMfaSetup = async () => {
+    if (!mfaPassword) {
+      toast.error("Enter your password to continue");
+      return;
+    }
+    setMfaLoading(true);
+    try {
+      const { data } = await authApi.setupMfa({ password: mfaPassword });
+      setMfaSetupData(data);
+      setShowMfaSetup(true);
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    }
+    setMfaLoading(false);
+  };
+
+  const handleConfirmMfa = async () => {
+    if (mfaCode.length < 6) {
+      toast.error("Enter the 6-digit code");
+      return;
+    }
+    setMfaLoading(true);
+    try {
+      await authApi.confirmMfa({ code: mfaCode, secret: mfaSetupData.secret });
+      setMfaEnabled(true);
+      setShowMfaSetup(false);
+      setMfaSetupData(null);
+      setMfaCode("");
+      setMfaPassword("");
+      toast.success("MFA enabled successfully");
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    }
+    setMfaLoading(false);
+  };
+
+  // MFA - Disable
+  const handleDisableMfa = async () => {
+    if (!mfaDisablePassword || mfaDisableCode.length < 6) {
+      toast.error("Enter your password and current MFA code");
+      return;
+    }
+    setMfaLoading(true);
+    try {
+      await authApi.disableMfa({ password: mfaDisablePassword, code: mfaDisableCode });
+      setMfaEnabled(false);
+      setShowMfaDisable(false);
+      setMfaDisableCode("");
+      setMfaDisablePassword("");
+      toast.success("MFA disabled");
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    }
+    setMfaLoading(false);
+  };
+
+  // MFA Mandate (admin only)
+  const handleMandateAll = async (mandate) => {
+    setMandateLoading(true);
+    try {
+      await usersApi.mandateMfa({ mandate });
+      setMandateAll(mandate);
+      // Also update org setting
+      await orgApi.update({ mfa_org_mandate: mandate });
+      toast.success(mandate ? "MFA mandated for all users" : "MFA mandate removed");
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    }
+    setMandateLoading(false);
   };
 
   if (loading) {
@@ -65,9 +158,10 @@ export default function SettingsPage() {
     <div data-testid="settings-page" className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">Manage organization settings</p>
+        <p className="text-sm text-muted-foreground">Manage organization and security settings</p>
       </div>
 
+      {/* Organization Settings */}
       <Card className="border">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
@@ -139,6 +233,175 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* MFA - Personal */}
+      <Card className="border">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Shield className="h-5 w-5" /> Multi-Factor Authentication
+          </CardTitle>
+          <CardDescription>
+            Add an extra layer of security using a TOTP authenticator app
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {mfaEnabled ? (
+                <ShieldCheck className="h-5 w-5 text-emerald-500" />
+              ) : (
+                <ShieldOff className="h-5 w-5 text-muted-foreground" />
+              )}
+              <div>
+                <p className="text-sm font-medium">{mfaEnabled ? "MFA is enabled" : "MFA is disabled"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {mfaEnabled ? "Your account is protected with two-factor authentication" : "Enable MFA to secure your account"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {!mfaEnabled && !showMfaSetup && (
+            <div className="space-y-3 pt-2">
+              <div className="space-y-1.5">
+                <Label>Your Password</Label>
+                <Input
+                  type="password"
+                  placeholder="Enter your password"
+                  value={mfaPassword}
+                  onChange={(e) => setMfaPassword(e.target.value)}
+                  data-testid="mfa-password-input"
+                />
+              </div>
+              <Button
+                onClick={handleStartMfaSetup}
+                disabled={mfaLoading || !mfaPassword}
+                className="gap-2"
+                data-testid="enable-mfa-btn"
+              >
+                {mfaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
+                Set Up MFA
+              </Button>
+            </div>
+          )}
+
+          {showMfaSetup && mfaSetupData && (
+            <div className="space-y-4 pt-2 animate-fade-in">
+              <Separator />
+              <p className="text-sm text-muted-foreground">
+                Scan this QR code with Google Authenticator, Authy, or any TOTP app:
+              </p>
+              <div className="flex justify-center p-4 bg-white rounded-lg border">
+                <img src={mfaSetupData.qr_code} alt="MFA QR Code" className="w-48 h-48" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Manual entry key</Label>
+                <code className="block text-xs bg-muted p-2 rounded-md font-mono break-all select-all">
+                  {mfaSetupData.manual_entry_key}
+                </code>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Verification Code</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                  className="text-center text-lg tracking-[0.3em] font-mono"
+                  data-testid="mfa-confirm-code-input"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => { setShowMfaSetup(false); setMfaSetupData(null); }}>
+                  Cancel
+                </Button>
+                <Button onClick={handleConfirmMfa} disabled={mfaLoading || mfaCode.length < 6} className="gap-2">
+                  {mfaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                  Activate MFA
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {mfaEnabled && !showMfaDisable && (
+            <Button
+              variant="outline"
+              className="gap-2 text-destructive hover:text-destructive"
+              onClick={() => setShowMfaDisable(true)}
+              data-testid="disable-mfa-btn"
+            >
+              <ShieldOff className="h-4 w-4" /> Disable MFA
+            </Button>
+          )}
+
+          {showMfaDisable && (
+            <div className="space-y-3 pt-2 animate-fade-in">
+              <Separator />
+              <p className="text-sm text-muted-foreground">Enter your password and current MFA code to disable:</p>
+              <div className="space-y-1.5">
+                <Label>Password</Label>
+                <Input
+                  type="password"
+                  value={mfaDisablePassword}
+                  onChange={(e) => setMfaDisablePassword(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Current MFA Code</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={mfaDisableCode}
+                  onChange={(e) => setMfaDisableCode(e.target.value.replace(/\D/g, ""))}
+                  className="text-center text-lg tracking-[0.3em] font-mono"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowMfaDisable(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={handleDisableMfa} disabled={mfaLoading} className="gap-2">
+                  {mfaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldOff className="h-4 w-4" />}
+                  Confirm Disable
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* MFA Mandate (Admin only) */}
+      {user?.system_role === "admin" && (
+        <Card className="border">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <KeyRound className="h-5 w-5" /> MFA Policy
+            </CardTitle>
+            <CardDescription>
+              Mandate MFA for all users in your organization
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Require MFA for all users</p>
+                <p className="text-xs text-muted-foreground">
+                  Users will be forced to set up MFA on their next login
+                </p>
+              </div>
+              <Switch
+                checked={mandateAll}
+                onCheckedChange={handleMandateAll}
+                disabled={mandateLoading}
+                data-testid="mandate-mfa-switch"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
