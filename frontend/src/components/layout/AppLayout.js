@@ -142,11 +142,11 @@ export default function AppLayout() {
         `}
       >
         {/* Logo */}
-        <div className="flex items-center gap-2 px-4 h-14 border-b border-border shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+        <div className="flex flex-row items-center gap-2 px-4 h-14 border-b border-border shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
             <CalendarDays className="h-4 w-4 text-primary-foreground" />
           </div>
-          {sidebarOpen && <span className="font-semibold text-sm tracking-tight">ShiftRoster</span>}
+          {sidebarOpen && <span className="font-semibold text-sm tracking-tight truncate">ShiftRoster</span>}
         </div>
 
         {/* Nav */}
@@ -158,14 +158,18 @@ export default function AppLayout() {
               end={item.to === "/"}
               onClick={() => setMobileSidebar(false)}
               className={({ isActive }) =>
-                `sidebar-link ${isActive ? "active" : "text-[hsl(var(--sidebar-text))]"}`
+                `flex flex-row items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-200 group ${
+                  isActive
+                    ? "bg-primary/10 text-primary font-medium shadow-sm ring-1 ring-primary/20"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                }`
               }
               data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
             >
-              <item.icon className="h-4 w-4 shrink-0" />
-              {sidebarOpen && <span>{item.label}</span>}
+              <item.icon className={`h-4 w-4 shrink-0 transition-transform duration-200 ${sidebarOpen ? "" : "mx-auto"} group-hover:scale-110`} />
+              {sidebarOpen && <span className="truncate">{item.label}</span>}
               {item.to === "/notifications" && unreadCount > 0 && sidebarOpen && (
-                <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5">{unreadCount}</Badge>
+                <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{unreadCount}</Badge>
               )}
             </NavLink>
           ))}
