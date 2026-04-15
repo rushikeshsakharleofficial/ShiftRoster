@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npm audit:*)",
       "Bash(ls /home/rushikesh.sakharle/projects/ShiftRoster/frontend/.env*)",
-      "Bash(cat /home/rushikesh.sakharle/projects/ShiftRoster/frontend/.env*)"
+      "Bash(cat /home/rushikesh.sakharle/projects/ShiftRoster/frontend/.env*)",
+      "Bash(docker-compose up:*)"
     ]
   }
 }
