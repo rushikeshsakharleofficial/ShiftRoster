@@ -5,7 +5,7 @@ from typing import Optional, List
 from datetime import datetime, timezone
 from bson import ObjectId
 from db import db
-from auth_utils import get_current_user, serialize_doc, serialize_list, hash_password, log_audit
+from auth_utils import get_current_user, serialize_doc, serialize_list, hash_password, log_audit, get_manager_dept_ids
 from pathlib import Path
 import uuid
 import os
@@ -72,8 +72,22 @@ async def list_users(
     query = {"org_id": current.get("org_id")}
     if role:
         query["system_role"] = role
-    if department_id:
+
+    # Managers only see employees in their assigned departments
+    if current["system_role"] == "manager":
+        mgr_depts = await get_manager_dept_ids(current["id"], db)
+        allowed = set(mgr_depts)
+        if department_id:
+            # Further filter to only the requested dept if it's in their scope
+            if department_id in allowed:
+                query["department_id"] = department_id
+            else:
+                return {"users": [], "total": 0}
+        else:
+            query["department_id"] = {"$in": list(allowed)} if allowed else "__none__"
+    elif department_id:
         query["department_id"] = department_id
+
     if level:
         query["employee_level"] = level
     if status:
@@ -110,7 +124,7 @@ async def create_user(data: CreateUserRequest, request: Request):
         if await db.users.find_one({"username": uname}):
             raise HTTPException(status_code=400, detail="Username already taken")
     else:
-        uname = await generate_unique_username(data.full_name, db)
+        uname = await generate_unique_username(email.split("@")[0], db)
 
     user_doc = {
         "org_id": current.get("org_id"),

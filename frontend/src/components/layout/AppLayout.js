@@ -4,17 +4,20 @@ import { useAuth } from "@/contexts/AuthContext";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
-import { notificationsApi, orgApi } from "@/lib/api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { notificationsApi, orgApi, usersApi } from "@/lib/api";
 import { useChat } from "@/contexts/ChatContext";
 import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
   BarChart3, ScrollText, Settings, LogOut, Menu, X, Check, LayoutTemplate,
-  MessageSquare, Coffee, Plane, CircleDot
+  MessageSquare, Coffee, Plane, CircleDot, UserCircle, Camera, Loader2
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -41,6 +44,14 @@ export default function AppLayout() {
 
   const { totalUnread: chatUnread } = useChat();
   const [myStatus, setMyStatus] = useState("active"); // active | break | leave
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ full_name: "", username: "" });
+  const [profileAvatar, setProfileAvatar] = useState(""); // current saved avatar
+  const [profileAvatarFile, setProfileAvatarFile] = useState(null); // pending file (not yet uploaded)
+  const [profileAvatarPreview, setProfileAvatarPreview] = useState(""); // local blob preview
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const profileAvatarRef = useRef(null);
   const isAdmin = user?.system_role === "admin";
   const isManager = user?.system_role === "manager";
   const isEmployee = user?.system_role === "employee";
@@ -117,6 +128,48 @@ export default function AppLayout() {
       }
     };
   }, [user?.id]);
+
+  const openProfile = () => {
+    setProfileForm({ full_name: user?.full_name || "", username: user?.username || "" });
+    setProfileAvatar(user?.avatar_url || "");
+    setProfileAvatarFile(null);
+    setProfileAvatarPreview("");
+    setProfileError("");
+    setProfileOpen(true);
+  };
+
+  const handleProfileAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProfileAvatarFile(file);
+    setProfileAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const handleProfileSave = async () => {
+    setProfileError("");
+    setProfileSaving(true);
+    try {
+      // Upload avatar first if a new file was selected
+      if (profileAvatarFile) {
+        const fd = new FormData();
+        fd.append("file", profileAvatarFile);
+        await usersApi.uploadAvatar(user.id, fd);
+      }
+      // Update profile fields
+      const payload = {};
+      if (profileForm.full_name.trim()) payload.full_name = profileForm.full_name.trim();
+      if (profileForm.username.trim()) payload.username = profileForm.username.trim().toLowerCase();
+      if (Object.keys(payload).length > 0) {
+        await usersApi.update(user.id, payload);
+      }
+      setProfileOpen(false);
+      window.location.reload();
+    } catch (err) {
+      setProfileError(err?.response?.data?.detail || "Save failed");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -420,6 +473,23 @@ export default function AppLayout() {
 
             <ThemeToggle />
 
+            {/* User profile button */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={openProfile}>
+                    <Avatar className="h-7 w-7">
+                      {user?.avatar_url && (
+                        <AvatarImage src={`${BACKEND_URL || ""}${user.avatar_url}`} />
+                      )}
+                      <AvatarFallback className="text-[10px] bg-primary/20 text-primary">{initials}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>My Profile</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
             <Button
               variant="ghost"
               size="icon"
@@ -431,6 +501,64 @@ export default function AppLayout() {
             </Button>
           </div>
         </header>
+
+        {/* My Profile Dialog */}
+        <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>My Profile</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              {/* Avatar */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="relative">
+                  <Avatar className="h-20 w-20">
+                    {(profileAvatarPreview || profileAvatar) && (
+                      <AvatarImage src={profileAvatarPreview || `${BACKEND_URL || ""}${profileAvatar}`} />
+                    )}
+                    <AvatarFallback className="text-2xl bg-primary/20 text-primary">{initials}</AvatarFallback>
+                  </Avatar>
+                  <button
+                    type="button"
+                    onClick={() => profileAvatarRef.current?.click()}
+                    className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:bg-primary/90"
+                  >
+                    <Camera className="h-3 w-3" />
+                  </button>
+                  <input ref={profileAvatarRef} type="file" accept="image/*" className="hidden" onChange={handleProfileAvatarChange} />
+                </div>
+                <p className="text-xs text-muted-foreground">Click camera to change avatar</p>
+              </div>
+              {/* Full name */}
+              <div className="space-y-1">
+                <Label className="text-xs">Full Name</Label>
+                <Input
+                  value={profileForm.full_name}
+                  onChange={(e) => setProfileForm(f => ({ ...f, full_name: e.target.value }))}
+                  placeholder="Your full name"
+                />
+              </div>
+              {/* Username */}
+              <div className="space-y-1">
+                <Label className="text-xs">Username</Label>
+                <Input
+                  value={profileForm.username}
+                  onChange={(e) => setProfileForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, "") }))}
+                  placeholder="e.g. john.doe"
+                />
+                <p className="text-[11px] text-muted-foreground">Used for @mentions and login. Letters, numbers, dots, underscores only.</p>
+              </div>
+              {profileError && <p className="text-xs text-destructive">{profileError}</p>}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setProfileOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={handleProfileSave} disabled={profileSaving}>
+                {profileSaving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Page content */}
         <main className="flex-1 flex flex-col min-h-0 p-4 md:p-6 lg:p-8">

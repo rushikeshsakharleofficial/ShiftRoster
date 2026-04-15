@@ -22,7 +22,9 @@
       "Bash(curl -sk -X POST https://localhost/api/setup -H 'Content-Type: application/json' -d '{\"org_name\":\"Test Org\",\"admin_name\":\"Test Admin\",\"admin_email\":\"admin@test.com\",\"admin_password\":\"admin123\"}')",
       "Bash(docker exec:*)",
       "Bash(docker cp:*)",
-      "Bash(docker restart:*)"
+      "Bash(docker restart:*)",
+      "Bash(xargs ls:*)",
+      "Bash(grep -l \"manager\\\\|department\" /home/rushikesh.sakharle/projects/ShiftRoster/backend/routes/*.py)"
     ]
   }
 }

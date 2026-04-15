@@ -33,6 +33,16 @@ def _slugify_name(name: str) -> str:
     return name or "user"
 
 
+async def get_manager_dept_ids(manager_id: str, db) -> list:
+    """Return the list of department_ids the manager controls via their manager groups."""
+    memberships = await db.manager_group_members.find({"user_id": manager_id}).to_list(50)
+    group_ids = [m["group_id"] for m in memberships]
+    if not group_ids:
+        return []
+    dept_docs = await db.manager_group_departments.find({"group_id": {"$in": group_ids}}).to_list(200)
+    return list({d["department_id"] for d in dept_docs})
+
+
 async def generate_unique_username(full_name: str, db) -> str:
     """Generate a unique username from a full name, appending a number if taken."""
     base = _slugify_name(full_name)

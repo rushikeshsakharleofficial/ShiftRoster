@@ -4,7 +4,7 @@ from typing import Optional, List
 from datetime import datetime, timezone
 from bson import ObjectId
 from db import db
-from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit, create_notification
+from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit, create_notification, get_manager_dept_ids
 
 router = APIRouter(prefix="/api", tags=["shifts"])
 
@@ -74,7 +74,15 @@ async def list_templates(request: Request):
     current = await get_current_user(request)
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    templates = await db.shift_templates.find({"org_id": current.get("org_id")}).to_list(200)
+    tpl_query = {"org_id": current.get("org_id")}
+    if current["system_role"] == "manager":
+        mgr_depts = await get_manager_dept_ids(current["id"], db)
+        tpl_query["$or"] = [
+            {"department_id": {"$in": mgr_depts}},
+            {"department_id": None},
+            {"department_id": {"$exists": False}},
+        ]
+    templates = await db.shift_templates.find(tpl_query).to_list(200)
     return serialize_list(templates)
 
 
@@ -143,8 +151,15 @@ async def list_shifts(
     current = await get_current_user(request)
     query = {"org_id": current.get("org_id")}
 
-    if department_id:
+    if current["system_role"] == "manager":
+        mgr_depts = await get_manager_dept_ids(current["id"], db)
+        if department_id and department_id in mgr_depts:
+            query["department_id"] = department_id
+        else:
+            query["department_id"] = {"$in": mgr_depts} if mgr_depts else "__none__"
+    elif department_id:
         query["department_id"] = department_id
+
     if start_date:
         query["start_time"] = {"$gte": start_date}
     if end_date:

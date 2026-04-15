@@ -117,7 +117,7 @@ async def initial_setup(data: SetupRequest):
     org_id = str(org_result.inserted_id)
 
     # Create SuperAdmin user
-    admin_username = await generate_unique_username(data.admin_name, db)
+    admin_username = await generate_unique_username(email.split("@")[0], db)
     now = datetime.now(timezone.utc)
     admin_result = await db.users.insert_one({
         "org_id": org_id,
