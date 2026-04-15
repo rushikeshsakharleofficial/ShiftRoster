@@ -70,6 +70,7 @@ export const authApi = {
     return api.post("/auth/confirm-mfa", data, { headers });
   },
   disableMfa: (data) => api.post("/auth/disable-mfa", data),
+  generateBackupCodes: () => api.post("/auth/generate-backup-codes"),
 };
 
 // Setup (first-time)
@@ -132,6 +133,7 @@ export const shiftsApi = {
 export const shiftTemplatesApi = {
   list: () => api.get("/shift-templates"),
   create: (data) => api.post("/shift-templates", data),
+  update: (id, data) => api.put(`/shift-templates/${id}`, data),
   delete: (id) => api.delete(`/shift-templates/${id}`),
 };
 
@@ -199,6 +201,12 @@ export const notificationsApi = {
 // Audit Logs
 export const auditApi = {
   list: (params) => api.get("/audit-logs", { params }),
+};
+
+// MFA Admin
+export const mfaAdminApi = {
+  resetUserMfa: (userId) => api.post(`/auth/admin/reset-user-mfa/${userId}`),
+  generateBackupCodes: () => api.post("/auth/generate-backup-codes"),
 };
 
 // Reports

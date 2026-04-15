@@ -109,6 +109,28 @@ async def delete_template(template_id: str, request: Request):
     return {"message": "Template deleted"}
 
 
+class ShiftTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    required_count: Optional[int] = None
+    color_hex: Optional[str] = None
+
+
+@router.put("/shift-templates/{template_id}")
+async def update_template(template_id: str, data: ShiftTemplateUpdate, request: Request):
+    current = await get_current_user(request)
+    if current["system_role"] not in ("admin", "manager"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    update = {k: v for k, v in data.model_dump().items() if v is not None}
+    if not update:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    await db.shift_templates.update_one({"_id": ObjectId(template_id)}, {"$set": update})
+    updated = await db.shift_templates.find_one({"_id": ObjectId(template_id)})
+    await log_audit(current.get("org_id"), current["id"], "update", "shift_template", template_id)
+    return serialize_doc(updated)
+
+
 # ── Shifts ──
 
 @router.get("/shifts")
@@ -205,6 +227,14 @@ async def update_shift(shift_id: str, data: ShiftUpdate, request: Request):
 
     updated = await db.shifts.find_one({"_id": ObjectId(shift_id)})
     await log_audit(current.get("org_id"), current["id"], "update", "shift", shift_id)
+
+    # Notify assigned users of shift change
+    assignments = await db.shift_assignments.find({"shift_id": shift_id}).to_list(50)
+    for a in assignments:
+        await create_notification(a["user_id"], "shift_updated",
+            f"Shift '{updated.get('title', '')}' has been updated",
+            link="/shifts")
+
     return serialize_doc(updated)
 
 
@@ -214,9 +244,14 @@ async def delete_shift(shift_id: str, request: Request):
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
+    assignments = await db.shift_assignments.find({"shift_id": shift_id}).to_list(50)
     await db.shifts.delete_one({"_id": ObjectId(shift_id)})
     await db.shift_assignments.delete_many({"shift_id": shift_id})
     await log_audit(current.get("org_id"), current["id"], "delete", "shift", shift_id)
+    for a in assignments:
+        await create_notification(a["user_id"], "shift_deleted",
+            "A shift you were assigned to has been removed",
+            link="/shifts")
     return {"message": "Shift deleted"}
 
 
@@ -331,6 +366,11 @@ async def move_shift(shift_id: str, data: ShiftMoveRequest, request: Request):
     )
     updated = await db.shifts.find_one({"_id": ObjectId(shift_id)})
     await log_audit(current.get("org_id"), current["id"], "move", "shift", shift_id)
+
+    for a in assignments:
+        await create_notification(a["user_id"], "shift_moved",
+            f"Shift '{updated.get('title', '')}' has been rescheduled",
+            link="/shifts")
 
     result = serialize_doc(updated)
     result["conflicts"] = conflicts

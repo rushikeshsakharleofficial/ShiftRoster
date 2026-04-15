@@ -378,7 +378,16 @@ async def mark_all_read(request: Request):
 # ══════════════════════════════════════════
 
 @router.get("/audit-logs")
-async def list_audit_logs(request: Request, entity: Optional[str] = None, skip: int = 0, limit: int = 50):
+async def list_audit_logs(
+    request: Request,
+    entity: Optional[str] = None,
+    action: Optional[str] = None,
+    actor_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+):
     current = await get_current_user(request)
     if current["system_role"] != "admin":
         raise HTTPException(status_code=403, detail="Only admin can view audit logs")
@@ -386,6 +395,16 @@ async def list_audit_logs(request: Request, entity: Optional[str] = None, skip: 
     query = {"org_id": current.get("org_id")}
     if entity:
         query["entity"] = entity
+    if action:
+        query["action"] = action
+    if actor_id:
+        query["actor_id"] = actor_id
+    if start_date:
+        query.setdefault("created_at", {})
+        query["created_at"]["$gte"] = datetime.fromisoformat(start_date)
+    if end_date:
+        query.setdefault("created_at", {})
+        query["created_at"]["$lte"] = datetime.fromisoformat(end_date + "T23:59:59")
 
     logs = await db.audit_logs.find(query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     total = await db.audit_logs.count_documents(query)

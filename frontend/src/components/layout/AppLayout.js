@@ -12,7 +12,7 @@ import { notificationsApi, orgApi } from "@/lib/api";
 import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
-  BarChart3, ScrollText, Settings, LogOut, Menu, X, Check
+  BarChart3, ScrollText, Settings, LogOut, Menu, X, Check, LayoutTemplate
 } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -117,6 +117,7 @@ export default function AppLayout() {
     { to: "/leave", icon: ClipboardList, label: "Leave Management", show: isAdmin || isManager || level !== "L1" },
     { to: "/attendance", icon: Clock, label: "Attendance", show: attendanceEnabled },
     { to: "/swap-requests", icon: ArrowLeftRight, label: "Swap Requests", show: isAdmin || isManager || level !== "L1" },
+    { to: "/shift-templates", icon: LayoutTemplate, label: "Shift Templates", show: isAdmin || isManager },
     { to: "/sticky-notes", icon: StickyNote, label: "Sticky Notes", show: true },
     { to: "/notifications", icon: Bell, label: "Notifications", show: true },
     { to: "/reports", icon: BarChart3, label: "Reports", show: isAdmin || isManager },

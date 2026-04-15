@@ -11,6 +11,8 @@ from auth_utils import (
     generate_qr_base64, create_mfa_temp_token, verify_mfa_temp_token
 )
 import jwt
+import secrets
+import hashlib
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -114,7 +116,19 @@ async def verify_mfa(data: VerifyMfaRequest, response: Response):
     if not mfa_secret:
         raise HTTPException(status_code=400, detail="MFA not configured")
 
-    if not verify_totp_code(mfa_secret, data.code):
+    totp_valid = verify_totp_code(mfa_secret, data.code)
+    backup_valid = False
+    if not totp_valid:
+        # Normalise code: strip dashes/spaces, uppercase, then reformat as XXXXXXXX-XXXXXXXX
+        code_clean = data.code.upper().replace("-", "").replace(" ", "")
+        formatted = (code_clean[:8] + "-" + code_clean[8:]) if len(code_clean) == 16 else data.code.upper()
+        code_hash = hashlib.sha256(formatted.encode()).hexdigest()
+        if code_hash in user.get("mfa_backup_codes", []):
+            backup_valid = True
+            remaining = [c for c in user.get("mfa_backup_codes", []) if c != code_hash]
+            await db.users.update_one({"_id": user["_id"]}, {"$set": {"mfa_backup_codes": remaining}})
+
+    if not totp_valid and not backup_valid:
         raise HTTPException(status_code=401, detail="Invalid MFA code")
 
     access_token = create_access_token(user_id, user["email"])
@@ -242,6 +256,49 @@ async def get_me(request: Request):
     from auth_utils import get_current_user
     user = await get_current_user(request)
     return user
+
+
+@router.post("/generate-backup-codes")
+async def generate_backup_codes(request: Request):
+    from auth_utils import get_current_user
+    current = await get_current_user(request)
+    user = await db.users.find_one({"_id": ObjectId(current["id"])})
+    if not user or not user.get("mfa_enabled"):
+        raise HTTPException(status_code=400, detail="MFA must be enabled to generate backup codes")
+
+    # Generate 8 backup codes in XXXXXXXX-XXXXXXXX format
+    codes = [secrets.token_hex(4).upper() + "-" + secrets.token_hex(4).upper() for _ in range(8)]
+    hashed = [hashlib.sha256(c.encode()).hexdigest() for c in codes]
+
+    await db.users.update_one(
+        {"_id": ObjectId(current["id"])},
+        {"$set": {"mfa_backup_codes": hashed, "updated_at": datetime.now(timezone.utc)}}
+    )
+    return {"backup_codes": codes}
+
+
+@router.post("/admin/reset-user-mfa/{user_id}")
+async def admin_reset_user_mfa(user_id: str, request: Request):
+    """Admin or manager can disable MFA for an employee."""
+    from auth_utils import get_current_user
+    current = await get_current_user(request)
+    if current["system_role"] not in ("admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only admin or manager can reset user MFA")
+
+    target = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {
+            "mfa_enabled": False,
+            "mfa_secret": None,
+            "mfa_backup_codes": [],
+            "updated_at": datetime.now(timezone.utc),
+        }}
+    )
+    return {"message": "MFA reset successfully", "user_id": user_id}
 
 
 @router.post("/refresh")

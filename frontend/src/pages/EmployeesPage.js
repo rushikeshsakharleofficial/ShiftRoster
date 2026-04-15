@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { usersApi, departmentsApi, formatApiError } from "@/lib/api";
+import { usersApi, departmentsApi, mfaAdminApi, formatApiError } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,11 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, UserPlus, ChevronUp, ChevronDown, Loader2 } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, UserPlus, ChevronUp, ChevronDown, Loader2, ShieldOff } from "lucide-react";
 
 export default function EmployeesPage() {
   const { user } = useAuth();
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [confirmMfaReset, setConfirmMfaReset] = useState({ open: false, userId: null, userName: "" });
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [total, setTotal] = useState(0);
@@ -75,6 +76,22 @@ export default function EmployeesPage() {
   };
 
   const handleDelete = (id) => setConfirmDelete({ id, label: "employee" });
+
+  const handleResetMfa = (userId, userName) => {
+    setConfirmMfaReset({ open: true, userId, userName });
+  };
+
+  const doResetMfa = async () => {
+    try {
+      await mfaAdminApi.resetUserMfa(confirmMfaReset.userId);
+      toast.success(`MFA reset for ${confirmMfaReset.userName}`);
+      loadData();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    } finally {
+      setConfirmMfaReset({ open: false, userId: null, userName: "" });
+    }
+  };
 
   const doDelete = async () => {
     try {
@@ -231,6 +248,11 @@ export default function EmployeesPage() {
                         <DropdownMenuItem onClick={() => { setForm({ ...emp, password: "" }); setShowEdit(emp.id); }}>
                           <Pencil className="h-3 w-3 mr-2" /> Edit
                         </DropdownMenuItem>
+                        {(user?.system_role === "admin" || user?.system_role === "manager") && emp.mfa_enabled && (
+                          <DropdownMenuItem onClick={() => handleResetMfa(emp.id, emp.full_name)}>
+                            <ShieldOff className="h-3 w-3 mr-2" /> Reset MFA
+                          </DropdownMenuItem>
+                        )}
                         {user?.system_role === "admin" && (
                           <DropdownMenuItem onClick={() => handleDelete(emp.id)} className="text-destructive">
                             <Trash2 className="h-3 w-3 mr-2" /> Delete
@@ -342,6 +364,23 @@ export default function EmployeesPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={doDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmMfaReset.open} onOpenChange={(o) => { if (!o) setConfirmMfaReset({ open: false, userId: null, userName: "" }); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset MFA for {confirmMfaReset.userName}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will disable MFA for this user. They will need to set up MFA again on their next login.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={doResetMfa} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Reset MFA
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

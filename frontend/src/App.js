@@ -16,6 +16,7 @@ import ReportsPage from "@/pages/ReportsPage";
 import AuditLogPage from "@/pages/AuditLogPage";
 import SettingsPage from "@/pages/SettingsPage";
 import StickyNotesPage from "@/pages/StickyNotesPage";
+import ShiftTemplatesPage from "@/pages/ShiftTemplatesPage";
 import { Toaster } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -76,6 +77,7 @@ export default function App() {
             <Route path="/attendance" element={<AttendancePage />} />
             <Route path="/swap-requests" element={<SwapRequestsPage />} />
             <Route path="/sticky-notes" element={<StickyNotesPage />} />
+            <Route path="/shift-templates" element={<ShiftTemplatesPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/audit-log" element={<AuditLogPage />} />
