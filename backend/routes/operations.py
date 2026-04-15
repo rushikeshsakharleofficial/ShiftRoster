@@ -281,6 +281,10 @@ async def clock_in(request: Request):
     current = await get_current_user(request)
     body = await request.json()
 
+    org = await db.organizations.find_one({"_id": ObjectId(current.get("org_id"))})
+    if not org or not org.get("attendance_enabled", False):
+        raise HTTPException(status_code=403, detail="Attendance tracking is not enabled for this organization")
+
     # Check if already clocked in today
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     existing = await db.attendance_logs.find_one({
@@ -310,6 +314,10 @@ async def clock_in(request: Request):
 @router.post("/attendance/clock-out")
 async def clock_out(request: Request):
     current = await get_current_user(request)
+
+    org = await db.organizations.find_one({"_id": ObjectId(current.get("org_id"))})
+    if not org or not org.get("attendance_enabled", False):
+        raise HTTPException(status_code=403, detail="Attendance tracking is not enabled for this organization")
 
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     log = await db.attendance_logs.find_one({
@@ -460,12 +468,21 @@ async def get_organization(request: Request):
 @router.put("/organization")
 async def update_organization(request: Request):
     current = await get_current_user(request)
-    if current["system_role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can update organization settings")
+    is_admin = current["system_role"] == "admin"
+    is_manager = current["system_role"] == "manager"
+    if not (is_admin or is_manager):
+        raise HTTPException(status_code=403, detail="Only admin or manager can update organization settings")
 
     body = await request.json()
-    allowed = ["name", "timezone", "locale", "currency", "work_week_start", "overtime_daily_threshold", "overtime_weekly_threshold"]
+    if is_admin:
+        allowed = ["name", "timezone", "locale", "currency", "work_week_start",
+                   "overtime_daily_threshold", "overtime_weekly_threshold", "attendance_enabled"]
+    else:
+        allowed = ["attendance_enabled"]
+
     update = {k: v for k, v in body.items() if k in allowed and v is not None}
+    if "attendance_enabled" in body and body["attendance_enabled"] is False:
+        update["attendance_enabled"] = False
     update["updated_at"] = datetime.now(timezone.utc)
 
     await db.organizations.update_one({"_id": ObjectId(current.get("org_id"))}, {"$set": update})

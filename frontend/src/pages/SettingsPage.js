@@ -9,10 +9,11 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound } from "lucide-react";
+import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock } from "lucide-react";
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const isAdmin = user?.system_role === "admin";
   const [org, setOrg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -24,6 +25,7 @@ export default function SettingsPage() {
     work_week_start: 1,
     overtime_daily_threshold: 8,
     overtime_weekly_threshold: 40,
+    attendance_enabled: false,
   });
 
   // MFA state
@@ -54,6 +56,7 @@ export default function SettingsPage() {
           work_week_start: data.work_week_start ?? 1,
           overtime_daily_threshold: data.overtime_daily_threshold ?? 8,
           overtime_weekly_threshold: data.overtime_weekly_threshold ?? 40,
+          attendance_enabled: !!data.attendance_enabled,
         });
         setMandateAll(!!data.mfa_org_mandate);
       } catch {}
@@ -161,8 +164,48 @@ export default function SettingsPage() {
         <p className="text-sm text-muted-foreground">Manage organization and security settings</p>
       </div>
 
-      {/* Organization Settings */}
+      {/* Attendance Feature Toggle — admin or manager */}
       <Card className="border">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Clock className="h-5 w-5" /> Attendance Tracking
+          </CardTitle>
+          <CardDescription>
+            Enable or disable the clock-in / clock-out feature for your organization.
+            When disabled, the Attendance page is hidden for all users.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">
+                {form.attendance_enabled ? "Enabled" : "Disabled"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {form.attendance_enabled
+                  ? "Employees can clock in and out"
+                  : "Attendance page is hidden from all users"}
+              </p>
+            </div>
+            <Switch
+              checked={form.attendance_enabled}
+              onCheckedChange={async (v) => {
+                setForm({ ...form, attendance_enabled: v });
+                try {
+                  await orgApi.update({ attendance_enabled: v });
+                  toast.success(v ? "Attendance tracking enabled" : "Attendance tracking disabled");
+                } catch (err) {
+                  setForm({ ...form, attendance_enabled: !v });
+                  toast.error(formatApiError(err.response?.data?.detail));
+                }
+              }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Organization Settings — admin only */}
+      {isAdmin && <Card className="border">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <SettingsIcon className="h-5 w-5" /> Organization
@@ -232,7 +275,7 @@ export default function SettingsPage() {
             Save Settings
           </Button>
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* MFA - Personal */}
       <Card className="border">

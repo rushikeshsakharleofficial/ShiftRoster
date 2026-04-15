@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { attendanceApi, formatApiError } from "@/lib/api";
+import { attendanceApi, orgApi, formatApiError } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +14,13 @@ export default function AttendancePage() {
   const [loading, setLoading] = useState(true);
   const [clockedIn, setClockedIn] = useState(false);
   const [clockLoading, setClockLoading] = useState(false);
+  const [enabled, setEnabled] = useState(null);
 
   const loadData = async () => {
     try {
+      const { data: orgData } = await orgApi.get();
+      if (!orgData.attendance_enabled) { setEnabled(false); setLoading(false); return; }
+      setEnabled(true);
       const { data } = await attendanceApi.list();
       setLogs(data || []);
       const hasOpen = (data || []).some(l => l.clock_in && !l.clock_out && l.user_id === user?.id);
@@ -61,6 +65,16 @@ export default function AttendancePage() {
     if (s === "absent") return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
     return "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300";
   };
+
+  if (enabled === false) {
+    return (
+      <div data-testid="attendance-page" className="flex flex-col items-center justify-center py-24 text-center gap-3">
+        <Clock className="h-12 w-12 text-muted-foreground opacity-30" />
+        <p className="text-lg font-medium">Attendance tracking is not enabled</p>
+        <p className="text-sm text-muted-foreground">A manager or admin can activate it in Settings.</p>
+      </div>
+    );
+  }
 
   return (
     <div data-testid="attendance-page" className="space-y-6">

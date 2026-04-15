@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
-import { notificationsApi } from "@/lib/api";
+import { notificationsApi, orgApi } from "@/lib/api";
 import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
@@ -25,6 +25,7 @@ export default function AppLayout() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [attendanceEnabled, setAttendanceEnabled] = useState(false);
   const wsRef = useRef(null);
 
   const isAdmin = user?.system_role === "admin";
@@ -43,6 +44,7 @@ export default function AppLayout() {
   useEffect(() => {
     fetchNotifs();
     const interval = setInterval(fetchNotifs, 30000);
+    orgApi.get().then(({ data }) => setAttendanceEnabled(!!data.attendance_enabled)).catch(() => {});
     return () => clearInterval(interval);
   }, []);
 
@@ -113,13 +115,13 @@ export default function AppLayout() {
     { to: "/departments", icon: Building2, label: "Departments", show: isAdmin },
     { to: "/manager-groups", icon: UserCog, label: "Manager Groups", show: isAdmin },
     { to: "/leave", icon: ClipboardList, label: "Leave Management", show: isAdmin || isManager || level !== "L1" },
-    { to: "/attendance", icon: Clock, label: "Attendance", show: true },
+    { to: "/attendance", icon: Clock, label: "Attendance", show: attendanceEnabled },
     { to: "/swap-requests", icon: ArrowLeftRight, label: "Swap Requests", show: isAdmin || isManager || level !== "L1" },
     { to: "/sticky-notes", icon: StickyNote, label: "Sticky Notes", show: true },
     { to: "/notifications", icon: Bell, label: "Notifications", show: true },
     { to: "/reports", icon: BarChart3, label: "Reports", show: isAdmin || isManager },
     { to: "/audit-log", icon: ScrollText, label: "Audit Log", show: isAdmin },
-    { to: "/settings", icon: Settings, label: "Settings", show: isAdmin },
+    { to: "/settings", icon: Settings, label: "Settings", show: isAdmin || isManager },
   ].filter((n) => n.show);
 
   const initials = user?.full_name
