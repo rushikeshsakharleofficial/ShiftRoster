@@ -4,7 +4,7 @@ from typing import Optional, List
 from datetime import datetime, timezone
 from bson import ObjectId
 from db import db
-from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit
+from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit, create_notification
 
 router = APIRouter(prefix="/api/sticky-notes", tags=["sticky-notes"])
 
@@ -76,6 +76,23 @@ async def create_sticky_note(data: CreateStickyNoteRequest, request: Request):
     }
     result = await db.sticky_notes.insert_one(note_doc)
     note_doc["_id"] = result.inserted_id
+
+    # Notify all org members when a public note is created
+    if data.is_public:
+        org_users = await db.users.find(
+            {"org_id": current.get("org_id"), "_id": {"$ne": ObjectId(current["id"])}},
+            {"_id": 1}
+        ).to_list(500)
+        creator_name = current.get("full_name", "Someone")
+        preview = data.text[:60] + ("..." if len(data.text) > 60 else "")
+        for u in org_users:
+            await create_notification(
+                str(u["_id"]),
+                "sticky_note_public",
+                f"{creator_name} posted a public note: {preview}",
+                link="/sticky-notes"
+            )
+
     return serialize_doc(note_doc)
 
 

@@ -1,13 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
-import { format, isSameDay, startOfMonth, endOfMonth } from "date-fns";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { format, isSameDay } from "date-fns";
 import { stickyNotesApi, formatApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { FullScreenCalendar } from "@/components/ui/fullscreen-calendar";
+import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -26,8 +27,10 @@ import {
   Lock,
   Loader2,
   Pencil,
-  X,
+  CalendarIcon,
+  LayoutGrid,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const NOTE_COLORS = [
   { name: "Yellow", value: "#FEF3C7" },
@@ -40,23 +43,291 @@ const NOTE_COLORS = [
   { name: "Teal", value: "#CCFBF1" },
 ];
 
+const ROTATIONS = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
+const POSITIONS_KEY = "sticky-note-positions";
+
+function loadStoredPositions() {
+  try {
+    return JSON.parse(localStorage.getItem(POSITIONS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function persistPositions(positions) {
+  localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions));
+}
+
+function gridPosition(index) {
+  const col = index % 4;
+  const row = Math.floor(index / 4);
+  return {
+    x: col * 224 + 24,
+    y: row * 210 + 24,
+  };
+}
+
+// ─── Draggable floating sticky note ──────────────────────────────────────────
+function FloatingNote({
+  note,
+  position,
+  onPositionChange,
+  onEdit,
+  onDelete,
+  onTogglePin,
+  canDelete,
+  isHighlighted,
+}) {
+  const [pos, setPos] = useState(position);
+  const posRef = useRef(position);
+  const isDragging = useRef(false);
+  const origin = useRef({ mx: 0, my: 0, nx: 0, ny: 0 });
+  const onChangeRef = useRef(onPositionChange);
+  const [zoomOpen, setZoomOpen] = useState(false);
+  const isTruncated = note.text.length > 120 || note.text.split("\n").length > 4;
+
+  useEffect(() => {
+    onChangeRef.current = onPositionChange;
+  });
+
+  // Sync position when parent resets layout
+  useEffect(() => {
+    posRef.current = position;
+    setPos(position);
+  }, [position.x, position.y]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const rotation = useMemo(
+    () => ROTATIONS[Math.abs(parseInt(note.id, 10)) % ROTATIONS.length],
+    [note.id]
+  );
+
+  const handleMouseDown = (e) => {
+    if (e.target.closest("button")) return;
+    e.preventDefault();
+    isDragging.current = true;
+    origin.current = {
+      mx: e.clientX,
+      my: e.clientY,
+      nx: posRef.current.x,
+      ny: posRef.current.y,
+    };
+  };
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!isDragging.current) return;
+      const x = origin.current.nx + e.clientX - origin.current.mx;
+      const y = origin.current.ny + e.clientY - origin.current.my;
+      posRef.current = { x, y };
+      setPos({ x, y });
+    };
+    const onUp = () => {
+      if (isDragging.current) {
+        isDragging.current = false;
+        onChangeRef.current(note.id, posRef.current);
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [note.id]);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: pos.x,
+        top: pos.y,
+        width: 200,
+        transform: `rotate(${rotation}deg)`,
+        background: note.color,
+        cursor: "grab",
+        userSelect: "none",
+        boxShadow: isHighlighted
+          ? `0 0 0 2.5px #6366f1, 4px 8px 20px rgba(0,0,0,0.22)`
+          : "2px 5px 14px rgba(0,0,0,0.16), 0 1px 3px rgba(0,0,0,0.08)",
+        zIndex: isHighlighted ? 20 : 10,
+        transition: "box-shadow 0.2s",
+      }}
+      className="rounded-sm p-3 group select-none"
+      onMouseDown={handleMouseDown}
+    >
+      {/* Tape strip */}
+      <div
+        style={{
+          position: "absolute",
+          top: -9,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 48,
+          height: 15,
+          background: "rgba(255,255,255,0.52)",
+          border: "1px solid rgba(0,0,0,0.07)",
+          borderRadius: 2,
+          backdropFilter: "blur(2px)",
+        }}
+      />
+
+      {note.pinned && (
+        <Pin className="h-3 w-3 text-primary absolute top-2.5 right-2.5" />
+      )}
+
+      <div className="text-[10px] mt-1 mb-1.5 flex items-center gap-1" style={{ color: "rgba(0,0,0,0.55)" }}>
+        <CalendarIcon className="h-2.5 w-2.5 shrink-0" />
+        {note.note_date}
+      </div>
+
+      <p
+        className="text-sm break-words pr-1"
+        style={{
+          color: "rgba(0,0,0,0.78)",
+          display: "-webkit-box",
+          WebkitLineClamp: 4,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+          lineHeight: "1.5",
+        }}
+      >
+        {note.text}
+      </p>
+      {isTruncated && (
+        <button
+          className="text-[11px] font-medium mt-1 underline underline-offset-2"
+          style={{ color: "rgba(0,0,0,0.5)" }}
+          onClick={(e) => { e.stopPropagation(); setZoomOpen(true); }}
+        >
+          See more
+        </button>
+      )}
+
+      {/* Actions */}
+      <div className="mt-2.5 flex items-center justify-between">
+        <div className="flex items-center gap-1 min-w-0">
+          {note.is_public ? (
+            <Globe className="h-3 w-3 shrink-0" style={{ color: "rgba(0,0,0,0.45)" }} />
+          ) : (
+            <Lock className="h-3 w-3 shrink-0" style={{ color: "rgba(0,0,0,0.45)" }} />
+          )}
+          <span className="text-[10px] truncate max-w-[60px]" style={{ color: "rgba(0,0,0,0.5)" }}>
+            {note.user_name}
+          </span>
+        </div>
+        <div className="flex items-center gap-0.5">
+          <button
+            className="p-0.5 rounded hover:bg-black/10 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePin(note);
+            }}
+            title={note.pinned ? "Unpin" : "Pin"}
+          >
+            {note.pinned ? (
+              <PinOff className="h-3 w-3" />
+            ) : (
+              <Pin className="h-3 w-3" />
+            )}
+          </button>
+          <button
+            className="p-0.5 rounded hover:bg-black/10 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(note);
+            }}
+            title="Edit"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          {canDelete && (
+            <button
+              className="p-0.5 rounded hover:bg-black/10 transition-colors text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(note.id);
+              }}
+              title="Delete"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Zoom popup */}
+      {isTruncated && (
+        <Dialog open={zoomOpen} onOpenChange={setZoomOpen}>
+          <DialogContent className="sm:max-w-lg flex flex-col max-h-[90vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <CalendarIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                {note.note_date}
+                {note.pinned && <Pin className="h-3.5 w-3.5 text-primary ml-1" />}
+              </DialogTitle>
+            </DialogHeader>
+            <div
+              className="rounded-sm relative flex-1 overflow-hidden"
+              style={{ background: note.color }}
+            >
+              <div
+                style={{
+                  position: "absolute", top: -8, left: "50%",
+                  transform: "translateX(-50%)", width: 48, height: 14,
+                  background: "rgba(255,255,255,0.52)",
+                  border: "1px solid rgba(0,0,0,0.07)", borderRadius: 2,
+                }}
+              />
+              <div className="p-4 overflow-y-auto" style={{ maxHeight: 360 }}>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words"
+                  style={{ color: "rgba(0,0,0,0.82)" }}>
+                  {note.text}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+              <span className="flex items-center gap-1">
+                {note.is_public ? <Globe className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+                {note.user_name}
+              </span>
+              <div className="flex gap-1">
+                <Button size="sm" variant="ghost" className="h-7 px-2 gap-1"
+                  onClick={() => { setZoomOpen(false); onEdit(note); }}>
+                  <Pencil className="h-3 w-3" /> Edit
+                </Button>
+                {canDelete && (
+                  <Button size="sm" variant="ghost" className="h-7 px-2 gap-1 text-destructive hover:text-destructive"
+                    onClick={() => { setZoomOpen(false); onDelete(note.id); }}>
+                    <Trash2 className="h-3 w-3" /> Delete
+                  </Button>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function StickyNotesPage() {
   const { user } = useAuth();
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [filterDate, setFilterDate] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [editingNote, setEditingNote] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [notePositions, setNotePositions] = useState(loadStoredPositions);
   const [form, setForm] = useState({
     text: "",
     color: "#FEF3C7",
     is_public: false,
     pinned: false,
   });
-
-  // Floating notes panel
-  const [showFloating, setShowFloating] = useState(false);
 
   const loadNotes = useCallback(async () => {
     try {
@@ -70,28 +341,68 @@ export default function StickyNotesPage() {
     loadNotes();
   }, [loadNotes]);
 
-  // Transform notes into calendar data format
-  const calendarData = notes.reduce((acc, note) => {
-    const noteDate = new Date(note.note_date + "T00:00:00");
-    const existing = acc.find((d) => isSameDay(d.day, noteDate));
-    const event = {
-      id: note.id,
-      name: note.text.substring(0, 40) + (note.text.length > 40 ? "..." : ""),
-      time: note.is_public ? "Public" : "Private",
-      color: note.color,
-      _note: note,
-    };
-    if (existing) {
-      existing.events.push(event);
-    } else {
-      acc.push({ day: noteDate, events: [event] });
-    }
-    return acc;
+  // Assign grid positions for notes that don't have stored positions yet
+  useEffect(() => {
+    setNotePositions((prev) => {
+      const updated = { ...prev };
+      let changed = false;
+      notes.forEach((note, index) => {
+        if (!updated[note.id]) {
+          updated[note.id] = gridPosition(index);
+          changed = true;
+        }
+      });
+      if (changed) {
+        persistPositions(updated);
+        return updated;
+      }
+      return prev;
+    });
+  }, [notes]);
+
+  const handlePositionChange = useCallback((noteId, pos) => {
+    setNotePositions((prev) => {
+      const next = { ...prev, [noteId]: pos };
+      persistPositions(next);
+      return next;
+    });
   }, []);
 
+  const resetLayout = useCallback(() => {
+    setNotePositions((prev) => {
+      const next = { ...prev };
+      notes.forEach((note, index) => {
+        next[note.id] = gridPosition(index);
+      });
+      persistPositions(next);
+      return next;
+    });
+  }, [notes]);
+
+  // Calendar data
+  const calendarData = useMemo(
+    () =>
+      notes.reduce((acc, note) => {
+        const noteDate = new Date(note.note_date + "T00:00:00");
+        const existing = acc.find((d) => isSameDay(d.day, noteDate));
+        const event = {
+          id: note.id,
+          name:
+            note.text.substring(0, 40) +
+            (note.text.length > 40 ? "..." : ""),
+          time: note.is_public ? "Public" : "Private",
+          color: note.color,
+        };
+        if (existing) existing.events.push(event);
+        else acc.push({ day: noteDate, events: [event] });
+        return acc;
+      }, []),
+    [notes]
+  );
+
   const handleDateClick = (day) => {
+    setFilterDate(day);
     setSelectedDate(day);
-    setShowFloating(true);
   };
 
   const handleNewNote = (day) => {
@@ -158,35 +469,27 @@ export default function StickyNotesPage() {
     } catch {}
   };
 
-  // Notes for the selected date
-  const selectedDateNotes = notes.filter(
-    (n) => n.note_date === format(selectedDate, "yyyy-MM-dd")
-  );
-
-  // Pinned notes across all dates
-  const pinnedNotes = notes.filter((n) => n.pinned);
+  const displayedNotes = filterDate
+    ? notes.filter(
+        (n) => n.note_date === format(filterDate, "yyyy-MM-dd")
+      )
+    : notes;
 
   return (
     <div data-testid="sticky-notes-page" className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <StickyNote className="h-6 w-6 text-amber-500" />
             Sticky Notes
           </h1>
           <p className="text-sm text-muted-foreground">
-            Add notes to calendar dates — visible to you or the whole team
+            Double-click a date to open its notes board
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowFloating(!showFloating)}
-          >
-            {showFloating ? "Hide Panel" : "Show Panel"}
-          </Button>
+          {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           <Button size="sm" onClick={() => handleNewNote(selectedDate)} className="gap-1">
             <Plus className="h-4 w-4" />
             New Note
@@ -194,165 +497,115 @@ export default function StickyNotesPage() {
         </div>
       </div>
 
-      {/* Pinned Notes Strip */}
-      {pinnedNotes.length > 0 && (
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          {pinnedNotes.map((note) => (
-            <div
-              key={note.id}
-              className="sticky-note pinned flex-shrink-0 w-48 rounded-lg p-3 border-2 cursor-pointer"
-              style={{ background: note.color, borderColor: `${note.color}80` }}
-              onClick={() => handleEditNote(note)}
-            >
-              <div className="flex items-start justify-between mb-1">
-                <Pin className="h-3 w-3 text-primary" />
-                <span className="text-[10px] text-muted-foreground">
-                  {note.note_date}
-                </span>
-              </div>
-              <p className="text-xs font-medium line-clamp-3 text-foreground/80">
-                {note.text}
-              </p>
-              <div className="flex items-center gap-1 mt-2">
-                {note.is_public ? (
-                  <Globe className="h-3 w-3 text-muted-foreground" />
-                ) : (
-                  <Lock className="h-3 w-3 text-muted-foreground" />
-                )}
-                <span className="text-[10px] text-muted-foreground">
-                  {note.user_name}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Calendar — always visible */}
+      <div className="border rounded-lg bg-card">
+        <FullScreenCalendar
+          data={calendarData}
+          onDateClick={handleDateClick}
+          onNewEvent={handleNewNote}
+        />
+      </div>
 
-      <div className="flex gap-4">
-        {/* Calendar */}
-        <div className={`flex-1 border rounded-lg bg-card ${showFloating ? "lg:w-2/3" : "w-full"}`}>
-          <FullScreenCalendar
-            data={calendarData}
-            onDateClick={handleDateClick}
-            onNewEvent={handleNewNote}
-          />
-        </div>
-
-        {/* Floating side panel */}
-        {showFloating && (
-          <div className="hidden lg:block w-80 border rounded-lg bg-card p-4 space-y-3 sticky top-0 self-start max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-sm">
-                {format(selectedDate, "MMMM d, yyyy")}
-              </h3>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setShowFloating(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {selectedDateNotes.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <StickyNote className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-xs">No notes for this date</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 gap-1"
-                  onClick={() => handleNewNote(selectedDate)}
-                >
-                  <Plus className="h-3 w-3" />
-                  Add Note
+      {/* Corkboard Dialog — opens on date double-click */}
+      <Dialog open={filterDate !== null} onOpenChange={(open) => { if (!open) setFilterDate(null); }}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between pr-6">
+              <span className="flex items-center gap-2">
+                <StickyNote className="h-5 w-5 text-amber-500" />
+                {filterDate ? format(filterDate, "MMMM d, yyyy") : ""}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={resetLayout} className="gap-1">
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  Reset Layout
+                </Button>
+                <Button size="sm" onClick={() => handleNewNote(filterDate)} className="gap-1">
+                  <Plus className="h-4 w-4" />
+                  New Note
                 </Button>
               </div>
-            ) : (
-              <div className="space-y-2">
-                {selectedDateNotes.map((note) => (
-                  <div
-                    key={note.id}
-                    className="sticky-note rounded-lg p-3 border group relative"
-                    style={{ background: note.color }}
-                  >
-                    <p className="text-xs text-foreground/80 pr-12 whitespace-pre-wrap">
-                      {note.text}
-                    </p>
-                    <div className="flex items-center justify-between mt-2">
-                      <div className="flex items-center gap-1">
-                        {note.is_public ? (
-                          <Globe className="h-3 w-3 text-muted-foreground" />
-                        ) : (
-                          <Lock className="h-3 w-3 text-muted-foreground" />
-                        )}
-                        <span className="text-[10px] text-muted-foreground">
-                          {note.user_name}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Actions */}
-                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => handleTogglePin(note)}
-                      >
-                        {note.pinned ? (
-                          <PinOff className="h-3 w-3" />
-                        ) : (
-                          <Pin className="h-3 w-3" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => handleEditNote(note)}
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      {(note.user_id === user?.id ||
-                        user?.system_role === "admin") && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(note.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Corkboard canvas */}
+          <div
+            className="relative overflow-auto rounded-md flex-1"
+            style={{
+              minHeight: 480,
+              backgroundImage: `radial-gradient(circle, rgba(128,128,128,0.25) 1px, transparent 1px)`,
+              backgroundSize: "28px 28px",
+            }}
+          >
+            {displayedNotes.length === 0 && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground pointer-events-none">
+                <StickyNote className="h-14 w-14 mb-3 opacity-15" />
+                <p className="text-sm opacity-60">
+                  No notes for this date — click New Note to add one
+                </p>
               </div>
             )}
+            {displayedNotes.map((note) => (
+              <FloatingNote
+                key={note.id}
+                note={note}
+                position={notePositions[note.id] || gridPosition(notes.indexOf(note))}
+                onPositionChange={handlePositionChange}
+                onEdit={handleEditNote}
+                onDelete={handleDelete}
+                onTogglePin={handleTogglePin}
+                canDelete={note.user_id === user?.id || user?.system_role === "admin"}
+                isHighlighted={false}
+              />
+            ))}
           </div>
-        )}
-      </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-md flex flex-col max-h-[90vh]">
+          <DialogHeader className="shrink-0">
             <DialogTitle>
               {editingNote ? "Edit Note" : "New Sticky Note"}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-1">
+            {/* Calendar date picker */}
             <div className="space-y-1.5">
               <Label>Date</Label>
-              <Input
-                type="date"
-                value={format(selectedDate, "yyyy-MM-dd")}
-                onChange={(e) =>
-                  setSelectedDate(new Date(e.target.value + "T00:00:00"))
-                }
-              />
+              <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal gap-2",
+                      !selectedDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="h-4 w-4 shrink-0" />
+                    {selectedDate
+                      ? format(selectedDate, "PPP")
+                      : "Pick a date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={(date) => {
+                      if (date) {
+                        setSelectedDate(date);
+                        setDatePickerOpen(false);
+                      }
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
+
+            {/* Note text */}
             <div className="space-y-1.5">
               <Label>Note</Label>
               <Textarea
@@ -363,6 +616,8 @@ export default function StickyNotesPage() {
                 className="resize-none"
               />
             </div>
+
+            {/* Color */}
             <div className="space-y-1.5">
               <Label>Color</Label>
               <div className="flex gap-2 flex-wrap">
@@ -382,11 +637,15 @@ export default function StickyNotesPage() {
                 ))}
               </div>
             </div>
+
+            {/* Toggles */}
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <Switch
                   checked={form.is_public}
-                  onCheckedChange={(v) => setForm({ ...form, is_public: v })}
+                  onCheckedChange={(v) =>
+                    setForm({ ...form, is_public: v })
+                  }
                 />
                 <Label className="flex items-center gap-1 text-sm">
                   {form.is_public ? (
@@ -410,15 +669,37 @@ export default function StickyNotesPage() {
                 </Label>
               </div>
             </div>
+
             {/* Preview */}
             <div
-              className="rounded-lg p-3 border text-sm"
-              style={{ background: form.color }}
+              className="rounded-sm border text-sm relative"
+              style={{ background: form.color, marginTop: 12 }}
             >
-              {form.text || "Preview..."}
+              <div
+                style={{
+                  position: "absolute",
+                  top: -8,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  width: 44,
+                  height: 14,
+                  background: "rgba(255,255,255,0.52)",
+                  border: "1px solid rgba(0,0,0,0.07)",
+                  borderRadius: 2,
+                }}
+              />
+              <div
+                className="p-3 overflow-y-auto"
+                style={{ maxHeight: 160 }}
+              >
+                <span style={{ color: "rgba(0,0,0,0.72)", whiteSpace: "pre-wrap" }}>
+                  {form.text || "Preview..."}
+                </span>
+              </div>
             </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="shrink-0 pt-2">
             <Button
               variant="outline"
               onClick={() => setDialogOpen(false)}
@@ -429,8 +710,10 @@ export default function StickyNotesPage() {
             <Button onClick={handleSave} disabled={saving} className="gap-1">
               {saving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
+              ) : editingNote ? (
+                "Save Changes"
               ) : (
-                <>{editingNote ? "Save Changes" : "Create Note"}</>
+                "Create Note"
               )}
             </Button>
           </DialogFooter>
