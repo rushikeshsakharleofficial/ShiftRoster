@@ -5,8 +5,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Clock, LogIn, LogOut, Loader2 } from "lucide-react";
+import { Clock, LogIn, LogOut, Loader2, TimerReset } from "lucide-react";
+
+const EXTEND_OPTIONS = [
+  { label: "30 minutes", value: 30 },
+  { label: "1 hour", value: 60 },
+  { label: "90 minutes", value: 90 },
+  { label: "2 hours", value: 120 },
+];
 
 export default function AttendancePage() {
   const { user } = useAuth();
@@ -15,6 +25,9 @@ export default function AttendancePage() {
   const [clockedIn, setClockedIn] = useState(false);
   const [clockLoading, setClockLoading] = useState(false);
   const [enabled, setEnabled] = useState(null);
+  const [showExtend, setShowExtend] = useState(false);
+  const [extendMinutes, setExtendMinutes] = useState(30);
+  const [extendLoading, setExtendLoading] = useState(false);
 
   const loadData = async () => {
     try {
@@ -57,6 +70,19 @@ export default function AttendancePage() {
     setClockLoading(false);
   };
 
+  const handleExtendShift = async () => {
+    setExtendLoading(true);
+    try {
+      await attendanceApi.extendShift({ minutes: extendMinutes });
+      toast.success(`Shift extended by ${extendMinutes} minutes`);
+      setShowExtend(false);
+      loadData();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    }
+    setExtendLoading(false);
+  };
+
   const formatTime = (t) => t ? new Date(t).toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
   const statusColor = (s) => {
@@ -97,17 +123,28 @@ export default function AttendancePage() {
               <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString("en-IN", { weekday: "long", month: "long", day: "numeric" })}</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-center sm:justify-end">
             {!clockedIn ? (
               <Button data-testid="clock-in-btn" onClick={handleClockIn} disabled={clockLoading} className="gap-2">
                 {clockLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                 Clock In
               </Button>
             ) : (
-              <Button data-testid="clock-out-btn" variant="destructive" onClick={handleClockOut} disabled={clockLoading} className="gap-2">
-                {clockLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
-                Clock Out
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowExtend(true)}
+                  className="gap-2"
+                  data-testid="extend-shift-btn"
+                >
+                  <TimerReset className="h-4 w-4" />
+                  Extend Shift
+                </Button>
+                <Button data-testid="clock-out-btn" variant="destructive" onClick={handleClockOut} disabled={clockLoading} className="gap-2">
+                  {clockLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+                  Clock Out
+                </Button>
+              </>
             )}
           </div>
         </CardContent>
@@ -121,21 +158,25 @@ export default function AttendancePage() {
               {(user?.system_role === "admin" || user?.system_role === "manager") && <TableHead>Employee</TableHead>}
               <TableHead>Clock In</TableHead>
               <TableHead>Clock Out</TableHead>
+              <TableHead>Extended</TableHead>
               <TableHead>Method</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
             ) : logs.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No attendance records</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No attendance records</TableCell></TableRow>
             ) : (
               logs.map(l => (
                 <TableRow key={l.id} data-testid={`attendance-row-${l.id}`}>
                   {(user?.system_role === "admin" || user?.system_role === "manager") && <TableCell className="font-medium">{l.user_name || "—"}</TableCell>}
                   <TableCell className="text-sm">{formatTime(l.clock_in)}</TableCell>
                   <TableCell className="text-sm">{formatTime(l.clock_out)}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {l.extended_minutes ? `+${l.extended_minutes}m` : "—"}
+                  </TableCell>
                   <TableCell><Badge variant="outline" className="text-[10px]">{l.clock_in_method || "web"}</Badge></TableCell>
                   <TableCell><Badge className={`text-[10px] ${statusColor(l.status)}`}>{l.status}</Badge></TableCell>
                 </TableRow>
@@ -144,6 +185,40 @@ export default function AttendancePage() {
           </TableBody>
         </Table>
       </Card>
+
+      {/* Extend Shift Dialog */}
+      <Dialog open={showExtend} onOpenChange={setShowExtend}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Extend Shift</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">How long do you want to extend your current shift?</p>
+            <div className="grid grid-cols-2 gap-2">
+              {EXTEND_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setExtendMinutes(opt.value)}
+                  className={`px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                    extendMinutes === opt.value
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border bg-background hover:bg-accent"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExtend(false)}>Cancel</Button>
+            <Button onClick={handleExtendShift} disabled={extendLoading} className="gap-2">
+              {extendLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <TimerReset className="h-4 w-4" />}
+              Extend {extendMinutes}m
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

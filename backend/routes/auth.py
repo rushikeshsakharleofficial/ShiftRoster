@@ -52,9 +52,9 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str, 
 
 @router.post("/login")
 async def login(data: LoginRequest, request: Request, response: Response):
-    email = data.email.strip().lower()
+    raw = data.email.strip()
     ip = request.client.host if request.client else "unknown"
-    identifier = f"{ip}:{email}"
+    identifier = f"{ip}:{raw.lower()}"
 
     # Brute force check
     attempt = await db.login_attempts.find_one({"identifier": identifier})
@@ -65,7 +65,12 @@ async def login(data: LoginRequest, request: Request, response: Response):
         else:
             await db.login_attempts.delete_one({"identifier": identifier})
 
-    user = await db.users.find_one({"email": email})
+    # Accept email OR username
+    if "@" in raw:
+        user = await db.users.find_one({"email": raw.lower()})
+    else:
+        user = await db.users.find_one({"username": raw.lower()})
+
     if not user or not verify_password(data.password, user["password_hash"]):
         await db.login_attempts.update_one(
             {"identifier": identifier},
@@ -76,7 +81,7 @@ async def login(data: LoginRequest, request: Request, response: Response):
             },
             upsert=True,
         )
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=401, detail="Invalid email/username or password")
 
     if user.get("status") == "inactive":
         raise HTTPException(status_code=403, detail="Account is deactivated")
@@ -96,7 +101,7 @@ async def login(data: LoginRequest, request: Request, response: Response):
         mfa_token = create_mfa_temp_token(user_id)
         return {"mfa_setup_required": True, "mfa_token": mfa_token, "remember_me": data.remember_me}
 
-    access_token = create_access_token(user_id, email)
+    access_token = create_access_token(user_id, user["email"])
     refresh_token = create_refresh_token(user_id)
     set_auth_cookies(response, access_token, refresh_token, remember_me=data.remember_me)
 

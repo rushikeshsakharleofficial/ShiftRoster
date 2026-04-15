@@ -9,11 +9,21 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { notificationsApi, orgApi } from "@/lib/api";
+import { useChat } from "@/contexts/ChatContext";
 import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
-  BarChart3, ScrollText, Settings, LogOut, Menu, X, Check, LayoutTemplate
+  BarChart3, ScrollText, Settings, LogOut, Menu, X, Check, LayoutTemplate,
+  MessageSquare, Coffee, Plane, CircleDot
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
 const BACKEND_URL = import.meta.env.REACT_APP_BACKEND_URL;
 
@@ -26,8 +36,11 @@ export default function AppLayout() {
   const [notifications, setNotifications] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [attendanceEnabled, setAttendanceEnabled] = useState(false);
+  const [orgBrand, setOrgBrand] = useState({ name: "ShiftRoster", logo_url: "" });
   const wsRef = useRef(null);
 
+  const { totalUnread: chatUnread } = useChat();
+  const [myStatus, setMyStatus] = useState("active"); // active | break | leave
   const isAdmin = user?.system_role === "admin";
   const isManager = user?.system_role === "manager";
   const isEmployee = user?.system_role === "employee";
@@ -44,7 +57,25 @@ export default function AppLayout() {
   useEffect(() => {
     fetchNotifs();
     const interval = setInterval(fetchNotifs, 30000);
-    orgApi.get().then(({ data }) => setAttendanceEnabled(!!data.attendance_enabled)).catch(() => {});
+    orgApi.get().then(({ data }) => {
+      setAttendanceEnabled(!!data.attendance_enabled);
+      const logoUrl = data.logo_url || "";
+      setOrgBrand({ name: data.brand_name || data.name || "ShiftRoster", logo_url: logoUrl });
+
+      // Update favicon to brand logo, or remove it if no logo
+      const link = document.querySelector("link[rel='icon']") || (() => {
+        const el = document.createElement("link");
+        el.rel = "icon";
+        document.head.appendChild(el);
+        return el;
+      })();
+      if (logoUrl) {
+        link.href = logoUrl;
+        link.type = "image/png";
+      } else {
+        link.href = "data:,";
+      }
+    }).catch(() => {});
     return () => clearInterval(interval);
   }, []);
 
@@ -55,6 +86,8 @@ export default function AppLayout() {
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
+    // Expose to ChatPage / ChatContext for typing events (set immediately, before open)
+    window._appLayoutWsRef = ws;
     ws.onopen = () => {
       ws.send(JSON.stringify({ user_id: user.id }));
     };
@@ -63,6 +96,9 @@ export default function AppLayout() {
         const msg = JSON.parse(e.data);
         if (msg.type === "presence_update") {
           setOnlineUsers(msg.online_users || []);
+        } else if (msg.type && msg.type.startsWith("chat_")) {
+          // Dispatch to ChatContext via CustomEvent
+          window.dispatchEvent(new CustomEvent("ws:chat", { detail: msg }));
         }
       } catch {}
     };
@@ -76,6 +112,9 @@ export default function AppLayout() {
     return () => {
       clearInterval(heartbeat);
       ws.close();
+      if (window._appLayoutWsRef === ws) {
+        window._appLayoutWsRef = null;
+      }
     };
   }, [user?.id]);
 
@@ -96,6 +135,14 @@ export default function AppLayout() {
       await notificationsApi.markAllRead();
       fetchNotifs();
     } catch {}
+  };
+
+  const handleSetStatus = (status) => {
+    setMyStatus(status);
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "set_status", status }));
+    }
   };
 
   const timeAgo = (date) => {
@@ -119,6 +166,7 @@ export default function AppLayout() {
     { to: "/swap-requests", icon: ArrowLeftRight, label: "Swap Requests", show: isAdmin || isManager || level !== "L1" },
     { to: "/shift-templates", icon: LayoutTemplate, label: "Shift Templates", show: isAdmin || isManager },
     { to: "/sticky-notes", icon: StickyNote, label: "Sticky Notes", show: true },
+    { to: "/chat", icon: MessageSquare, label: "Chat", show: true },
     { to: "/notifications", icon: Bell, label: "Notifications", show: true },
     { to: "/reports", icon: BarChart3, label: "Reports", show: isAdmin || isManager },
     { to: "/audit-log", icon: ScrollText, label: "Audit Log", show: isAdmin },
@@ -146,10 +194,14 @@ export default function AppLayout() {
       >
         {/* Logo */}
         <div className="flex flex-row items-center gap-2 px-4 h-14 border-b border-border shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
-            <CalendarDays className="h-4 w-4 text-primary-foreground" />
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0 overflow-hidden">
+            {orgBrand.logo_url ? (
+              <img src={orgBrand.logo_url} alt="logo" className="w-full h-full object-cover rounded-lg" />
+            ) : (
+              <CalendarDays className="h-4 w-4 text-primary-foreground" />
+            )}
           </div>
-          {sidebarOpen && <span className="font-semibold text-sm tracking-tight truncate">ShiftRoster</span>}
+          {sidebarOpen && <span className="font-semibold text-sm tracking-tight truncate">{orgBrand.name}</span>}
         </div>
 
         {/* Nav */}
@@ -174,23 +226,54 @@ export default function AppLayout() {
               {item.to === "/notifications" && unreadCount > 0 && sidebarOpen && (
                 <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{unreadCount}</Badge>
               )}
+              {item.to === "/chat" && chatUnread > 0 && sidebarOpen && (
+                <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{chatUnread > 99 ? "99+" : chatUnread}</Badge>
+              )}
             </NavLink>
           ))}
         </nav>
 
         {/* User section */}
         <div className="border-t border-border p-3 shrink-0">
-          <div className="flex items-center gap-2">
-            <Avatar className="h-8 w-8 shrink-0">
-              <AvatarFallback className="text-xs bg-primary/10 text-primary">{initials}</AvatarFallback>
-            </Avatar>
-            {sidebarOpen && (
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate">{user?.full_name}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{roleBadge}</p>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="flex items-center gap-2 cursor-pointer rounded-md hover:bg-accent/50 px-1 py-1 transition-colors">
+                <div className="relative shrink-0">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="text-xs bg-primary/10 text-primary">{initials}</AvatarFallback>
+                  </Avatar>
+                  {/* My own status dot */}
+                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
+                    myStatus === "active" ? "bg-green-500"
+                    : myStatus === "break" ? "bg-yellow-400"
+                    : myStatus === "leave" ? "border-2 border-red-400 bg-background"
+                    : "bg-muted-foreground/40"
+                  }`} />
+                </div>
+                {sidebarOpen && (
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{user?.full_name}</p>
+                    <p className="text-[10px] text-muted-foreground truncate capitalize">
+                      {myStatus === "active" ? roleBadge : myStatus === "break" ? "On Break" : "On Leave"}
+                    </p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" className="w-48">
+              <DropdownMenuLabel className="text-[11px] text-muted-foreground">Set Status</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleSetStatus("active")} className={myStatus === "active" ? "text-primary font-medium" : ""}>
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500 mr-2 shrink-0" /> Active
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSetStatus("break")} className={myStatus === "break" ? "text-primary font-medium" : ""}>
+                <Coffee className="h-3.5 w-3.5 mr-2 text-yellow-500 shrink-0" /> On Break
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSetStatus("leave")} className={myStatus === "leave" ? "text-primary font-medium" : ""}>
+                <Plane className="h-3.5 w-3.5 mr-2 text-red-400 shrink-0" /> On Leave
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
 
@@ -244,7 +327,12 @@ export default function AppLayout() {
                               {uInitials}
                             </AvatarFallback>
                           </Avatar>
-                          <span className={`presence-dot ${ou.status === "active" ? "active" : ou.status === "idle" ? "idle" : "away"}`} />
+                          <span className={`presence-dot ${
+                            ou.status === "active" ? "active"
+                            : ou.status === "break" ? "break"
+                            : ou.status === "leave" ? "leave"
+                            : "away"
+                          }`} />
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -345,8 +433,8 @@ export default function AppLayout() {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
-          <div className="animate-fade-in">
+        <main className="flex-1 flex flex-col min-h-0 p-4 md:p-6 lg:p-8">
+          <div className="animate-fade-in flex-1 min-h-0 overflow-auto">
             <Outlet />
           </div>
         </main>

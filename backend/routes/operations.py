@@ -347,6 +347,57 @@ async def clock_out(request: Request):
     return serialize_doc(updated)
 
 
+class ExtendShiftRequest(BaseModel):
+    minutes: int
+
+
+@router.post("/attendance/extend-shift")
+async def extend_shift(data: ExtendShiftRequest, request: Request):
+    """Extend the current active shift by N minutes. Updates the shift end_time and records extended_minutes."""
+    current = await get_current_user(request)
+
+    org = await db.organizations.find_one({"_id": ObjectId(current.get("org_id"))})
+    if not org or not org.get("attendance_enabled", False):
+        raise HTTPException(status_code=403, detail="Attendance tracking is not enabled")
+
+    if data.minutes <= 0 or data.minutes > 480:
+        raise HTTPException(status_code=400, detail="Extension must be between 1 and 480 minutes")
+
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    log = await db.attendance_logs.find_one({
+        "user_id": current["id"],
+        "clock_in": {"$gte": today_start},
+        "clock_out": None,
+    })
+    if not log:
+        raise HTTPException(status_code=400, detail="No active clock-in found")
+
+    now = datetime.now(timezone.utc)
+    new_extended = (log.get("extended_minutes") or 0) + data.minutes
+    await db.attendance_logs.update_one(
+        {"_id": log["_id"]},
+        {"$set": {"extended_minutes": new_extended, "updated_at": now}},
+    )
+
+    # Also extend the associated shift end_time if shift_id is present
+    if log.get("shift_id"):
+        try:
+            shift = await db.shifts.find_one({"_id": ObjectId(log["shift_id"])})
+            if shift and shift.get("end_time"):
+                from datetime import datetime as dt
+                end_dt = shift["end_time"] if isinstance(shift["end_time"], datetime) else dt.fromisoformat(shift["end_time"].replace("Z", "+00:00"))
+                new_end = end_dt + timedelta(minutes=data.minutes)
+                await db.shifts.update_one(
+                    {"_id": ObjectId(log["shift_id"])},
+                    {"$set": {"end_time": new_end, "updated_at": now}},
+                )
+        except Exception:
+            pass
+
+    updated = await db.attendance_logs.find_one({"_id": log["_id"]})
+    return serialize_doc(updated)
+
+
 # ══════════════════════════════════════════
 # NOTIFICATIONS
 # ══════════════════════════════════════════
@@ -522,8 +573,9 @@ async def update_organization(request: Request):
 
     body = await request.json()
     if is_admin:
-        allowed = ["name", "timezone", "locale", "currency", "work_week_start",
-                   "overtime_daily_threshold", "overtime_weekly_threshold", "attendance_enabled"]
+        allowed = ["name", "brand_name", "logo_url", "timezone", "locale", "currency",
+                   "work_week_start", "overtime_daily_threshold", "overtime_weekly_threshold",
+                   "attendance_enabled"]
     else:
         allowed = ["attendance_enabled"]
 

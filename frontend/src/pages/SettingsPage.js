@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle } from "lucide-react";
+import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle, ImageIcon, Upload, X } from "lucide-react";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -50,6 +50,10 @@ export default function SettingsPage() {
   const [shareManagerName, setShareManagerName] = useState(user?.full_name || "");
   const [shareMessage, setShareMessage] = useState("");
 
+  // Branding state
+  const [brandForm, setBrandForm] = useState({ brand_name: "", logo_url: "" });
+  const [brandSaving, setBrandSaving] = useState(false);
+
   // MFA mandate state
   const [mandateAll, setMandateAll] = useState(false);
   const [mandateLoading, setMandateLoading] = useState(false);
@@ -70,6 +74,7 @@ export default function SettingsPage() {
           attendance_enabled: !!data.attendance_enabled,
         });
         setMandateAll(!!data.mfa_org_mandate);
+        setBrandForm({ brand_name: data.brand_name || data.name || "", logo_url: data.logo_url || "" });
       } catch {}
       setMfaEnabled(!!user?.mfa_enabled);
       setShareManagerName(user?.full_name || "");
@@ -87,6 +92,30 @@ export default function SettingsPage() {
       toast.error(formatApiError(err.response?.data?.detail));
     }
     setSaving(false);
+  };
+
+  // Branding
+  const handleLogoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Logo must be under 2MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => setBrandForm(f => ({ ...f, logo_url: ev.target.result }));
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveBranding = async () => {
+    setBrandSaving(true);
+    try {
+      await orgApi.update({ brand_name: brandForm.brand_name, logo_url: brandForm.logo_url });
+      toast.success("Branding saved");
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    }
+    setBrandSaving(false);
   };
 
   // MFA - Setup
@@ -273,6 +302,66 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Branding — admin only */}
+      {isAdmin && (
+        <Card className="border">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ImageIcon className="h-5 w-5" /> Branding
+            </CardTitle>
+            <CardDescription>Customize the app logo and name shown in the sidebar</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-1.5">
+              <Label>Brand Name</Label>
+              <Input
+                placeholder="Your company name"
+                value={brandForm.brand_name}
+                onChange={e => setBrandForm(f => ({ ...f, brand_name: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">Shown in the sidebar instead of "ShiftRoster"</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Logo</Label>
+              <div className="flex items-center gap-4">
+                {/* Preview */}
+                <div className="w-16 h-16 rounded-xl border-2 border-dashed border-border flex items-center justify-center bg-muted/30 overflow-hidden shrink-0">
+                  {brandForm.logo_url ? (
+                    <img src={brandForm.logo_url} alt="logo preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="cursor-pointer">
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-background hover:bg-accent transition-colors text-sm">
+                      <Upload className="h-4 w-4" />
+                      Upload Logo
+                    </div>
+                    <input type="file" accept="image/*" className="sr-only" onChange={handleLogoChange} />
+                  </label>
+                  {brandForm.logo_url && (
+                    <button
+                      onClick={() => setBrandForm(f => ({ ...f, logo_url: "" }))}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <X className="h-3 w-3" /> Remove logo
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">PNG, JPG or SVG · Max 2MB · Displayed at 32×32px in sidebar</p>
+            </div>
+
+            <Button onClick={handleSaveBranding} disabled={brandSaving} className="gap-2">
+              {brandSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save Branding
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Organization Settings — admin only */}
       {isAdmin && <Card className="border">

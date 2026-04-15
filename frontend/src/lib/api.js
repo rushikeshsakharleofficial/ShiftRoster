@@ -88,6 +88,7 @@ export const usersApi = {
   delete: (id) => api.delete(`/users/${id}`),
   changeLevel: (id, data) => api.put(`/users/${id}/level`, data),
   mandateMfa: (data) => api.put("/users/mfa/mandate", data),
+  uploadAvatar: (id, formData) => api.post(`/users/${id}/avatar`, formData, { headers: { "Content-Type": "multipart/form-data" } }),
 };
 
 // Departments
@@ -189,6 +190,7 @@ export const attendanceApi = {
   list: (params) => api.get("/attendance", { params }),
   clockIn: (data) => api.post("/attendance/clock-in", data || {}),
   clockOut: () => api.post("/attendance/clock-out"),
+  extendShift: (data) => api.post("/attendance/extend-shift", data),
 };
 
 // Notifications
@@ -236,6 +238,43 @@ export const orgApi = {
 export const holidaysApi = {
   list: () => api.get("/public-holidays"),
   create: (data) => api.post("/public-holidays", data),
+};
+
+// Chat
+export const chatApi = {
+  // Channels
+  listChannels: () => api.get("/chat/channels"),
+  createChannel: (data) => api.post("/chat/channels", data),
+  getChannel: (id) => api.get(`/chat/channels/${id}`),
+  joinChannel: (id) => api.post(`/chat/channels/${id}/join`),
+  leaveChannel: (id) => api.post(`/chat/channels/${id}/leave`),
+  inviteToChannel: (id, data) => api.post(`/chat/channels/${id}/invite`, data),
+  getChannelMembers: (id) => api.get(`/chat/channels/${id}/members`),
+  getChannelMessages: (id, params) => api.get(`/chat/channels/${id}/messages`, { params }),
+  sendChannelMessage: (id, data) => api.post(`/chat/channels/${id}/messages`, data),
+  markChannelRead: (id) => api.post(`/chat/channels/${id}/read`),
+
+  // DMs
+  listDMs: () => api.get("/chat/dms"),
+  openDM: (data) => api.post("/chat/dms", data),
+  getDMMessages: (id, params) => api.get(`/chat/dms/${id}/messages`, { params }),
+  sendDMMessage: (id, data) => api.post(`/chat/dms/${id}/messages`, data),
+  markDMRead: (id) => api.post(`/chat/dms/${id}/read`),
+
+  // Messages
+  editMessage: (id, data) => api.put(`/chat/messages/${id}`, data),
+  deleteMessage: (id) => api.delete(`/chat/messages/${id}`),
+  reactToMessage: (id, data) => api.post(`/chat/messages/${id}/react`, data),
+
+  // Unread + Users
+  getUnread: () => api.get("/chat/unread"),
+  listUsers: (params) => api.get("/chat/users", { params }),
+  mentionUsers: (q) => api.get("/chat/mention-users", { params: { q } }),
+
+  // File upload
+  uploadFile: (formData) => api.post("/chat/upload", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  }),
 };
 
 export default api;
