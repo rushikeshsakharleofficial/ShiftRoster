@@ -3,15 +3,14 @@ FROM node:18-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json* yarn.lock* ./
-RUN npm install --legacy-peer-deps && \
-    npm install ajv@8.17.1 --legacy-peer-deps
+RUN npm install --legacy-peer-deps
 
 COPY . .
 
 ARG REACT_APP_BACKEND_URL=http://localhost:8000
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
 
-RUN npx craco build
+RUN npm run build
 
 # Production stage
 FROM nginx:alpine
