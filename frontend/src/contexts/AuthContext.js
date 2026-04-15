@@ -22,8 +22,8 @@ export function AuthProvider({ children }) {
     checkAuth();
   }, [checkAuth]);
 
-  const login = async (email, password) => {
-    const { data } = await authApi.login({ email, password });
+  const login = async (email, password, rememberMe = false) => {
+    const { data } = await authApi.login({ email, password, remember_me: rememberMe });
 
     // MFA required — return the MFA data for the login page to handle
     if (data.mfa_required || data.mfa_setup_required) {

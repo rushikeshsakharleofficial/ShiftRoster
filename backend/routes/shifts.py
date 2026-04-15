@@ -4,7 +4,7 @@ from typing import Optional, List
 from datetime import datetime, timezone
 from bson import ObjectId
 from db import db
-from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit, create_notification
+from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit, create_notification, get_manager_dept_ids
 
 router = APIRouter(prefix="/api", tags=["shifts"])
 
@@ -74,7 +74,15 @@ async def list_templates(request: Request):
     current = await get_current_user(request)
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    templates = await db.shift_templates.find({"org_id": current.get("org_id")}).to_list(200)
+    tpl_query = {"org_id": current.get("org_id")}
+    if current["system_role"] == "manager":
+        mgr_depts = await get_manager_dept_ids(current["id"], db)
+        tpl_query["$or"] = [
+            {"department_id": {"$in": mgr_depts}},
+            {"department_id": None},
+            {"department_id": {"$exists": False}},
+        ]
+    templates = await db.shift_templates.find(tpl_query).to_list(200)
     return serialize_list(templates)
 
 
@@ -109,6 +117,28 @@ async def delete_template(template_id: str, request: Request):
     return {"message": "Template deleted"}
 
 
+class ShiftTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    required_count: Optional[int] = None
+    color_hex: Optional[str] = None
+
+
+@router.put("/shift-templates/{template_id}")
+async def update_template(template_id: str, data: ShiftTemplateUpdate, request: Request):
+    current = await get_current_user(request)
+    if current["system_role"] not in ("admin", "manager"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    update = {k: v for k, v in data.model_dump().items() if v is not None}
+    if not update:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    await db.shift_templates.update_one({"_id": ObjectId(template_id)}, {"$set": update})
+    updated = await db.shift_templates.find_one({"_id": ObjectId(template_id)})
+    await log_audit(current.get("org_id"), current["id"], "update", "shift_template", template_id)
+    return serialize_doc(updated)
+
+
 # ── Shifts ──
 
 @router.get("/shifts")
@@ -121,8 +151,15 @@ async def list_shifts(
     current = await get_current_user(request)
     query = {"org_id": current.get("org_id")}
 
-    if department_id:
+    if current["system_role"] == "manager":
+        mgr_depts = await get_manager_dept_ids(current["id"], db)
+        if department_id and department_id in mgr_depts:
+            query["department_id"] = department_id
+        else:
+            query["department_id"] = {"$in": mgr_depts} if mgr_depts else "__none__"
+    elif department_id:
         query["department_id"] = department_id
+
     if start_date:
         query["start_time"] = {"$gte": start_date}
     if end_date:
@@ -205,6 +242,14 @@ async def update_shift(shift_id: str, data: ShiftUpdate, request: Request):
 
     updated = await db.shifts.find_one({"_id": ObjectId(shift_id)})
     await log_audit(current.get("org_id"), current["id"], "update", "shift", shift_id)
+
+    # Notify assigned users of shift change
+    assignments = await db.shift_assignments.find({"shift_id": shift_id}).to_list(50)
+    for a in assignments:
+        await create_notification(a["user_id"], "shift_updated",
+            f"Shift '{updated.get('title', '')}' has been updated",
+            link="/shifts")
+
     return serialize_doc(updated)
 
 
@@ -214,9 +259,14 @@ async def delete_shift(shift_id: str, request: Request):
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
+    assignments = await db.shift_assignments.find({"shift_id": shift_id}).to_list(50)
     await db.shifts.delete_one({"_id": ObjectId(shift_id)})
     await db.shift_assignments.delete_many({"shift_id": shift_id})
     await log_audit(current.get("org_id"), current["id"], "delete", "shift", shift_id)
+    for a in assignments:
+        await create_notification(a["user_id"], "shift_deleted",
+            "A shift you were assigned to has been removed",
+            link="/shifts")
     return {"message": "Shift deleted"}
 
 
@@ -277,7 +327,18 @@ async def delete_assignment(assignment_id: str, request: Request):
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
+    assignment = await db.shift_assignments.find_one({"_id": ObjectId(assignment_id)})
     await db.shift_assignments.delete_one({"_id": ObjectId(assignment_id)})
+
+    if assignment:
+        shift = await db.shifts.find_one({"_id": ObjectId(assignment["shift_id"])}) if assignment.get("shift_id") else None
+        title = shift.get("title", "a shift") if shift else "a shift"
+        await create_notification(
+            assignment["user_id"], "shift_unassigned",
+            f"You have been removed from: {title}",
+            link="/shifts"
+        )
+
     return {"message": "Assignment removed"}
 
 
@@ -331,6 +392,11 @@ async def move_shift(shift_id: str, data: ShiftMoveRequest, request: Request):
     )
     updated = await db.shifts.find_one({"_id": ObjectId(shift_id)})
     await log_audit(current.get("org_id"), current["id"], "move", "shift", shift_id)
+
+    for a in assignments:
+        await create_notification(a["user_id"], "shift_moved",
+            f"Shift '{updated.get('title', '')}' has been rescheduled",
+            link="/shifts")
 
     result = serialize_doc(updated)
     result["conflicts"] = conflicts

@@ -66,6 +66,10 @@ export function FullScreenCalendar({ data = [], onDateClick, onNewEvent }) {
 
   function handleDayClick(day) {
     setSelectedDay(day);
+  }
+
+  function handleDayDoubleClick(day) {
+    setSelectedDay(day);
     if (onDateClick) onDateClick(day);
   }
 
@@ -153,6 +157,7 @@ export function FullScreenCalendar({ data = [], onDateClick, onNewEvent }) {
               <div
                 key={dayIdx}
                 onClick={() => handleDayClick(day)}
+                onDoubleClick={() => handleDayDoubleClick(day)}
                 className={cn(
                   dayIdx === 0 && colStartClasses[getDay(day)],
                   !isEqual(day, selectedDay) &&
@@ -215,6 +220,7 @@ export function FullScreenCalendar({ data = [], onDateClick, onNewEvent }) {
             {days.map((day, dayIdx) => (
               <button
                 onClick={() => handleDayClick(day)}
+                onDoubleClick={() => handleDayDoubleClick(day)}
                 key={dayIdx}
                 type="button"
                 className={cn(

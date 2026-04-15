@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -16,6 +17,7 @@ import { Plus, Trash2, UserCog, Users, Building2, Loader2, Check, X, Award } fro
 
 export default function ManagerGroupsPage() {
   const { user } = useAuth();
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const [groups, setGroups] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [managers, setManagers] = useState([]);
@@ -66,13 +68,18 @@ export default function ManagerGroupsPage() {
     setSaving(false);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this manager group?")) return;
+  const handleDelete = (id) => setConfirmDelete({ id, label: "manager group" });
+
+  const doDelete = async () => {
     try {
-      await managerGroupsApi.delete(id);
+      await managerGroupsApi.delete(confirmDelete.id);
       toast.success("Group deleted");
       loadData();
-    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    } finally {
+      setConfirmDelete(null);
+    }
   };
 
   const handleAddMember = async () => {
@@ -337,6 +344,19 @@ export default function ManagerGroupsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {confirmDelete?.label}?</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={doDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

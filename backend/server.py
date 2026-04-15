@@ -4,15 +4,23 @@ from pathlib import Path
 load_dotenv(Path(__file__).parent / '.env')
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 from db import db, client
-from auth_utils import hash_password, verify_password, serialize_doc
+from auth_utils import hash_password, verify_password, serialize_doc, generate_unique_username
 from datetime import datetime, timezone
+from bson import ObjectId
 import os
 import logging
 import json
 import asyncio
+from pathlib import Path
+
+# Ensure uploads directory exists
+UPLOADS_DIR = Path(__file__).parent / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
 
 # Import routers
 from routes.auth import router as auth_router
@@ -23,6 +31,7 @@ from routes.shifts import router as shifts_router
 from routes.leave import router as leave_router
 from routes.operations import router as operations_router
 from routes.sticky_notes import router as sticky_notes_router
+from routes.chat import router as chat_router
 
 app = FastAPI(title="ShiftRoster API", version="2.0.0")
 
@@ -35,6 +44,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Serve uploaded files
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+
 # Include all routers
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -44,6 +56,7 @@ app.include_router(shifts_router)
 app.include_router(leave_router)
 app.include_router(operations_router)
 app.include_router(sticky_notes_router)
+app.include_router(chat_router)
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -64,6 +77,8 @@ class SetupRequest(BaseModel):
     admin_email: str
     admin_password: str
     timezone: str = "Asia/Kolkata"
+    brand_name: Optional[str] = None
+    logo_url: Optional[str] = None
 
 
 @app.get("/api/setup/status")
@@ -87,6 +102,8 @@ async def initial_setup(data: SetupRequest):
     # Create organization
     org_result = await db.organizations.insert_one({
         "name": data.org_name,
+        "brand_name": data.brand_name or data.org_name,
+        "logo_url": data.logo_url or "",
         "timezone": data.timezone,
         "locale": "en-IN",
         "currency": "INR",
@@ -100,9 +117,12 @@ async def initial_setup(data: SetupRequest):
     org_id = str(org_result.inserted_id)
 
     # Create SuperAdmin user
-    await db.users.insert_one({
+    admin_username = await generate_unique_username(email.split("@")[0], db)
+    now = datetime.now(timezone.utc)
+    admin_result = await db.users.insert_one({
         "org_id": org_id,
         "email": email,
+        "username": admin_username,
         "password_hash": hash_password(data.admin_password),
         "full_name": data.admin_name,
         "phone": "",
@@ -118,8 +138,25 @@ async def initial_setup(data: SetupRequest):
         "mfa_enabled": False,
         "mfa_mandated": False,
         "mfa_secret": None,
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "created_at": now,
+        "updated_at": now,
+    })
+    admin_id = str(admin_result.inserted_id)
+
+    # Create default #general channel
+    await db.chat_channels.insert_one({
+        "org_id": org_id,
+        "name": "general",
+        "description": "Company-wide announcements and conversations",
+        "type": "public",
+        "created_by": admin_id,
+        "members": [admin_id],
+        "admins": [admin_id],
+        "created_at": now,
+        "updated_at": now,
+        "last_message_at": now,
+        "last_message_preview": "",
+        "message_count": 0,
     })
 
     # Seed demo departments
@@ -142,54 +179,7 @@ async def initial_setup(data: SetupRequest):
 
 
 # ── WebSocket Presence ──
-class PresenceManager:
-    def __init__(self):
-        self.connections: dict[str, WebSocket] = {}
-        self.user_data: dict[str, dict] = {}
-
-    async def connect(self, user_id: str, ws: WebSocket, user_info: dict):
-        await ws.accept()
-        self.connections[user_id] = ws
-        self.user_data[user_id] = {
-            "id": user_id,
-            "name": user_info.get("full_name", ""),
-            "avatar": user_info.get("avatar_url", ""),
-            "department_id": user_info.get("department_id", ""),
-            "system_role": user_info.get("system_role", ""),
-            "view": "",
-            "status": "active",
-            "last_seen": datetime.now(timezone.utc).isoformat(),
-        }
-        await self.broadcast_presence()
-
-    def disconnect(self, user_id: str):
-        self.connections.pop(user_id, None)
-        self.user_data.pop(user_id, None)
-
-    async def heartbeat(self, user_id: str, data: dict):
-        if user_id in self.user_data:
-            self.user_data[user_id]["view"] = data.get("current_view", "")
-            self.user_data[user_id]["status"] = "active"
-            self.user_data[user_id]["last_seen"] = datetime.now(timezone.utc).isoformat()
-            await self.broadcast_presence()
-
-    async def broadcast_presence(self):
-        online = list(self.user_data.values())
-        message = json.dumps({"type": "presence_update", "online_users": online})
-        disconnected = []
-        for uid, ws in self.connections.items():
-            try:
-                await ws.send_text(message)
-            except Exception:
-                disconnected.append(uid)
-        for uid in disconnected:
-            self.disconnect(uid)
-
-    def get_online_users(self):
-        return list(self.user_data.values())
-
-
-presence = PresenceManager()
+from presence_manager import presence
 
 
 @app.websocket("/api/ws")
@@ -205,13 +195,28 @@ async def websocket_endpoint(ws: WebSocket):
             await ws.close()
             return
 
-        from bson import ObjectId
         user = await db.users.find_one({"_id": ObjectId(user_id)}, {"password_hash": 0})
         if not user:
             await ws.close()
             return
 
         user_info = serialize_doc(user)
+
+        # Auto-detect initial status: check for approved leave today
+        initial_status = "active"
+        try:
+            today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            leave = await db.leave_requests.find_one({
+                "user_id": user_id,
+                "status": "approved",
+                "start_date": {"$lte": today_str},
+                "end_date": {"$gte": today_str},
+            })
+            if leave:
+                initial_status = "leave"
+        except Exception:
+            pass
+
         presence.connections[user_id] = ws
         presence.user_data[user_id] = {
             "id": user_id,
@@ -220,7 +225,7 @@ async def websocket_endpoint(ws: WebSocket):
             "department_id": user_info.get("department_id", ""),
             "system_role": user_info.get("system_role", ""),
             "view": "",
-            "status": "active",
+            "status": initial_status,
             "last_seen": datetime.now(timezone.utc).isoformat(),
         }
         await presence.broadcast_presence()
@@ -230,8 +235,41 @@ async def websocket_endpoint(ws: WebSocket):
             msg = json.loads(data)
             if msg.get("type") == "heartbeat":
                 await presence.heartbeat(user_id, msg)
+            elif msg.get("type") == "set_status":
+                await presence.set_status(user_id, msg.get("status", "active"))
             elif msg.get("type") == "ping":
                 await ws.send_text(json.dumps({"type": "pong"}))
+            elif msg.get("type") == "chat_typing":
+                channel_id = msg.get("channel_id", "")
+                user_name = msg.get("user_name", "")
+                is_typing = msg.get("is_typing", True)
+                if channel_id:
+                    try:
+                        ch = await db.chat_channels.find_one({"_id": ObjectId(channel_id)})
+                        if ch:
+                            members = [str(m) for m in ch.get("members", [])]
+                            others = [m for m in members if m != user_id]
+                            await presence.send_to_users(others, {
+                                "type": "chat_typing",
+                                "channel_id": channel_id,
+                                "user_id": user_id,
+                                "user_name": user_name,
+                                "is_typing": is_typing,
+                            })
+                    except Exception as e:
+                        logger.error(f"chat_typing error: {e}")
+            elif msg.get("type") == "chat_read":
+                channel_id = msg.get("channel_id", "")
+                if channel_id:
+                    try:
+                        now = datetime.now(timezone.utc)
+                        await db.chat_read_receipts.update_one(
+                            {"channel_id": channel_id, "user_id": user_id},
+                            {"$set": {"last_read_at": now, "updated_at": now}},
+                            upsert=True,
+                        )
+                    except Exception as e:
+                        logger.error(f"chat_read error: {e}")
 
     except WebSocketDisconnect:
         pass
@@ -257,6 +295,7 @@ async def startup():
 
     # Create indexes
     await db.users.create_index("email", unique=True)
+    await db.users.create_index("username", unique=True, sparse=True)
     await db.login_attempts.create_index("identifier")
     await db.shifts.create_index([("org_id", 1), ("start_time", 1)])
     await db.shift_assignments.create_index("shift_id")
@@ -268,6 +307,15 @@ async def startup():
     await db.audit_logs.create_index([("entity", 1), ("entity_id", 1)])
     await db.sticky_notes.create_index([("org_id", 1), ("note_date", 1)])
     await db.sticky_notes.create_index([("user_id", 1)])
+
+    # Chat indexes
+    await db.chat_channels.create_index([("org_id", 1), ("type", 1)])
+    await db.chat_channels.create_index([("members", 1)])
+    await db.chat_channels.create_index([("org_id", 1), ("name", 1)])
+    await db.chat_messages.create_index([("channel_id", 1), ("created_at", -1)])
+    await db.chat_read_receipts.create_index(
+        [("channel_id", 1), ("user_id", 1)], unique=True
+    )
 
     logger.info("ShiftRoster API started successfully")
 

@@ -5,6 +5,8 @@ import pyotp
 import qrcode
 import io
 import base64
+import re
+import unicodedata
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException, Request
 from bson import ObjectId
@@ -14,6 +16,44 @@ JWT_ALGORITHM = "HS256"
 
 def get_jwt_secret():
     return os.environ["JWT_SECRET"]
+
+
+def _slugify_name(name: str) -> str:
+    """Convert a full name to a lowercase dot-separated slug: 'Rushikesh Sakharle' -> 'rushikesh.sakharle'."""
+    # Normalize unicode (e.g. accented chars)
+    name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    name = name.lower().strip()
+    # Replace spaces/hyphens with dots
+    name = re.sub(r"[\s\-]+", ".", name)
+    # Remove any characters that are not alphanumeric, dot, or underscore
+    name = re.sub(r"[^a-z0-9._]", "", name)
+    # Collapse repeated dots
+    name = re.sub(r"\.{2,}", ".", name)
+    name = name.strip(".")
+    return name or "user"
+
+
+async def get_manager_dept_ids(manager_id: str, db) -> list:
+    """Return the list of department_ids the manager controls via their manager groups."""
+    memberships = await db.manager_group_members.find({"user_id": manager_id}).to_list(50)
+    group_ids = [m["group_id"] for m in memberships]
+    if not group_ids:
+        return []
+    dept_docs = await db.manager_group_departments.find({"group_id": {"$in": group_ids}}).to_list(200)
+    return list({d["department_id"] for d in dept_docs})
+
+
+async def generate_unique_username(full_name: str, db) -> str:
+    """Generate a unique username from a full name, appending a number if taken."""
+    base = _slugify_name(full_name)
+    candidate = base
+    counter = 1
+    while True:
+        existing = await db.users.find_one({"username": candidate})
+        if not existing:
+            return candidate
+        candidate = f"{base}{counter}"
+        counter += 1
 
 
 def hash_password(password: str) -> str:

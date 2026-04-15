@@ -4,7 +4,7 @@ from typing import Optional, List
 from datetime import datetime, timezone
 from bson import ObjectId
 from db import db
-from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit, create_notification
+from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit, create_notification, get_manager_dept_ids
 
 router = APIRouter(prefix="/api", tags=["leave"])
 
@@ -105,10 +105,25 @@ async def list_leave_requests(request: Request, status: Optional[str] = None, us
     current = await get_current_user(request)
     query = {}
 
-    if current["system_role"] in ("admin", "manager"):
+    if current["system_role"] == "admin":
         query["org_id"] = current.get("org_id")
         if user_id:
             query["user_id"] = user_id
+    elif current["system_role"] == "manager":
+        query["org_id"] = current.get("org_id")
+        # Scope to employees in manager's departments
+        mgr_depts = await get_manager_dept_ids(current["id"], db)
+        dept_user_ids = []
+        if mgr_depts:
+            dept_users = await db.users.find(
+                {"org_id": current.get("org_id"), "department_id": {"$in": mgr_depts}},
+                {"_id": 1}
+            ).to_list(500)
+            dept_user_ids = [str(u["_id"]) for u in dept_users]
+        if user_id and user_id in dept_user_ids:
+            query["user_id"] = user_id
+        else:
+            query["user_id"] = {"$in": dept_user_ids} if dept_user_ids else "__none__"
     else:
         query["user_id"] = current["id"]
 
@@ -152,6 +167,19 @@ async def create_leave_request(data: LeaveRequestCreate, request: Request):
     }
     result = await db.leave_requests.insert_one(doc)
     doc["_id"] = result.inserted_id
+
+    # Notify managers/admins in the same org
+    managers = await db.users.find(
+        {"org_id": current.get("org_id"), "system_role": {"$in": ["admin", "manager"]}, "_id": {"$ne": ObjectId(current["id"])}},
+        {"_id": 1}
+    ).to_list(100)
+    for m in managers:
+        await create_notification(
+            str(m["_id"]), "leave_requested",
+            f"{current.get('full_name', 'An employee')} submitted a leave request",
+            link="/leave"
+        )
+
     return serialize_doc(doc)
 
 

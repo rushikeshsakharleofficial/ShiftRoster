@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarDays, ArrowRight, Loader2, Shield, Sparkles } from "lucide-react";
+import { CalendarDays, ArrowRight, Loader2, Shield, Sparkles, ImageIcon, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 export default function SetupPage() {
@@ -15,12 +15,25 @@ export default function SetupPage() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     org_name: "",
+    logo_url: "",
     admin_name: "",
     admin_email: "",
     admin_password: "",
     confirm_password: "",
     timezone: "Asia/Kolkata",
   });
+
+  const handleLogoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Logo must be under 2MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => setForm(f => ({ ...f, logo_url: ev.target.result }));
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     const check = async () => {
@@ -50,6 +63,8 @@ export default function SetupPage() {
     try {
       await setupApi.createSuperAdmin({
         org_name: form.org_name,
+        brand_name: form.brand_name || form.org_name,
+        logo_url: form.logo_url,
         admin_name: form.admin_name,
         admin_email: form.admin_email,
         admin_password: form.admin_password,
@@ -109,6 +124,31 @@ export default function SetupPage() {
                     required
                     data-testid="setup-org-name"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>Logo <span className="text-muted-foreground font-normal text-xs">(optional · max 2MB)</span></Label>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-lg border-2 border-dashed border-border flex items-center justify-center bg-muted/30 overflow-hidden shrink-0">
+                      {form.logo_url ? (
+                        <img src={form.logo_url} alt="preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="cursor-pointer">
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-background hover:bg-accent transition-colors text-sm">
+                          <Upload className="h-3.5 w-3.5" /> Upload Logo
+                        </div>
+                        <input type="file" accept="image/*" className="sr-only" onChange={handleLogoChange} />
+                      </label>
+                      {form.logo_url && (
+                        <button type="button" onClick={() => setForm(f => ({ ...f, logo_url: "" }))} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive">
+                          <X className="h-3 w-3" /> Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Timezone</Label>

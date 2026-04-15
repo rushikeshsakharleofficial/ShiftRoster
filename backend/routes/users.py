@@ -1,11 +1,18 @@
-from fastapi import APIRouter, HTTPException, Request, Query
-from auth_utils import create_notification
+from fastapi import APIRouter, HTTPException, Request, Query, UploadFile, File
+from auth_utils import create_notification, generate_unique_username
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 from bson import ObjectId
 from db import db
-from auth_utils import get_current_user, serialize_doc, serialize_list, hash_password, log_audit
+from auth_utils import get_current_user, serialize_doc, serialize_list, hash_password, log_audit, get_manager_dept_ids
+from pathlib import Path
+import uuid
+import os
+
+UPLOADS_DIR = Path(__file__).parent.parent / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
+MAX_AVATAR_BYTES = 5 * 1024 * 1024  # 5 MB
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -14,6 +21,7 @@ class CreateUserRequest(BaseModel):
     email: str
     password: str
     full_name: str
+    username: Optional[str] = None  # auto-generated from full_name if omitted
     phone: str = ""
     system_role: str = "employee"
     employee_level: Optional[str] = "L1"
@@ -27,6 +35,7 @@ class CreateUserRequest(BaseModel):
 
 class UpdateUserRequest(BaseModel):
     full_name: Optional[str] = None
+    username: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
     system_role: Optional[str] = None
@@ -63,8 +72,22 @@ async def list_users(
     query = {"org_id": current.get("org_id")}
     if role:
         query["system_role"] = role
-    if department_id:
+
+    # Managers only see employees in their assigned departments
+    if current["system_role"] == "manager":
+        mgr_depts = await get_manager_dept_ids(current["id"], db)
+        allowed = set(mgr_depts)
+        if department_id:
+            # Further filter to only the requested dept if it's in their scope
+            if department_id in allowed:
+                query["department_id"] = department_id
+            else:
+                return {"users": [], "total": 0}
+        else:
+            query["department_id"] = {"$in": list(allowed)} if allowed else "__none__"
+    elif department_id:
         query["department_id"] = department_id
+
     if level:
         query["employee_level"] = level
     if status:
@@ -73,6 +96,7 @@ async def list_users(
         query["$or"] = [
             {"full_name": {"$regex": search, "$options": "i"}},
             {"email": {"$regex": search, "$options": "i"}},
+            {"username": {"$regex": search, "$options": "i"}},
         ]
 
     users = await db.users.find(query, {"password_hash": 0}).skip(skip).limit(limit).to_list(limit)
@@ -94,9 +118,18 @@ async def create_user(data: CreateUserRequest, request: Request):
     if data.system_role == "manager" and current["system_role"] != "admin":
         raise HTTPException(status_code=403, detail="Only admin can create managers")
 
+    # Resolve username
+    if data.username:
+        uname = data.username.strip().lower()
+        if await db.users.find_one({"username": uname}):
+            raise HTTPException(status_code=400, detail="Username already taken")
+    else:
+        uname = await generate_unique_username(email.split("@")[0], db)
+
     user_doc = {
         "org_id": current.get("org_id"),
         "email": email,
+        "username": uname,
         "password_hash": hash_password(data.password),
         "full_name": data.full_name,
         "phone": data.phone,
@@ -150,6 +183,14 @@ async def update_user(user_id: str, data: UpdateUserRequest, request: Request):
     # Only admin can change system_role
     if "system_role" in update and current["system_role"] != "admin":
         raise HTTPException(status_code=403, detail="Only admin can change roles")
+
+    # Validate username uniqueness if changing it
+    if "username" in update:
+        uname = update["username"].strip().lower()
+        conflict = await db.users.find_one({"username": uname, "_id": {"$ne": ObjectId(user_id)}})
+        if conflict:
+            raise HTTPException(status_code=400, detail="Username already taken")
+        update["username"] = uname
 
     update["updated_at"] = datetime.now(timezone.utc)
     try:
@@ -245,3 +286,37 @@ async def mandate_mfa(data: MandateMfaRequest, request: Request):
     action = "mandated" if data.mandate else "un-mandated"
     await log_audit(current.get("org_id"), current["id"], "mfa_mandate", "users", diff={"action": action, "count": result.modified_count})
     return {"message": f"MFA {action} for {result.modified_count} user(s)"}
+
+
+@router.post("/{user_id}/avatar")
+async def upload_avatar(user_id: str, request: Request, file: UploadFile = File(...)):
+    """Upload or replace a user's avatar image (max 5 MB, images only)."""
+    current = await get_current_user(request)
+    if current["system_role"] not in ("admin", "manager") and current["id"] != user_id:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    content_type = file.content_type or ""
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are allowed")
+
+    content = await file.read(MAX_AVATAR_BYTES + 1)
+    if len(content) > MAX_AVATAR_BYTES:
+        raise HTTPException(status_code=400, detail="Image too large (max 5 MB)")
+
+    ext = os.path.splitext(file.filename or "avatar.jpg")[1] or ".jpg"
+    unique_name = f"avatar_{uuid.uuid4().hex}{ext}"
+    save_path = UPLOADS_DIR / unique_name
+    with open(save_path, "wb") as f:
+        f.write(content)
+
+    avatar_url = f"/uploads/{unique_name}"
+    try:
+        await db.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {"avatar_url": avatar_url, "updated_at": datetime.now(timezone.utc)}},
+        )
+    except Exception:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await log_audit(current.get("org_id"), current["id"], "update", "user_avatar", user_id)
+    return {"avatar_url": avatar_url}

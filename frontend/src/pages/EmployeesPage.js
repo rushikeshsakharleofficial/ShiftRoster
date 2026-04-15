@@ -1,20 +1,30 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { usersApi, departmentsApi, formatApiError } from "@/lib/api";
+import { usersApi, departmentsApi, mfaAdminApi, formatApiError } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, UserPlus, ChevronUp, ChevronDown, Loader2 } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, ChevronUp, ChevronDown, Loader2, ShieldOff, Camera } from "lucide-react";
+
+const API_URL = import.meta.env.REACT_APP_BACKEND_URL || "";
+
+const EMPTY_FORM = {
+  email: "", password: "", full_name: "", username: "", phone: "",
+  system_role: "employee", employee_level: "L1", department_id: "", employment_type: "full_time",
+};
 
 export default function EmployeesPage() {
   const { user } = useAuth();
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [confirmMfaReset, setConfirmMfaReset] = useState({ open: false, userId: null, userName: "" });
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [total, setTotal] = useState(0);
@@ -24,8 +34,10 @@ export default function EmployeesPage() {
   const [deptFilter, setDeptFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(null);
-  const [form, setForm] = useState({ email: "", password: "", full_name: "", phone: "", system_role: "employee", employee_level: "L1", department_id: "", employment_type: "full_time" });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const avatarInputRef = useRef(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -47,10 +59,12 @@ export default function EmployeesPage() {
   const handleCreate = async () => {
     setSaving(true);
     try {
-      await usersApi.create(form);
+      const payload = { ...form };
+      if (!payload.username) delete payload.username; // server auto-generates
+      await usersApi.create(payload);
       toast.success("Employee created");
       setShowCreate(false);
-      setForm({ email: "", password: "", full_name: "", phone: "", system_role: "employee", employee_level: "L1", department_id: "", employment_type: "full_time" });
+      setForm(EMPTY_FORM);
       loadData();
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail));
@@ -62,6 +76,7 @@ export default function EmployeesPage() {
     setSaving(true);
     try {
       const { password, email, ...updateData } = form;
+      if (!updateData.username) delete updateData.username;
       await usersApi.update(showEdit, updateData);
       toast.success("Employee updated");
       setShowEdit(null);
@@ -72,14 +87,53 @@ export default function EmployeesPage() {
     setSaving(false);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this employee?")) return;
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !showEdit) return;
+    if (!file.type.startsWith("image/")) { toast.error("Only image files allowed"); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error("Image must be under 5 MB"); return; }
+    setAvatarLoading(true);
     try {
-      await usersApi.delete(id);
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await usersApi.uploadAvatar(showEdit, fd);
+      setForm(f => ({ ...f, avatar_url: data.avatar_url }));
+      toast.success("Avatar updated");
+      loadData();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    }
+    setAvatarLoading(false);
+    e.target.value = "";
+  };
+
+  const handleDelete = (id) => setConfirmDelete({ id, label: "employee" });
+
+  const handleResetMfa = (userId, userName) => {
+    setConfirmMfaReset({ open: true, userId, userName });
+  };
+
+  const doResetMfa = async () => {
+    try {
+      await mfaAdminApi.resetUserMfa(confirmMfaReset.userId);
+      toast.success(`MFA reset for ${confirmMfaReset.userName}`);
+      loadData();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    } finally {
+      setConfirmMfaReset({ open: false, userId: null, userName: "" });
+    }
+  };
+
+  const doDelete = async () => {
+    try {
+      await usersApi.delete(confirmDelete.id);
       toast.success("Employee deleted");
       loadData();
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail));
+    } finally {
+      setConfirmDelete(null);
     }
   };
 
@@ -114,6 +168,11 @@ export default function EmployeesPage() {
     return "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300";
   };
 
+  const initials = (name) => {
+    const parts = (name || "").trim().split(" ");
+    return parts.map(p => p[0]).join("").slice(0, 2).toUpperCase() || "?";
+  };
+
   return (
     <div data-testid="employees-page" className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -132,7 +191,7 @@ export default function EmployeesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             data-testid="employee-search"
-            placeholder="Search by name or email..."
+            placeholder="Search by name, email or username..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -166,6 +225,7 @@ export default function EmployeesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Username</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Level</TableHead>
@@ -176,13 +236,25 @@ export default function EmployeesPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
             ) : employees.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No employees found</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No employees found</TableCell></TableRow>
             ) : (
               employees.map(emp => (
                 <TableRow key={emp.id} data-testid={`employee-row-${emp.id}`}>
-                  <TableCell className="font-medium">{emp.full_name}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      {emp.avatar_url ? (
+                        <img src={`${API_URL}${emp.avatar_url}`} alt="" className="w-7 h-7 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-semibold">
+                          {initials(emp.full_name)}
+                        </div>
+                      )}
+                      <span className="font-medium">{emp.full_name}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm font-mono">{emp.username || "—"}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">{emp.email}</TableCell>
                   <TableCell><Badge className={`text-[10px] ${roleColor(emp.system_role)}`}>{emp.system_role}</Badge></TableCell>
                   <TableCell>
@@ -223,9 +295,14 @@ export default function EmployeesPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => { setForm({ ...emp, password: "" }); setShowEdit(emp.id); }}>
+                        <DropdownMenuItem onClick={() => { setForm({ ...emp, password: "", username: emp.username || "" }); setShowEdit(emp.id); }}>
                           <Pencil className="h-3 w-3 mr-2" /> Edit
                         </DropdownMenuItem>
+                        {(user?.system_role === "admin" || user?.system_role === "manager") && emp.mfa_enabled && (
+                          <DropdownMenuItem onClick={() => handleResetMfa(emp.id, emp.full_name)}>
+                            <ShieldOff className="h-3 w-3 mr-2" /> Reset MFA
+                          </DropdownMenuItem>
+                        )}
                         {user?.system_role === "admin" && (
                           <DropdownMenuItem onClick={() => handleDelete(emp.id)} className="text-destructive">
                             <Trash2 className="h-3 w-3 mr-2" /> Delete
@@ -243,11 +320,39 @@ export default function EmployeesPage() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={showCreate || !!showEdit} onOpenChange={() => { setShowCreate(false); setShowEdit(null); }}>
-        <DialogContent data-testid="employee-dialog">
+        <DialogContent data-testid="employee-dialog" className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{showEdit ? "Edit Employee" : "Add Employee"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+
+            {/* Avatar (edit only) */}
+            {showEdit && (
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  {form.avatar_url ? (
+                    <img src={`${API_URL}${form.avatar_url}`} alt="" className="w-16 h-16 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center text-lg font-semibold">
+                      {initials(form.full_name)}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={avatarLoading}
+                    className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground rounded-full p-1 shadow"
+                  >
+                    {avatarLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+                  </button>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  <p>Click camera to upload avatar</p>
+                  <p className="text-xs">JPG, PNG, WebP · max 5 MB</p>
+                </div>
+                <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Full Name</Label>
@@ -258,6 +363,17 @@ export default function EmployeesPage() {
                 <Input data-testid="emp-email-input" type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} disabled={!!showEdit} />
               </div>
             </div>
+
+            <div className="space-y-1.5">
+              <Label>Username <span className="text-muted-foreground text-xs">(optional — auto-generated if blank)</span></Label>
+              <Input
+                data-testid="emp-username-input"
+                placeholder="e.g. rushikesh.sakharle"
+                value={form.username || ""}
+                onChange={e => setForm({...form, username: e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, "")})}
+              />
+            </div>
+
             {!showEdit && (
               <div className="space-y-1.5">
                 <Label>Password</Label>
@@ -327,6 +443,36 @@ export default function EmployeesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {confirmDelete?.label}?</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={doDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmMfaReset.open} onOpenChange={(o) => { if (!o) setConfirmMfaReset({ open: false, userId: null, userName: "" }); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset MFA for {confirmMfaReset.userName}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will disable MFA for this user. They will need to set up MFA again on their next login.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={doResetMfa} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Reset MFA
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

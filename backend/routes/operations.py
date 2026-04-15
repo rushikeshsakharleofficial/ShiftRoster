@@ -207,6 +207,15 @@ async def create_swap(data: SwapRequestCreate, request: Request):
     }
     result = await db.swap_requests.insert_one(doc)
     doc["_id"] = result.inserted_id
+
+    # Notify the target user
+    if data.target_id:
+        await create_notification(
+            data.target_id, "swap_requested",
+            f"{current.get('full_name', 'A colleague')} has requested a shift swap with you",
+            link="/swap-requests"
+        )
+
     return serialize_doc(doc)
 
 
@@ -281,6 +290,10 @@ async def clock_in(request: Request):
     current = await get_current_user(request)
     body = await request.json()
 
+    org = await db.organizations.find_one({"_id": ObjectId(current.get("org_id"))})
+    if not org or not org.get("attendance_enabled", False):
+        raise HTTPException(status_code=403, detail="Attendance tracking is not enabled for this organization")
+
     # Check if already clocked in today
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     existing = await db.attendance_logs.find_one({
@@ -311,6 +324,10 @@ async def clock_in(request: Request):
 async def clock_out(request: Request):
     current = await get_current_user(request)
 
+    org = await db.organizations.find_one({"_id": ObjectId(current.get("org_id"))})
+    if not org or not org.get("attendance_enabled", False):
+        raise HTTPException(status_code=403, detail="Attendance tracking is not enabled for this organization")
+
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     log = await db.attendance_logs.find_one({
         "user_id": current["id"],
@@ -325,6 +342,57 @@ async def clock_out(request: Request):
         {"_id": log["_id"]},
         {"$set": {"clock_out": now, "updated_at": now}},
     )
+
+    updated = await db.attendance_logs.find_one({"_id": log["_id"]})
+    return serialize_doc(updated)
+
+
+class ExtendShiftRequest(BaseModel):
+    minutes: int
+
+
+@router.post("/attendance/extend-shift")
+async def extend_shift(data: ExtendShiftRequest, request: Request):
+    """Extend the current active shift by N minutes. Updates the shift end_time and records extended_minutes."""
+    current = await get_current_user(request)
+
+    org = await db.organizations.find_one({"_id": ObjectId(current.get("org_id"))})
+    if not org or not org.get("attendance_enabled", False):
+        raise HTTPException(status_code=403, detail="Attendance tracking is not enabled")
+
+    if data.minutes <= 0 or data.minutes > 480:
+        raise HTTPException(status_code=400, detail="Extension must be between 1 and 480 minutes")
+
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    log = await db.attendance_logs.find_one({
+        "user_id": current["id"],
+        "clock_in": {"$gte": today_start},
+        "clock_out": None,
+    })
+    if not log:
+        raise HTTPException(status_code=400, detail="No active clock-in found")
+
+    now = datetime.now(timezone.utc)
+    new_extended = (log.get("extended_minutes") or 0) + data.minutes
+    await db.attendance_logs.update_one(
+        {"_id": log["_id"]},
+        {"$set": {"extended_minutes": new_extended, "updated_at": now}},
+    )
+
+    # Also extend the associated shift end_time if shift_id is present
+    if log.get("shift_id"):
+        try:
+            shift = await db.shifts.find_one({"_id": ObjectId(log["shift_id"])})
+            if shift and shift.get("end_time"):
+                from datetime import datetime as dt
+                end_dt = shift["end_time"] if isinstance(shift["end_time"], datetime) else dt.fromisoformat(shift["end_time"].replace("Z", "+00:00"))
+                new_end = end_dt + timedelta(minutes=data.minutes)
+                await db.shifts.update_one(
+                    {"_id": ObjectId(log["shift_id"])},
+                    {"$set": {"end_time": new_end, "updated_at": now}},
+                )
+        except Exception:
+            pass
 
     updated = await db.attendance_logs.find_one({"_id": log["_id"]})
     return serialize_doc(updated)
@@ -370,14 +438,45 @@ async def mark_all_read(request: Request):
 # ══════════════════════════════════════════
 
 @router.get("/audit-logs")
-async def list_audit_logs(request: Request, entity: Optional[str] = None, skip: int = 0, limit: int = 50):
+async def list_audit_logs(
+    request: Request,
+    entity: Optional[str] = None,
+    action: Optional[str] = None,
+    actor_id: Optional[str] = None,
+    actor_name: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+):
     current = await get_current_user(request)
-    if current["system_role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can view audit logs")
+    if current["system_role"] not in ("admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only admin or manager can view audit logs")
 
     query = {"org_id": current.get("org_id")}
     if entity:
         query["entity"] = entity
+    if action:
+        query["action"] = action
+    if actor_id:
+        query["actor_id"] = actor_id
+    if actor_name:
+        # Find users whose names match, then filter logs by their IDs
+        matched_users = await db.users.find(
+            {"org_id": current.get("org_id"), "full_name": {"$regex": actor_name, "$options": "i"}},
+            {"_id": 1}
+        ).to_list(50)
+        matched_ids = [str(u["_id"]) for u in matched_users]
+        if matched_ids:
+            query["actor_id"] = {"$in": matched_ids}
+        else:
+            return {"logs": [], "total": 0}
+    if start_date:
+        query.setdefault("created_at", {})
+        query["created_at"]["$gte"] = datetime.fromisoformat(start_date)
+    if end_date:
+        query.setdefault("created_at", {})
+        query["created_at"]["$lte"] = datetime.fromisoformat(end_date + "T23:59:59")
 
     logs = await db.audit_logs.find(query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     total = await db.audit_logs.count_documents(query)
@@ -385,8 +484,15 @@ async def list_audit_logs(request: Request, entity: Optional[str] = None, skip: 
     result = []
     for l in logs:
         ldata = serialize_doc(l)
-        actor = await db.users.find_one({"_id": ObjectId(l["actor_id"])}, {"full_name": 1})
-        ldata["actor_name"] = actor.get("full_name", "") if actor else ""
+        actor_oid = l.get("actor_id")
+        if actor_oid:
+            try:
+                actor = await db.users.find_one({"_id": ObjectId(actor_oid)}, {"full_name": 1})
+                ldata["actor_name"] = actor.get("full_name", "") if actor else ""
+            except Exception:
+                ldata["actor_name"] = ""
+        else:
+            ldata["actor_name"] = ""
         result.append(ldata)
     return {"logs": result, "total": total}
 
@@ -460,12 +566,22 @@ async def get_organization(request: Request):
 @router.put("/organization")
 async def update_organization(request: Request):
     current = await get_current_user(request)
-    if current["system_role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can update organization settings")
+    is_admin = current["system_role"] == "admin"
+    is_manager = current["system_role"] == "manager"
+    if not (is_admin or is_manager):
+        raise HTTPException(status_code=403, detail="Only admin or manager can update organization settings")
 
     body = await request.json()
-    allowed = ["name", "timezone", "locale", "currency", "work_week_start", "overtime_daily_threshold", "overtime_weekly_threshold"]
+    if is_admin:
+        allowed = ["name", "brand_name", "logo_url", "timezone", "locale", "currency",
+                   "work_week_start", "overtime_daily_threshold", "overtime_weekly_threshold",
+                   "attendance_enabled"]
+    else:
+        allowed = ["attendance_enabled"]
+
     update = {k: v for k, v in body.items() if k in allowed and v is not None}
+    if "attendance_enabled" in body and body["attendance_enabled"] is False:
+        update["attendance_enabled"] = False
     update["updated_at"] = datetime.now(timezone.utc)
 
     await db.organizations.update_one({"_id": ObjectId(current.get("org_id"))}, {"$set": update})

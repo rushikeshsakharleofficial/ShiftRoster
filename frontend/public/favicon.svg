@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="#1e293b"/>
+
+  <!-- Calendar header bar -->
+  <rect x="5" y="5" width="22" height="5" rx="2" fill="#f59e0b"/>
+
+  <!-- Row 1: amber | dark | dark -->
+  <rect x="5"  y="12" width="6" height="4" rx="1" fill="#f59e0b"/>
+  <rect x="13" y="12" width="6" height="4" rx="1" fill="#334155"/>
+  <rect x="21" y="12" width="6" height="4" rx="1" fill="#334155"/>
+
+  <!-- Row 2: dark | amber | dark -->
+  <rect x="5"  y="18" width="6" height="4" rx="1" fill="#334155"/>
+  <rect x="13" y="18" width="6" height="4" rx="1" fill="#f59e0b"/>
+  <rect x="21" y="18" width="6" height="4" rx="1" fill="#334155"/>
+
+  <!-- Row 3: dark | dark | amber -->
+  <rect x="5"  y="24" width="6" height="4" rx="1" fill="#334155"/>
+  <rect x="13" y="24" width="6" height="4" rx="1" fill="#334155"/>
+  <rect x="21" y="24" width="6" height="4" rx="1" fill="#f59e0b"/>
+</svg>

@@ -1,32 +1,59 @@
 import { useState, useEffect, useRef } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
-import { notificationsApi } from "@/lib/api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { notificationsApi, orgApi, usersApi } from "@/lib/api";
+import { useChat } from "@/contexts/ChatContext";
 import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
-  BarChart3, ScrollText, Settings, LogOut, Menu, X, Check
+  BarChart3, ScrollText, Settings, LogOut, Menu, X, Check, LayoutTemplate,
+  MessageSquare, Coffee, Plane, CircleDot, UserCircle, Camera, Loader2
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = import.meta.env.REACT_APP_BACKEND_URL;
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isFullBleed = location.pathname.startsWith("/chat");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [attendanceEnabled, setAttendanceEnabled] = useState(false);
+  const [orgBrand, setOrgBrand] = useState({ name: "ShiftRoster", logo_url: "" });
   const wsRef = useRef(null);
 
+  const { totalUnread: chatUnread } = useChat();
+  const [myStatus, setMyStatus] = useState("active"); // active | break | leave
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ full_name: "", username: "" });
+  const [profileAvatar, setProfileAvatar] = useState(""); // current saved avatar
+  const [profileAvatarFile, setProfileAvatarFile] = useState(null); // pending file (not yet uploaded)
+  const [profileAvatarPreview, setProfileAvatarPreview] = useState(""); // local blob preview
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const profileAvatarRef = useRef(null);
   const isAdmin = user?.system_role === "admin";
   const isManager = user?.system_role === "manager";
   const isEmployee = user?.system_role === "employee";
@@ -43,6 +70,25 @@ export default function AppLayout() {
   useEffect(() => {
     fetchNotifs();
     const interval = setInterval(fetchNotifs, 30000);
+    orgApi.get().then(({ data }) => {
+      setAttendanceEnabled(!!data.attendance_enabled);
+      const logoUrl = data.logo_url || "";
+      setOrgBrand({ name: data.brand_name || data.name || "ShiftRoster", logo_url: logoUrl });
+
+      // Update favicon to brand logo, or remove it if no logo
+      const link = document.querySelector("link[rel='icon']") || (() => {
+        const el = document.createElement("link");
+        el.rel = "icon";
+        document.head.appendChild(el);
+        return el;
+      })();
+      if (logoUrl) {
+        link.href = logoUrl;
+        link.type = "image/png";
+      } else {
+        link.href = "data:,";
+      }
+    }).catch(() => {});
     return () => clearInterval(interval);
   }, []);
 
@@ -53,6 +99,8 @@ export default function AppLayout() {
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
+    // Expose to ChatPage / ChatContext for typing events (set immediately, before open)
+    window._appLayoutWsRef = ws;
     ws.onopen = () => {
       ws.send(JSON.stringify({ user_id: user.id }));
     };
@@ -61,6 +109,9 @@ export default function AppLayout() {
         const msg = JSON.parse(e.data);
         if (msg.type === "presence_update") {
           setOnlineUsers(msg.online_users || []);
+        } else if (msg.type && msg.type.startsWith("chat_")) {
+          // Dispatch to ChatContext via CustomEvent
+          window.dispatchEvent(new CustomEvent("ws:chat", { detail: msg }));
         }
       } catch {}
     };
@@ -74,8 +125,53 @@ export default function AppLayout() {
     return () => {
       clearInterval(heartbeat);
       ws.close();
+      if (window._appLayoutWsRef === ws) {
+        window._appLayoutWsRef = null;
+      }
     };
   }, [user?.id]);
+
+  const openProfile = () => {
+    setProfileForm({ full_name: user?.full_name || "", username: user?.username || "" });
+    setProfileAvatar(user?.avatar_url || "");
+    setProfileAvatarFile(null);
+    setProfileAvatarPreview("");
+    setProfileError("");
+    setProfileOpen(true);
+  };
+
+  const handleProfileAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProfileAvatarFile(file);
+    setProfileAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const handleProfileSave = async () => {
+    setProfileError("");
+    setProfileSaving(true);
+    try {
+      // Upload avatar first if a new file was selected
+      if (profileAvatarFile) {
+        const fd = new FormData();
+        fd.append("file", profileAvatarFile);
+        await usersApi.uploadAvatar(user.id, fd);
+      }
+      // Update profile fields
+      const payload = {};
+      if (profileForm.full_name.trim()) payload.full_name = profileForm.full_name.trim();
+      if (profileForm.username.trim()) payload.username = profileForm.username.trim().toLowerCase();
+      if (Object.keys(payload).length > 0) {
+        await usersApi.update(user.id, payload);
+      }
+      setProfileOpen(false);
+      window.location.reload();
+    } catch (err) {
+      setProfileError(err?.response?.data?.detail || "Save failed");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -96,6 +192,14 @@ export default function AppLayout() {
     } catch {}
   };
 
+  const handleSetStatus = (status) => {
+    setMyStatus(status);
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "set_status", status }));
+    }
+  };
+
   const timeAgo = (date) => {
     if (!date) return "";
     const diff = Date.now() - new Date(date).getTime();
@@ -113,13 +217,15 @@ export default function AppLayout() {
     { to: "/departments", icon: Building2, label: "Departments", show: isAdmin },
     { to: "/manager-groups", icon: UserCog, label: "Manager Groups", show: isAdmin },
     { to: "/leave", icon: ClipboardList, label: "Leave Management", show: isAdmin || isManager || level !== "L1" },
-    { to: "/attendance", icon: Clock, label: "Attendance", show: true },
+    { to: "/attendance", icon: Clock, label: "Attendance", show: attendanceEnabled },
     { to: "/swap-requests", icon: ArrowLeftRight, label: "Swap Requests", show: isAdmin || isManager || level !== "L1" },
+    { to: "/shift-templates", icon: LayoutTemplate, label: "Shift Templates", show: isAdmin || isManager },
     { to: "/sticky-notes", icon: StickyNote, label: "Sticky Notes", show: true },
+    { to: "/chat", icon: MessageSquare, label: "Chat", show: true },
     { to: "/notifications", icon: Bell, label: "Notifications", show: true },
     { to: "/reports", icon: BarChart3, label: "Reports", show: isAdmin || isManager },
     { to: "/audit-log", icon: ScrollText, label: "Audit Log", show: isAdmin },
-    { to: "/settings", icon: Settings, label: "Settings", show: isAdmin },
+    { to: "/settings", icon: Settings, label: "Settings", show: isAdmin || isManager },
   ].filter((n) => n.show);
 
   const initials = user?.full_name
@@ -143,10 +249,14 @@ export default function AppLayout() {
       >
         {/* Logo */}
         <div className="flex flex-row items-center gap-2 px-4 h-14 border-b border-border shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
-            <CalendarDays className="h-4 w-4 text-primary-foreground" />
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0 overflow-hidden">
+            {orgBrand.logo_url ? (
+              <img src={orgBrand.logo_url} alt="logo" className="w-full h-full object-cover rounded-lg" />
+            ) : (
+              <CalendarDays className="h-4 w-4 text-primary-foreground" />
+            )}
           </div>
-          {sidebarOpen && <span className="font-semibold text-sm tracking-tight truncate">ShiftRoster</span>}
+          {sidebarOpen && <span className="font-semibold text-sm tracking-tight truncate">{orgBrand.name}</span>}
         </div>
 
         {/* Nav */}
@@ -171,23 +281,54 @@ export default function AppLayout() {
               {item.to === "/notifications" && unreadCount > 0 && sidebarOpen && (
                 <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{unreadCount}</Badge>
               )}
+              {item.to === "/chat" && chatUnread > 0 && sidebarOpen && (
+                <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{chatUnread > 99 ? "99+" : chatUnread}</Badge>
+              )}
             </NavLink>
           ))}
         </nav>
 
         {/* User section */}
         <div className="border-t border-border p-3 shrink-0">
-          <div className="flex items-center gap-2">
-            <Avatar className="h-8 w-8 shrink-0">
-              <AvatarFallback className="text-xs bg-primary/10 text-primary">{initials}</AvatarFallback>
-            </Avatar>
-            {sidebarOpen && (
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate">{user?.full_name}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{roleBadge}</p>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="flex items-center gap-2 cursor-pointer rounded-md hover:bg-accent/50 px-1 py-1 transition-colors">
+                <div className="relative shrink-0">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="text-xs bg-primary/10 text-primary">{initials}</AvatarFallback>
+                  </Avatar>
+                  {/* My own status dot */}
+                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
+                    myStatus === "active" ? "bg-green-500"
+                    : myStatus === "break" ? "bg-yellow-400"
+                    : myStatus === "leave" ? "border-2 border-red-400 bg-background"
+                    : "bg-muted-foreground/40"
+                  }`} />
+                </div>
+                {sidebarOpen && (
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{user?.full_name}</p>
+                    <p className="text-[10px] text-muted-foreground truncate capitalize">
+                      {myStatus === "active" ? roleBadge : myStatus === "break" ? "On Break" : "On Leave"}
+                    </p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" className="w-48">
+              <DropdownMenuLabel className="text-[11px] text-muted-foreground">Set Status</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleSetStatus("active")} className={myStatus === "active" ? "text-primary font-medium" : ""}>
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500 mr-2 shrink-0" /> Active
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSetStatus("break")} className={myStatus === "break" ? "text-primary font-medium" : ""}>
+                <Coffee className="h-3.5 w-3.5 mr-2 text-yellow-500 shrink-0" /> On Break
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSetStatus("leave")} className={myStatus === "leave" ? "text-primary font-medium" : ""}>
+                <Plane className="h-3.5 w-3.5 mr-2 text-red-400 shrink-0" /> On Leave
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
 
@@ -241,7 +382,12 @@ export default function AppLayout() {
                               {uInitials}
                             </AvatarFallback>
                           </Avatar>
-                          <span className={`presence-dot ${ou.status === "active" ? "active" : ou.status === "idle" ? "idle" : "away"}`} />
+                          <span className={`presence-dot ${
+                            ou.status === "active" ? "active"
+                            : ou.status === "break" ? "break"
+                            : ou.status === "leave" ? "leave"
+                            : "away"
+                          }`} />
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -329,6 +475,23 @@ export default function AppLayout() {
 
             <ThemeToggle />
 
+            {/* User profile button */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={openProfile}>
+                    <Avatar className="h-7 w-7">
+                      {user?.avatar_url && (
+                        <AvatarImage src={`${BACKEND_URL || ""}${user.avatar_url}`} />
+                      )}
+                      <AvatarFallback className="text-[10px] bg-primary/20 text-primary">{initials}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>My Profile</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
             <Button
               variant="ghost"
               size="icon"
@@ -341,9 +504,67 @@ export default function AppLayout() {
           </div>
         </header>
 
+        {/* My Profile Dialog */}
+        <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>My Profile</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              {/* Avatar */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="relative">
+                  <Avatar className="h-20 w-20">
+                    {(profileAvatarPreview || profileAvatar) && (
+                      <AvatarImage src={profileAvatarPreview || `${BACKEND_URL || ""}${profileAvatar}`} />
+                    )}
+                    <AvatarFallback className="text-2xl bg-primary/20 text-primary">{initials}</AvatarFallback>
+                  </Avatar>
+                  <button
+                    type="button"
+                    onClick={() => profileAvatarRef.current?.click()}
+                    className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:bg-primary/90"
+                  >
+                    <Camera className="h-3 w-3" />
+                  </button>
+                  <input ref={profileAvatarRef} type="file" accept="image/*" className="hidden" onChange={handleProfileAvatarChange} />
+                </div>
+                <p className="text-xs text-muted-foreground">Click camera to change avatar</p>
+              </div>
+              {/* Full name */}
+              <div className="space-y-1">
+                <Label className="text-xs">Full Name</Label>
+                <Input
+                  value={profileForm.full_name}
+                  onChange={(e) => setProfileForm(f => ({ ...f, full_name: e.target.value }))}
+                  placeholder="Your full name"
+                />
+              </div>
+              {/* Username */}
+              <div className="space-y-1">
+                <Label className="text-xs">Username</Label>
+                <Input
+                  value={profileForm.username}
+                  onChange={(e) => setProfileForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, "") }))}
+                  placeholder="e.g. john.doe"
+                />
+                <p className="text-[11px] text-muted-foreground">Used for @mentions and login. Letters, numbers, dots, underscores only.</p>
+              </div>
+              {profileError && <p className="text-xs text-destructive">{profileError}</p>}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setProfileOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={handleProfileSave} disabled={profileSaving}>
+                {profileSaving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Page content */}
-        <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
-          <div className="animate-fade-in">
+        <main className={`flex-1 flex flex-col min-h-0 ${isFullBleed ? "" : "p-4 md:p-6 lg:p-8"}`}>
+          <div className={`animate-fade-in flex-1 min-h-0 ${isFullBleed ? "overflow-hidden" : "relative overflow-auto"}`}>
             <Outlet />
           </div>
         </main>

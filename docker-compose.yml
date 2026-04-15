@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # MongoDB
   mongo:
@@ -23,8 +21,6 @@ services:
       dockerfile: Dockerfile
     container_name: shiftroster-backend
     restart: unless-stopped
-    ports:
-      - "8000:8000"
     environment:
       MONGO_URL: mongodb://mongo:27017
       DB_NAME: shiftroster
@@ -34,27 +30,52 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
+      - backend_uploads:/app/uploads
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 15s
       timeout: 5s
       retries: 3
 
-  # Frontend (React + Nginx)
+  # Frontend (React + Nginx static server — internal only)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        REACT_APP_BACKEND_URL: http://localhost:8000
+        REACT_APP_BACKEND_URL: ${PROTOCOL:-http}://${DOMAIN:-localhost}
     container_name: shiftroster-frontend
     restart: unless-stopped
-    ports:
-      - "3000:80"
     depends_on:
       backend:
         condition: service_healthy
 
+  # Nginx Reverse Proxy — SSL termination, public entrypoint
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: shiftroster-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+      PROTOCOL: ${PROTOCOL:-http}
+      BACKEND_URL: http://backend:8000
+      FRONTEND_URL: http://frontend:80
+      SSL_CERT: /etc/nginx/ssl/cert.pem
+      SSL_KEY: /etc/nginx/ssl/key.pem
+    volumes:
+      # Mount SSL certs from host (place cert.pem + key.pem in ./ssl/)
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+
 volumes:
   mongo_data:
+    driver: local
+  backend_uploads:
     driver: local

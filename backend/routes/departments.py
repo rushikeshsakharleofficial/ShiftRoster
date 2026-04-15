@@ -4,7 +4,7 @@ from typing import Optional
 from datetime import datetime, timezone
 from bson import ObjectId
 from db import db
-from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit
+from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit, get_manager_dept_ids
 
 router = APIRouter(prefix="/api", tags=["departments"])
 
@@ -29,7 +29,13 @@ class PositionCreate(BaseModel):
 @router.get("/departments")
 async def list_departments(request: Request):
     current = await get_current_user(request)
-    depts = await db.departments.find({"org_id": current.get("org_id")}).to_list(100)
+    if current["system_role"] == "manager":
+        mgr_depts = await get_manager_dept_ids(current["id"], db)
+        if not mgr_depts:
+            return []
+        depts = await db.departments.find({"org_id": current.get("org_id"), "_id": {"$in": [ObjectId(d) for d in mgr_depts]}}).to_list(100)
+    else:
+        depts = await db.departments.find({"org_id": current.get("org_id")}).to_list(100)
     return serialize_list(depts)
 
 

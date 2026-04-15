@@ -78,6 +78,9 @@
 .presence-dot.active { background: #10B981; }
 .presence-dot.idle { background: #F59E0B; }
 .presence-dot.away { background: #94A3B8; }
+/* break = yellow, leave = empty circle (red border no fill) */
+.presence-dot.break { background: #FBBF24; }
+.presence-dot.leave { background: transparent; border-color: #F87171; }
 
 /* Shift block colors */
 .shift-block {

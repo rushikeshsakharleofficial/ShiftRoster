@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm audit:*)",
+      "Bash(ls /home/rushikesh.sakharle/projects/ShiftRoster/frontend/.env*)",
+      "Bash(cat /home/rushikesh.sakharle/projects/ShiftRoster/frontend/.env*)",
+      "Bash(docker-compose up:*)",
+      "Bash(ls /home/rushikesh.sakharle/projects/ShiftRoster/frontend/src/components/ui/checkbox*)",
+      "Bash(grep -rn \"audit_logs\\\\|audit_log\" /home/rushikesh.sakharle/projects/ShiftRoster/backend/routes/*.py)",
+      "Bash(grep -rn \"create_notification\\\\|notifications\" /home/rushikesh.sakharle/projects/ShiftRoster/backend/routes/*.py)",
+      "Bash(grep -rn \"log_audit\\\\|from auth_utils import\" /home/rushikesh.sakharle/projects/ShiftRoster/backend/routes/*.py)",
+      "Bash(grep -n \"register\\\\|setup\\\\|onboard\\\\|first_run\\\\|org.*create\\\\|create.*org\" /home/rushikesh.sakharle/projects/ShiftRoster/backend/routes/*.py)",
+      "Bash(python3 -c \"import ast, sys; ast.parse\\(open\\('backend/routes/chat.py'\\).read\\(\\)\\); print\\('chat.py: OK'\\)\")",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('backend/server.py'\\).read\\(\\)\\); print\\('server.py: OK'\\)\")",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('backend/presence_manager.py'\\).read\\(\\)\\); print\\('presence_manager.py: OK'\\)\")",
+      "Bash(docker compose:*)",
+      "Bash(docker version:*)",
+      "Bash(docker-compose version:*)",
+      "Bash(docker-compose build:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(curl -sk https://localhost/api/health)",
+      "Bash(curl -sk -X POST https://localhost/api/setup -H 'Content-Type: application/json' -d '{\"org_name\":\"Test Org\",\"admin_name\":\"Test Admin\",\"admin_email\":\"admin@test.com\",\"admin_password\":\"admin123\"}')",
+      "Bash(docker exec:*)",
+      "Bash(docker cp:*)",
+      "Bash(docker restart:*)",
+      "Bash(xargs ls:*)",
+      "Bash(grep -l \"manager\\\\|department\" /home/rushikesh.sakharle/projects/ShiftRoster/backend/routes/*.py)"
+    ]
+  }
+}
