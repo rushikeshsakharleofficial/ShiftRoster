@@ -152,6 +152,19 @@ async def create_leave_request(data: LeaveRequestCreate, request: Request):
     }
     result = await db.leave_requests.insert_one(doc)
     doc["_id"] = result.inserted_id
+
+    # Notify managers/admins in the same org
+    managers = await db.users.find(
+        {"org_id": current.get("org_id"), "system_role": {"$in": ["admin", "manager"]}, "_id": {"$ne": ObjectId(current["id"])}},
+        {"_id": 1}
+    ).to_list(100)
+    for m in managers:
+        await create_notification(
+            str(m["_id"]), "leave_requested",
+            f"{current.get('full_name', 'An employee')} submitted a leave request",
+            link="/leave"
+        )
+
     return serialize_doc(doc)
 
 

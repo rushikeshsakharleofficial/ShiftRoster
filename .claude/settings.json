@@ -4,7 +4,11 @@
       "Bash(npm audit:*)",
       "Bash(ls /home/rushikesh.sakharle/projects/ShiftRoster/frontend/.env*)",
       "Bash(cat /home/rushikesh.sakharle/projects/ShiftRoster/frontend/.env*)",
-      "Bash(docker-compose up:*)"
+      "Bash(docker-compose up:*)",
+      "Bash(ls /home/rushikesh.sakharle/projects/ShiftRoster/frontend/src/components/ui/checkbox*)",
+      "Bash(grep -rn \"audit_logs\\\\|audit_log\" /home/rushikesh.sakharle/projects/ShiftRoster/backend/routes/*.py)",
+      "Bash(grep -rn \"create_notification\\\\|notifications\" /home/rushikesh.sakharle/projects/ShiftRoster/backend/routes/*.py)",
+      "Bash(grep -rn \"log_audit\\\\|from auth_utils import\" /home/rushikesh.sakharle/projects/ShiftRoster/backend/routes/*.py)"
     ]
   }
 }

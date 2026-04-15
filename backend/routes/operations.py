@@ -207,6 +207,15 @@ async def create_swap(data: SwapRequestCreate, request: Request):
     }
     result = await db.swap_requests.insert_one(doc)
     doc["_id"] = result.inserted_id
+
+    # Notify the target user
+    if data.target_id:
+        await create_notification(
+            data.target_id, "swap_requested",
+            f"{current.get('full_name', 'A colleague')} has requested a shift swap with you",
+            link="/swap-requests"
+        )
+
     return serialize_doc(doc)
 
 
@@ -383,14 +392,15 @@ async def list_audit_logs(
     entity: Optional[str] = None,
     action: Optional[str] = None,
     actor_id: Optional[str] = None,
+    actor_name: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
 ):
     current = await get_current_user(request)
-    if current["system_role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can view audit logs")
+    if current["system_role"] not in ("admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only admin or manager can view audit logs")
 
     query = {"org_id": current.get("org_id")}
     if entity:
@@ -399,6 +409,17 @@ async def list_audit_logs(
         query["action"] = action
     if actor_id:
         query["actor_id"] = actor_id
+    if actor_name:
+        # Find users whose names match, then filter logs by their IDs
+        matched_users = await db.users.find(
+            {"org_id": current.get("org_id"), "full_name": {"$regex": actor_name, "$options": "i"}},
+            {"_id": 1}
+        ).to_list(50)
+        matched_ids = [str(u["_id"]) for u in matched_users]
+        if matched_ids:
+            query["actor_id"] = {"$in": matched_ids}
+        else:
+            return {"logs": [], "total": 0}
     if start_date:
         query.setdefault("created_at", {})
         query["created_at"]["$gte"] = datetime.fromisoformat(start_date)
@@ -412,8 +433,15 @@ async def list_audit_logs(
     result = []
     for l in logs:
         ldata = serialize_doc(l)
-        actor = await db.users.find_one({"_id": ObjectId(l["actor_id"])}, {"full_name": 1})
-        ldata["actor_name"] = actor.get("full_name", "") if actor else ""
+        actor_oid = l.get("actor_id")
+        if actor_oid:
+            try:
+                actor = await db.users.find_one({"_id": ObjectId(actor_oid)}, {"full_name": 1})
+                ldata["actor_name"] = actor.get("full_name", "") if actor else ""
+            except Exception:
+                ldata["actor_name"] = ""
+        else:
+            ldata["actor_name"] = ""
         result.append(ldata)
     return {"logs": result, "total": total}
 

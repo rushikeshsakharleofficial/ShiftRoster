@@ -5,6 +5,7 @@ import { authApi, formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CalendarDays, ArrowRight, Loader2, Shield, KeyRound } from "lucide-react";
 
 export default function LoginPage() {
@@ -12,6 +13,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +29,7 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const result = await login(email, password);
+      const result = await login(email, password, rememberMe);
 
       if (result.mfa_required) {
         setMfaStep("verify");
@@ -64,7 +66,7 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const { data } = await authApi.verifyMfa({ mfa_token: mfaToken, code: mfaCode });
+      const { data } = await authApi.verifyMfa({ mfa_token: mfaToken, code: mfaCode, remember_me: rememberMe });
       completeMfaLogin(data);
       navigate("/");
     } catch (err) {
@@ -293,6 +295,17 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="remember-me"
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(!!checked)}
+                data-testid="remember-me-checkbox"
+              />
+              <Label htmlFor="remember-me" className="text-sm font-normal cursor-pointer">
+                Remember me for 30 days
+              </Label>
             </div>
             <Button
               data-testid="login-submit-btn"

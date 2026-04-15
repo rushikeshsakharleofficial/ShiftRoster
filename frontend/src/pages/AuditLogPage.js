@@ -70,7 +70,7 @@ export default function AuditLogPage() {
       const params = { skip: page * PAGE_SIZE, limit: PAGE_SIZE };
       if (entityFilter && entityFilter !== "all") params.entity = entityFilter;
       if (actionFilter && actionFilter !== "all") params.action = actionFilter;
-      if (debouncedActor) params.actor_id = debouncedActor;
+      if (debouncedActor) params.actor_name = debouncedActor;
       if (startDate) params.start_date = startDate;
       if (endDate) params.end_date = endDate;
       const { data } = await auditApi.list(params);

@@ -20,11 +20,13 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 class LoginRequest(BaseModel):
     email: str
     password: str
+    remember_me: bool = False
 
 
 class VerifyMfaRequest(BaseModel):
     mfa_token: str
     code: str
+    remember_me: bool = False
 
 
 class SetupMfaRequest(BaseModel):
@@ -41,9 +43,11 @@ class DisableMfaRequest(BaseModel):
     code: str  # Require a valid TOTP code to disable
 
 
-def set_auth_cookies(response: Response, access_token: str, refresh_token: str):
+def set_auth_cookies(response: Response, access_token: str, refresh_token: str, remember_me: bool = False):
+    refresh_max_age = 2592000 if remember_me else 604800  # 30 days or 7 days
     response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=3600, path="/")
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax", max_age=refresh_max_age, path="/")
+    response.set_cookie(key="remember_me", value="1" if remember_me else "0", httponly=False, secure=False, samesite="lax", max_age=refresh_max_age, path="/")
 
 
 @router.post("/login")
@@ -85,16 +89,16 @@ async def login(data: LoginRequest, request: Request, response: Response):
     # Check if MFA is enabled
     if user.get("mfa_enabled"):
         mfa_token = create_mfa_temp_token(user_id)
-        return {"mfa_required": True, "mfa_token": mfa_token}
+        return {"mfa_required": True, "mfa_token": mfa_token, "remember_me": data.remember_me}
 
     # Check if MFA is mandated but not set up yet
     if user.get("mfa_mandated") and not user.get("mfa_enabled"):
         mfa_token = create_mfa_temp_token(user_id)
-        return {"mfa_setup_required": True, "mfa_token": mfa_token}
+        return {"mfa_setup_required": True, "mfa_token": mfa_token, "remember_me": data.remember_me}
 
     access_token = create_access_token(user_id, email)
     refresh_token = create_refresh_token(user_id)
-    set_auth_cookies(response, access_token, refresh_token)
+    set_auth_cookies(response, access_token, refresh_token, remember_me=data.remember_me)
 
     user_data = serialize_doc(user)
     user_data.pop("password_hash", None)
@@ -133,7 +137,7 @@ async def verify_mfa(data: VerifyMfaRequest, response: Response):
 
     access_token = create_access_token(user_id, user["email"])
     refresh_token = create_refresh_token(user_id)
-    set_auth_cookies(response, access_token, refresh_token)
+    set_auth_cookies(response, access_token, refresh_token, remember_me=data.remember_me)
 
     user_data = serialize_doc(user)
     user_data.pop("password_hash", None)

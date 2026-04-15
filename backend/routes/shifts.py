@@ -312,7 +312,18 @@ async def delete_assignment(assignment_id: str, request: Request):
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
+    assignment = await db.shift_assignments.find_one({"_id": ObjectId(assignment_id)})
     await db.shift_assignments.delete_one({"_id": ObjectId(assignment_id)})
+
+    if assignment:
+        shift = await db.shifts.find_one({"_id": ObjectId(assignment["shift_id"])}) if assignment.get("shift_id") else None
+        title = shift.get("title", "a shift") if shift else "a shift"
+        await create_notification(
+            assignment["user_id"], "shift_unassigned",
+            f"You have been removed from: {title}",
+            link="/shifts"
+        )
+
     return {"message": "Assignment removed"}
 
 
