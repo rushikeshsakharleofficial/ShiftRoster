@@ -221,6 +221,7 @@ async def websocket_endpoint(ws: WebSocket):
         presence.user_data[user_id] = {
             "id": user_id,
             "name": user_info.get("full_name", ""),
+            "username": user_info.get("username", ""),
             "avatar": user_info.get("avatar_url", ""),
             "department_id": user_info.get("department_id", ""),
             "system_role": user_info.get("system_role", ""),

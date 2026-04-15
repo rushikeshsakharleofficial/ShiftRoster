@@ -13,7 +13,27 @@ export function ChatProvider({ children }) {
   const [typingUsers, setTypingUsers] = useState({}); // {channelId: [{user_id, user_name}]}
   const [unreadCounts, setUnreadCounts] = useState({});
   const [totalUnread, setTotalUnread] = useState(0);
+  const [userCache, setUserCache] = useState({}); // {username: {full_name, avatar_url, initials}}
   const typingTimers = useRef({});
+
+  const updateCache = useCallback((users) => {
+    setUserCache((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      users.forEach((u) => {
+        if (!next[u.username] || next[u.username].full_name !== u.full_name) {
+          next[u.username] = {
+            id: u.id,
+            full_name: u.full_name,
+            avatar_url: u.avatar_url,
+            initials: u.initials,
+          };
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, []);
 
   // Load channels + DMs
   const loadChannels = useCallback(async () => {
@@ -38,6 +58,16 @@ export function ChatProvider({ children }) {
       }
       setUnreadCounts(counts);
       setTotalUnread(total);
+
+      // ── Set Default Channel (#general) ──
+      if (!activeChannelId) {
+        const general = (chRes.data.channels || []).find(ch => ch.name === "general");
+        if (general) {
+          setActiveChannelId(general.id);
+        } else if (chRes.data.channels && chRes.data.channels.length > 0) {
+          setActiveChannelId(chRes.data.channels[0].id);
+        }
+      }
     } catch (err) {
       // silently ignore — user may not be logged in yet
     }
@@ -192,6 +222,16 @@ export function ChatProvider({ children }) {
           const updated = [...current, message];
           messagesRef.current = { ...messagesRef.current, [channel_id]: updated };
           setMessages((prev) => ({ ...prev, [channel_id]: updated }));
+          
+          // Update userCache if we have sender info
+          if (message.sender_username && message.sender_name) {
+            updateCache([{
+              username: message.sender_username,
+              full_name: message.sender_name,
+              avatar_url: message.avatar_url || "",
+              initials: message.sender_initials || "",
+            }]);
+          }
         }
 
         // Update last_message_preview on channel / dm list
@@ -312,6 +352,8 @@ export function ChatProvider({ children }) {
       joinChannel,
       openDM,
       loadChannels,
+      userCache,
+      updateCache,
     }}>
       {children}
     </ChatContext.Provider>

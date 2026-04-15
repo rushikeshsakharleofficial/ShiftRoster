@@ -40,7 +40,7 @@ COMMON_LOCATIONS='
 if [ "$PROTOCOL" = "https" ] && [ -f "$SSL_CERT" ] && [ -f "$SSL_KEY" ]; then
     echo "Generating HTTPS nginx config for domain: $DOMAIN"
     cat > /etc/nginx/conf.d/default.conf << CONF
-# HTTP → HTTPS redirect
+# HTTP ? HTTPS redirect
 server {
     listen 80;
     server_name ${DOMAIN};

@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { notificationsApi, orgApi, usersApi } from "@/lib/api";
 import { useChat } from "@/contexts/ChatContext";
+import { getAvatarColor } from "@/lib/utils";
+import FlipClock from "@/components/ui/flip-clock";
 import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
@@ -295,7 +297,9 @@ export default function AppLayout() {
               <div className="flex items-center gap-2 cursor-pointer rounded-md hover:bg-accent/50 px-1 py-1 transition-colors">
                 <div className="relative shrink-0">
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className="text-xs bg-primary/10 text-primary">{initials}</AvatarFallback>
+                    <AvatarFallback className={`text-xs font-semibold ${getAvatarColor(user?.username || user?.full_name)}`}>
+                      {initials}
+                    </AvatarFallback>
                   </Avatar>
                   {/* My own status dot */}
                   <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
@@ -366,43 +370,7 @@ export default function AppLayout() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Online Presence Avatars */}
-            <TooltipProvider>
-              <div className="hidden md:flex items-center -space-x-2" data-testid="presence-bar">
-                {onlineUsers.slice(0, 8).map((ou) => {
-                  const uInitials = ou.name
-                    ? ou.name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase()
-                    : "?";
-                  return (
-                    <Tooltip key={ou.id}>
-                      <TooltipTrigger>
-                        <div className="relative">
-                          <Avatar className="h-7 w-7 border-2 border-background">
-                            <AvatarFallback className="text-[10px] bg-primary/20 text-primary">
-                              {uInitials}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className={`presence-dot ${
-                            ou.status === "active" ? "active"
-                            : ou.status === "break" ? "break"
-                            : ou.status === "leave" ? "leave"
-                            : "away"
-                          }`} />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="text-xs">{ou.name} — {ou.system_role}{ou.view ? ` — viewing ${ou.view}` : ""}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  );
-                })}
-                {onlineUsers.length > 8 && (
-                  <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium border-2 border-background">
-                    +{onlineUsers.length - 8}
-                  </div>
-                )}
-              </div>
-            </TooltipProvider>
+            <FlipClock />
 
             {/* Notification Popover */}
             <Popover>
@@ -484,7 +452,9 @@ export default function AppLayout() {
                       {user?.avatar_url && (
                         <AvatarImage src={`${BACKEND_URL || ""}${user.avatar_url}`} />
                       )}
-                      <AvatarFallback className="text-[10px] bg-primary/20 text-primary">{initials}</AvatarFallback>
+                      <AvatarFallback className={`text-[10px] font-semibold ${getAvatarColor(user?.username || user?.full_name)}`}>
+                        {initials}
+                      </AvatarFallback>
                     </Avatar>
                   </Button>
                 </TooltipTrigger>
@@ -518,7 +488,9 @@ export default function AppLayout() {
                     {(profileAvatarPreview || profileAvatar) && (
                       <AvatarImage src={profileAvatarPreview || `${BACKEND_URL || ""}${profileAvatar}`} />
                     )}
-                    <AvatarFallback className="text-2xl bg-primary/20 text-primary">{initials}</AvatarFallback>
+                    <AvatarFallback className={`text-2xl font-semibold ${getAvatarColor(user?.username || user?.full_name)}`}>
+                      {initials}
+                    </AvatarFallback>
                   </Avatar>
                   <button
                     type="button"

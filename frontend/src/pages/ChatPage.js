@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useChat } from "@/contexts/ChatContext";
 import { chatApi } from "@/lib/api";
+import { getAvatarColor } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,15 +42,26 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function renderMessageText(text) {
+function renderMessageText(text, userCache = {}) {
   if (!text) return null;
   // Highlight @mentions (including @all, @anyone, @username)
   const parts = text.split(/(@[\w.]+)/g);
-  return parts.map((part, i) =>
-    /^@[\w.]+$/.test(part)
-      ? <span key={i} className="bg-primary/15 text-primary font-semibold rounded px-0.5">{part}</span>
-      : <span key={i}>{part}</span>
-  );
+  return parts.map((part, i) => {
+    if (/^@[\w.]+$/.test(part)) {
+      const username = part.slice(1);
+      if (username === "all" || username === "anyone") {
+        return <span key={i} className="bg-primary/15 text-primary font-semibold rounded px-0.5">{part}</span>;
+      }
+      const cached = userCache[username];
+      const displayName = cached ? `@${cached.full_name}` : part;
+      return (
+        <span key={i} className="bg-primary/15 text-primary font-semibold rounded px-0.5 cursor-default" title={`@${username}`}>
+          {displayName}
+        </span>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
 }
 
 function FileAttachment({ fileUrl, fileName, fileSize, fileType }) {
@@ -129,7 +141,7 @@ function TypingDots() {
 }
 
 // ── Message Bubble ──
-function MessageBubble({ msg, prevMsg, currentUserId, onReact, onEdit, onDelete, onReply, wsRef, channelId }) {
+function MessageBubble({ msg, prevMsg, currentUserId, onReact, onEdit, onDelete, onReply, wsRef, channelId, userCache }) {
   const [showActions, setShowActions] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
@@ -151,7 +163,9 @@ function MessageBubble({ msg, prevMsg, currentUserId, onReact, onEdit, onDelete,
       <>
         {showDaySep && <DaySeparator date={msg.created_at} />}
         <div className="flex items-center justify-center py-1.5">
-          <span className="text-[11px] text-muted-foreground bg-muted px-3 py-0.5 rounded-full">{msg.text}</span>
+          <span className="text-[11px] text-muted-foreground bg-muted px-3 py-0.5 rounded-full">
+            {renderMessageText(msg.text, userCache)}
+          </span>
         </div>
       </>
     );
@@ -169,7 +183,7 @@ function MessageBubble({ msg, prevMsg, currentUserId, onReact, onEdit, onDelete,
         <div className="w-9 shrink-0 pt-0.5">
           {!sameAsPrev ? (
             <Avatar className="h-9 w-9">
-              <AvatarFallback className="text-xs bg-primary/15 text-primary font-semibold">
+              <AvatarFallback className={`text-xs font-semibold ${getAvatarColor(msg.sender_username || msg.sender_name)}`}>
                 {msg.sender_initials || "?"}
               </AvatarFallback>
             </Avatar>
@@ -200,7 +214,7 @@ function MessageBubble({ msg, prevMsg, currentUserId, onReact, onEdit, onDelete,
             <>
               {msg.text && (
                 <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
-                  {renderMessageText(msg.text)}
+                  {renderMessageText(msg.text, userCache)}
                 </p>
               )}
               {msg.file_url && (
@@ -462,7 +476,7 @@ function NewDMDialog({ open, onClose, onOpenDM }) {
               >
                 <div className="relative">
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className="text-xs bg-primary/15 text-primary font-semibold">
+                    <AvatarFallback className={`text-xs font-semibold ${getAvatarColor(u.username || u.full_name)}`}>
                       {u.initials}
                     </AvatarFallback>
                   </Avatar>
@@ -533,7 +547,9 @@ function InviteUserDialog({ open, onClose, channelId }) {
             users.map((u) => (
               <div key={u.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent">
                 <Avatar className="h-8 w-8">
-                  <AvatarFallback className="text-xs bg-primary/15 text-primary font-semibold">{u.initials}</AvatarFallback>
+                  <AvatarFallback className={`text-xs font-semibold ${getAvatarColor(u.username || u.full_name)}`}>
+                    {u.initials}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
                   <p className="text-sm font-medium">{u.full_name}</p>
@@ -566,7 +582,7 @@ export default function ChatPage() {
     channels, dms, activeChannelId, setActiveChannelId,
     messages, loadMessages, loadMoreMessages, sendMessage, editMessage, deleteMessage,
     reactToMessage, typingUsers, unreadCounts, markRead, createChannel, joinChannel, openDM,
-    loadChannels,
+    loadChannels, userCache, updateCache,
   } = useChat();
 
   const [channelsSectionOpen, setChannelsSectionOpen] = useState(true);
@@ -631,14 +647,16 @@ export default function ChatPage() {
     if (!isDM) {
       try {
         const res = await chatApi.getChannelMembers(id);
-        setMembers(res.data.members || []);
+        const membersList = res.data.members || [];
+        setMembers(membersList);
+        updateCache(membersList);
       } catch {
         setMembers([]);
       }
     } else {
       setMembers([]);
     }
-  }, [loadMessages, markRead, setActiveChannelId]);
+  }, [loadMessages, markRead, setActiveChannelId, updateCache]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -692,6 +710,7 @@ export default function ChatPage() {
           const res = await chatApi.mentionUsers(q);
           const users = res.data.users || [];
           setMention({ show: users.length > 0, query: q, users, idx: 0 });
+          updateCache(users);
         } catch {
           setMention(s => ({ ...s, show: false }));
         }
@@ -947,7 +966,7 @@ export default function ChatPage() {
                         >
                           <div className="relative shrink-0">
                             <Avatar className="h-5 w-5">
-                              <AvatarFallback className="text-[9px] bg-primary/15 text-primary font-semibold">
+                              <AvatarFallback className={`text-[9px] font-semibold ${getAvatarColor(other?.username || other?.full_name)}`}>
                                 {other?.initials || "?"}
                               </AvatarFallback>
                             </Avatar>
@@ -1099,6 +1118,7 @@ export default function ChatPage() {
                             onReply={handleReply}
                             wsRef={wsRef}
                             channelId={activeChannelId}
+                            userCache={userCache}
                           />
                         ))}
                         <div ref={messagesEndRef} />
@@ -1157,13 +1177,11 @@ export default function ChatPage() {
                             onMouseDown={(e) => { e.preventDefault(); insertMention(u.username); }}
                             className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${i === mention.idx ? "bg-accent" : "hover:bg-accent/60"}`}
                           >
-                            {u.avatar_url ? (
-                              <img src={`${BACKEND_URL}${u.avatar_url}`} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
-                            ) : (
-                              <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center text-[9px] font-bold text-primary shrink-0">
+                            <Avatar className="w-6 h-6 shrink-0">
+                              <AvatarFallback className={`text-[9px] font-bold ${getAvatarColor(u.username || u.full_name)}`}>
                                 {u.initials}
-                              </div>
-                            )}
+                              </AvatarFallback>
+                            </Avatar>
                             <div className="min-w-0">
                               <span className="text-sm font-medium">@{u.username}</span>
                               <span className="text-xs text-muted-foreground ml-1.5 truncate">{u.full_name}</span>
@@ -1264,7 +1282,7 @@ export default function ChatPage() {
                           >
                             <div className="relative shrink-0">
                               <Avatar className="h-7 w-7">
-                                <AvatarFallback className="text-[10px] bg-primary/15 text-primary font-semibold">
+                                <AvatarFallback className={`text-[10px] font-semibold ${getAvatarColor(m.username || m.full_name)}`}>
                                   {m.initials}
                                 </AvatarFallback>
                               </Avatar>

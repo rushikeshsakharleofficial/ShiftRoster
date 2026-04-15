@@ -50,6 +50,14 @@ export default function SetupPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (step === 1) {
+      if (form.org_name.trim()) {
+        setStep(2);
+      }
+      return;
+    }
+
     if (form.admin_password !== form.confirm_password) {
       toast.error("Passwords do not match");
       return;

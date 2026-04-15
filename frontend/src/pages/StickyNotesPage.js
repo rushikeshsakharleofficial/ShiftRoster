@@ -62,8 +62,8 @@ function gridPosition(index) {
   const col = index % 4;
   const row = Math.floor(index / 4);
   return {
-    x: col * 224 + 24,
-    y: row * 210 + 24,
+    x: col * 240 + 24, // Using slightly more space
+    y: row * 220 + 24,
   };
 }
 
@@ -141,7 +141,6 @@ function FloatingNote({
         position: "absolute",
         left: pos.x,
         top: pos.y,
-        width: 200,
         transform: `rotate(${rotation}deg)`,
         background: note.color,
         cursor: "grab",
@@ -152,21 +151,15 @@ function FloatingNote({
         zIndex: isHighlighted ? 20 : 10,
         transition: "box-shadow 0.2s",
       }}
-      className="rounded-sm p-3 group select-none"
+      className="rounded-sm p-3 group select-none w-48 md:w-52"
       onMouseDown={handleMouseDown}
     >
       {/* Tape strip */}
       <div
+        className="absolute -top-2 left-1/2 -translate-x-1/2 w-12 h-4 rounded-sm"
         style={{
-          position: "absolute",
-          top: -9,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: 48,
-          height: 15,
           background: "rgba(255,255,255,0.52)",
           border: "1px solid rgba(0,0,0,0.07)",
-          borderRadius: 2,
           backdropFilter: "blur(2px)",
         }}
       />
@@ -271,15 +264,14 @@ function FloatingNote({
               style={{ background: note.color }}
             >
               <div
+                className="absolute -top-2 left-1/2 -translate-x-1/2 w-12 h-3.5 rounded-sm"
                 style={{
-                  position: "absolute", top: -8, left: "50%",
-                  transform: "translateX(-50%)", width: 48, height: 14,
                   background: "rgba(255,255,255,0.52)",
-                  border: "1px solid rgba(0,0,0,0.07)", borderRadius: 2,
+                  border: "1px solid rgba(0,0,0,0.07)",
                 }}
               />
-              <div className="p-4 overflow-y-auto" style={{ maxHeight: 360 }}>
-                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words"
+              <div className="p-6 overflow-y-auto" style={{ maxHeight: "50vh" }}>
+                <p className="text-base leading-relaxed whitespace-pre-wrap break-words"
                   style={{ color: "rgba(0,0,0,0.82)" }}>
                   {note.text}
                 </p>
@@ -612,8 +604,8 @@ export default function StickyNotesPage() {
                 placeholder="Write your note..."
                 value={form.text}
                 onChange={(e) => setForm({ ...form, text: e.target.value })}
-                rows={4}
-                className="resize-none"
+                rows={6}
+                className="resize-none p-3 leading-relaxed"
               />
             </div>
 
@@ -689,10 +681,10 @@ export default function StickyNotesPage() {
                 }}
               />
               <div
-                className="p-3 overflow-y-auto"
+                className="p-4 overflow-y-auto"
                 style={{ maxHeight: 160 }}
               >
-                <span style={{ color: "rgba(0,0,0,0.72)", whiteSpace: "pre-wrap" }}>
+                <span className="leading-relaxed" style={{ color: "rgba(0,0,0,0.72)", whiteSpace: "pre-wrap" }}>
                   {form.text || "Preview..."}
                 </span>
               </div>

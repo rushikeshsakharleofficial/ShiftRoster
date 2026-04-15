@@ -154,6 +154,87 @@ async def create_user(data: CreateUserRequest, request: Request):
     doc = serialize_doc(user_doc)
     doc.pop("password_hash", None)
 
+    # ── Welcome Automation ──
+    try:
+        # 1. Find the #general channel for this organization
+        general_ch = await db.chat_channels.find_one({
+            "org_id": user_doc["org_id"],
+            "name": "general",
+            "type": "public"
+        })
+        
+        if general_ch:
+            ch_id = str(general_ch["_id"])
+            user_id = doc["id"]
+            
+            # 2. Add user to the channel members
+            await db.chat_channels.update_one(
+                {"_id": general_ch["_id"]},
+                {"$addToSet": {"members": user_id}}
+            )
+            
+            # 3. Send welcome message
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+            welcome_text = f"Welcome to the team, @{doc['username']}! 👋"
+            
+            def _user_initials(name: str) -> str:
+                parts = name.strip().split()
+                if not parts: return "?"
+                return "".join(p[0] for p in parts[:2]).upper()
+
+            msg_doc = {
+                "org_id": user_doc["org_id"],
+                "channel_id": ch_id,
+                "sender_id": "system",
+                "sender_name": "Welcome Bot",
+                "sender_initials": "WB",
+                "text": welcome_text,
+                "type": "system",
+                "reactions": [],
+                "reply_to": None,
+                "created_at": now,
+            }
+            await db.chat_messages.insert_one(msg_doc)
+            
+            # 4. Update channel last message
+            await db.chat_channels.update_one(
+                {"_id": general_ch["_id"]},
+                {
+                    "$set": {
+                        "last_message_at": now,
+                        "last_message_preview": welcome_text[:80],
+                        "updated_at": now,
+                    },
+                    "$inc": {"message_count": 1},
+                }
+            )
+            
+            # 5. Notify via WebSocket if possible
+            from presence_manager import presence
+            all_members = [str(m) for m in general_ch.get("members", [])]
+            if user_id not in all_members:
+                all_members.append(user_id)
+            
+            await presence.send_to_users(all_members, {
+                "type": "chat_new_message",
+                "channel_id": ch_id,
+                "message": {
+                    "id": str(msg_doc["_id"]),
+                    "channel_id": ch_id,
+                    "sender_id": "system",
+                    "sender_name": "Welcome Bot",
+                    "sender_initials": "WB",
+                    "text": welcome_text,
+                    "type": "system",
+                    "reactions": [],
+                    "reply_to": None,
+                    "created_at": now.isoformat(),
+                }
+            })
+    except Exception as e:
+        print(f"Error in welcome automation: {e}")
+
     await log_audit(current.get("org_id"), current["id"], "create", "user", doc["id"])
     return doc
 
