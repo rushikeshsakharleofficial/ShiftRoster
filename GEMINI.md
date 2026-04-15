@@ -17,7 +17,7 @@ ShiftMaster is a full-stack application designed for efficient shift roster mana
     - `db.py`: MongoDB connection management.
 - `frontend/`: React application (bootstrapped with CRA + craco).
     - `src/components/`: Reusable UI components (including shadcn/UI).
-    - `src/pages/`: Main application screens (including new Sticky Notes and Setup pages).
+    - `src/pages/`: Main application screens (including new Sticky Notes, Audit Log, Reports, Setup pages, etc.).
     - `src/lib/api.js`: Axios client and API interceptors.
 
 ---
@@ -46,12 +46,30 @@ docker-compose up -d --build
 
 ---
 
-## Key Features & Recent Additions
+## Key Features
+
+### Core Management
+- **Role-Based Access Control**: Separate workflows for Admin, Manager, and Employee (L1/L2/L3).
+- **Organization Setup**: Streamlined first-time setup workflow.
+- **Entity Management**: Comprehensive CRUD for Employees, Departments, and Manager Groups.
+- **Manager Workflows**: Manager nomination workflow with admin approval.
+
+### Shift & Roster Capabilities
+- **Shift Scheduling**: Drag-and-drop scheduling with conflict detection.
+- **Recurring Shifts**: Full support via iCal RRULE (e.g., weekdays, MWF, TTh).
+- **Calendar Views**: Both standard week/month views and a dedicated Fullscreen Calendar for large-scale coordination.
 - **Sticky Notes**: Overlay notes on the calendar for quick coordination.
-- **Fullscreen Calendar**: Dedicated view for large-scale shift management.
-- **Setup Workflow**: Streamlined first-time organization setup.
-- **Responsive Sidebar**: Collapsible navigation with mobile-first design.
-- **Shift Management**: Drag-and-drop scheduling, recurring shifts, and conflict detection.
+
+### Monitoring & Analytics
+- **Live Presence**: Realtime WebSocket presence bar to see who is online.
+- **Attendance & Leave**: Automated attendance tracking and leave request management.
+- **Detailed Charts (Recharts)**: Visualizations for attendance trends, shift coverage, and department breakdown.
+- **Exporting & Reporting**: CSV exports for attendance, employee, and shift reports.
+- **Audit Logs & Notifications**: System-wide notifications and tracking of critical changes.
+
+### User Experience
+- **Responsive Design**: Collapsible sidebar, mobile-first design, touch-friendly targets, and responsive grids.
+- **Theming**: Integrated Dark/Light mode toggle.
 
 ---
 
