@@ -833,7 +833,7 @@ export default function ChatPage() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-full -m-4 md:-m-6 lg:-m-8 overflow-hidden bg-background">
+      <div className="flex h-full overflow-hidden bg-background">
 
         {/* ── Left Sidebar ── */}
         <aside className="w-64 shrink-0 flex flex-col border-r border-border bg-[hsl(var(--sidebar-bg))] overflow-hidden">

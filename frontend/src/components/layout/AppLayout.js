@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,8 @@ const BACKEND_URL = import.meta.env.REACT_APP_BACKEND_URL;
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isFullBleed = location.pathname.startsWith("/chat");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -561,8 +563,8 @@ export default function AppLayout() {
         </Dialog>
 
         {/* Page content */}
-        <main className="flex-1 flex flex-col min-h-0 p-4 md:p-6 lg:p-8">
-          <div className="animate-fade-in flex-1 min-h-0 overflow-auto">
+        <main className={`flex-1 flex flex-col min-h-0 ${isFullBleed ? "" : "p-4 md:p-6 lg:p-8"}`}>
+          <div className={`animate-fade-in flex-1 min-h-0 ${isFullBleed ? "overflow-hidden" : "relative overflow-auto"}`}>
             <Outlet />
           </div>
         </main>
