@@ -28,6 +28,12 @@ class PresenceManager:
         self.connections.pop(user_id, None)
         self.user_data.pop(user_id, None)
 
+    async def update_user_data(self, user_id: str, updates: dict):
+        """Update a user's presence data (e.g. name, avatar) if they are online."""
+        if user_id in self.user_data:
+            self.user_data[user_id].update(updates)
+            await self.broadcast_presence()
+
     async def heartbeat(self, user_id: str, data: dict):
         if user_id in self.user_data:
             self.user_data[user_id]["view"] = data.get("current_view", "")

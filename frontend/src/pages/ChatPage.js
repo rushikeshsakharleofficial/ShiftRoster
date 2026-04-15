@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useChat } from "@/contexts/ChatContext";
 import { chatApi } from "@/lib/api";
 import { getAvatarColor } from "@/lib/utils";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -183,6 +183,9 @@ function MessageBubble({ msg, prevMsg, currentUserId, onReact, onEdit, onDelete,
         <div className="w-9 shrink-0 pt-0.5">
           {!sameAsPrev ? (
             <Avatar className="h-9 w-9">
+              {msg?.sender_avatar && (
+                <AvatarImage src={`${BACKEND_URL || ""}${msg.sender_avatar}`} />
+              )}
               <AvatarFallback className={`text-xs font-semibold ${getAvatarColor(msg.sender_username || msg.sender_name)}`}>
                 {msg.sender_initials || "?"}
               </AvatarFallback>
@@ -476,6 +479,9 @@ function NewDMDialog({ open, onClose, onOpenDM }) {
               >
                 <div className="relative">
                   <Avatar className="h-8 w-8">
+                    {u?.avatar_url && (
+                      <AvatarImage src={`${BACKEND_URL || ""}${u.avatar_url}`} />
+                    )}
                     <AvatarFallback className={`text-xs font-semibold ${getAvatarColor(u.username || u.full_name)}`}>
                       {u.initials}
                     </AvatarFallback>
@@ -547,6 +553,9 @@ function InviteUserDialog({ open, onClose, channelId }) {
             users.map((u) => (
               <div key={u.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent">
                 <Avatar className="h-8 w-8">
+                  {u?.avatar_url && (
+                    <AvatarImage src={`${BACKEND_URL || ""}${u.avatar_url}`} />
+                  )}
                   <AvatarFallback className={`text-xs font-semibold ${getAvatarColor(u.username || u.full_name)}`}>
                     {u.initials}
                   </AvatarFallback>
@@ -966,6 +975,9 @@ export default function ChatPage() {
                         >
                           <div className="relative shrink-0">
                             <Avatar className="h-5 w-5">
+                              {other?.avatar_url && (
+                                <AvatarImage src={`${BACKEND_URL || ""}${other.avatar_url}`} />
+                              )}
                               <AvatarFallback className={`text-[9px] font-semibold ${getAvatarColor(other?.username || other?.full_name)}`}>
                                 {other?.initials || "?"}
                               </AvatarFallback>
@@ -1178,6 +1190,9 @@ export default function ChatPage() {
                             className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${i === mention.idx ? "bg-accent" : "hover:bg-accent/60"}`}
                           >
                             <Avatar className="w-6 h-6 shrink-0">
+                              {u?.avatar_url && (
+                                <AvatarImage src={`${BACKEND_URL || ""}${u.avatar_url}`} />
+                              )}
                               <AvatarFallback className={`text-[9px] font-bold ${getAvatarColor(u.username || u.full_name)}`}>
                                 {u.initials}
                               </AvatarFallback>
@@ -1282,6 +1297,9 @@ export default function ChatPage() {
                           >
                             <div className="relative shrink-0">
                               <Avatar className="h-7 w-7">
+                                {m.avatar_url && (
+                                  <AvatarImage src={`${BACKEND_URL || ""}${m.avatar_url}`} />
+                                )}
                                 <AvatarFallback className={`text-[10px] font-semibold ${getAvatarColor(m.username || m.full_name)}`}>
                                   {m.initials}
                                 </AvatarFallback>

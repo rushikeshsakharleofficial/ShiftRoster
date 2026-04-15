@@ -33,7 +33,7 @@ import {
 const BACKEND_URL = import.meta.env.REACT_APP_BACKEND_URL;
 
 export default function AppLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, checkAuth } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const isFullBleed = location.pathname.startsWith("/chat");
@@ -166,6 +166,7 @@ export default function AppLayout() {
       if (Object.keys(payload).length > 0) {
         await usersApi.update(user.id, payload);
       }
+      await checkAuth();
       setProfileOpen(false);
       window.location.reload();
     } catch (err) {
@@ -297,6 +298,7 @@ export default function AppLayout() {
               <div className="flex items-center gap-2 cursor-pointer rounded-md hover:bg-accent/50 px-1 py-1 transition-colors">
                 <div className="relative shrink-0">
                   <Avatar className="h-8 w-8">
+                    <AvatarImage src={`${BACKEND_URL || ""}${user?.avatar_url}`} />
                     <AvatarFallback className={`text-xs font-semibold ${getAvatarColor(user?.username || user?.full_name)}`}>
                       {initials}
                     </AvatarFallback>
@@ -485,9 +487,7 @@ export default function AppLayout() {
               <div className="flex flex-col items-center gap-2">
                 <div className="relative">
                   <Avatar className="h-20 w-20">
-                    {(profileAvatarPreview || profileAvatar) && (
-                      <AvatarImage src={profileAvatarPreview || `${BACKEND_URL || ""}${profileAvatar}`} />
-                    )}
+                    <AvatarImage src={profileAvatarPreview || (profileAvatar ? `${BACKEND_URL || ""}${profileAvatar}` : "")} />
                     <AvatarFallback className={`text-2xl font-semibold ${getAvatarColor(user?.username || user?.full_name)}`}>
                       {initials}
                     </AvatarFallback>

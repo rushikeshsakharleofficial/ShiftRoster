@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from db import db
 from auth_utils import get_current_user, serialize_doc, serialize_list, hash_password, log_audit, get_manager_dept_ids
+from presence_manager import presence
 from pathlib import Path
 import uuid
 import os
@@ -211,7 +212,6 @@ async def create_user(data: CreateUserRequest, request: Request):
             )
             
             # 5. Notify via WebSocket if possible
-            from presence_manager import presence
             all_members = [str(m) for m in general_ch.get("members", [])]
             if user_id not in all_members:
                 all_members.append(user_id)
@@ -281,6 +281,15 @@ async def update_user(user_id: str, data: UpdateUserRequest, request: Request):
 
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="User not found or no changes")
+
+    # Sync presence changes
+    p_updates = {}
+    if "full_name" in update:
+        p_updates["name"] = update["full_name"]
+    if "username" in update:
+        p_updates["username"] = update["username"]
+    if p_updates:
+        await presence.update_user_data(user_id, p_updates)
 
     updated = await db.users.find_one({"_id": ObjectId(user_id)}, {"password_hash": 0})
     await log_audit(current.get("org_id"), current["id"], "update", "user", user_id, {"changes": update})
@@ -376,6 +385,7 @@ async def upload_avatar(user_id: str, request: Request, file: UploadFile = File(
     if current["system_role"] not in ("admin", "manager") and current["id"] != user_id:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
+    UPLOADS_DIR.mkdir(exist_ok=True)
     content_type = file.content_type or ""
     if not content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files are allowed")
@@ -398,6 +408,9 @@ async def upload_avatar(user_id: str, request: Request, file: UploadFile = File(
         )
     except Exception:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Update presence manager if user is online
+    await presence.update_user_data(user_id, {"avatar": avatar_url})
 
     await log_audit(current.get("org_id"), current["id"], "update", "user_avatar", user_id)
     return {"avatar_url": avatar_url}

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const Digit = ({ value }) => {
   return (
-    <div className="relative w-7 h-10 overflow-hidden rounded-md bg-zinc-900 text-white font-mono text-xl font-bold flex items-center justify-center">
+    <div className="relative w-7 h-10 overflow-hidden rounded-md bg-zinc-900 dark:bg-zinc-800 text-zinc-100 font-mono text-xl font-bold flex items-center justify-center">
       <AnimatePresence mode="popLayout">
         <motion.span
           key={value}
@@ -39,11 +39,11 @@ export default function FlipClock() {
       {hours.split("").map((digit, i) => (
         <Digit key={`h-${i}`} value={parseInt(digit)} />
       ))}
-      <span className="text-3xl font-bold text-zinc-500">:</span>
+      <span className="text-3xl font-bold text-zinc-500 dark:text-zinc-400">:</span>
       {minutes.split("").map((digit, i) => (
         <Digit key={`m-${i}`} value={parseInt(digit)} />
       ))}
-      <span className="text-3xl font-bold text-zinc-500">:</span>
+      <span className="text-3xl font-bold text-zinc-500 dark:text-zinc-400">:</span>
       {seconds.split("").map((digit, i) => (
         <Digit key={`s-${i}`} value={parseInt(digit)} />
       ))}
