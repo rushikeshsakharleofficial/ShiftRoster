@@ -11,8 +11,9 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 
 class ShiftMasterAPITester:
-    def __init__(self, base_url: str = "https://roster-mgmt-1.preview.emergentagent.com/api"):
+    def __init__(self, base_url: str = "http://localhost:8080/api"):
         self.base_url = base_url
+        self.session = requests.Session()
         self.access_token = None
         self.refresh_token = None
         self.admin_user = None
@@ -41,13 +42,13 @@ class ShiftMasterAPITester:
 
         try:
             if method == 'GET':
-                response = requests.get(url, headers=headers, timeout=30)
+                response = self.session.get(url, headers=headers, timeout=30)
             elif method == 'POST':
-                response = requests.post(url, json=data, headers=headers, timeout=30)
+                response = self.session.post(url, json=data, headers=headers, timeout=30)
             elif method == 'PUT':
-                response = requests.put(url, json=data, headers=headers, timeout=30)
+                response = self.session.put(url, json=data, headers=headers, timeout=30)
             elif method == 'DELETE':
-                response = requests.delete(url, headers=headers, timeout=30)
+                response = self.session.delete(url, headers=headers, timeout=30)
             else:
                 return False, {"error": f"Unsupported method: {method}"}
 
@@ -73,21 +74,22 @@ class ShiftMasterAPITester:
         """Test admin login and store tokens"""
         login_data = {
             "email": "admin@shiftmaster.com",
-            "password": "admin123"
+            "password": "admin1234567"
         }
-        
+
         success, data = self.make_request('POST', '/auth/login', login_data, use_auth=False)
-        
-        if success and 'access_token' in data:
-            self.access_token = data['access_token']
-            self.refresh_token = data.get('refresh_token')
+
+        # Check for token in response OR cookies (since we moved to secure cookies)
+        self.access_token = data.get('access_token') or self.session.cookies.get('access_token')
+        self.refresh_token = data.get('refresh_token') or self.session.cookies.get('refresh_token')
+
+        if success and self.access_token:
             self.admin_user = data
             self.log_result("Admin Login", True, f"Logged in as {data.get('full_name')}")
             return True
         else:
             self.log_result("Admin Login", False, f"Login failed: {data}")
             return False
-
     def test_auth_me(self) -> bool:
         """Test /auth/me endpoint"""
         success, data = self.make_request('GET', '/auth/me')
@@ -103,7 +105,7 @@ class ShiftMasterAPITester:
         timestamp = datetime.now().strftime("%H%M%S")
         register_data = {
             "email": f"test_user_{timestamp}@example.com",
-            "password": "TestPass123!",
+            "password": "TestPass123456!",
             "full_name": f"Test User {timestamp}",
             "phone": "1234567890"
         }

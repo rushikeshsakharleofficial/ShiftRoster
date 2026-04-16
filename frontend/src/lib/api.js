@@ -6,17 +6,10 @@ const API = `${API_URL}/api`;
 const api = axios.create({
   baseURL: API,
   headers: { "Content-Type": "application/json" },
+  withCredentials: true, // Send cookies with every request
 });
 
-// Add auth token to all requests
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access_token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
+// Interceptor for manual token handling is no longer needed with secure cookies
 // Handle 401 - try refresh, then logout
 api.interceptors.response.use(
   (res) => res,
@@ -25,20 +18,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== "/auth/login" && originalRequest.url !== "/auth/me") {
       originalRequest._retry = true;
       try {
-        const refreshToken = localStorage.getItem("refresh_token");
-        if (refreshToken) {
-          const { data } = await axios.post(`${API}/auth/refresh`, {}, {
-            headers: { Authorization: `Bearer ${refreshToken}` },
-          });
-          if (data.access_token) {
-            localStorage.setItem("access_token", data.access_token);
-            originalRequest.headers.Authorization = `Bearer ${data.access_token}`;
-            return api(originalRequest);
-          }
-        }
+        // Just call refresh, cookies are handled by browser
+        await axios.post(`${API}/auth/refresh`, {}, { withCredentials: true });
+        return api(originalRequest);
       } catch {}
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
     }
     return Promise.reject(error);
   }

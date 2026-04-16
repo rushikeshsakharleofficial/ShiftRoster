@@ -104,6 +104,17 @@ def serialize_list(docs):
     return [serialize_doc(d) for d in docs]
 
 
+def verify_access_token(token: str) -> dict:
+    """Verify an access token and return the payload."""
+    try:
+        payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "access":
+            return None
+        return payload
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
+
+
 async def get_current_user(request: Request):
     from db import db
 

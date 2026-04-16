@@ -94,10 +94,12 @@ async def list_users(
     if status:
         query["status"] = status
     if search:
+        # Sanitize regex special characters to prevent ReDoS
+        safe_search = re.escape(search)
         query["$or"] = [
-            {"full_name": {"$regex": search, "$options": "i"}},
-            {"email": {"$regex": search, "$options": "i"}},
-            {"username": {"$regex": search, "$options": "i"}},
+            {"full_name": {"$regex": safe_search, "$options": "i"}},
+            {"email": {"$regex": safe_search, "$options": "i"}},
+            {"username": {"$regex": safe_search, "$options": "i"}},
         ]
 
     users = await db.users.find(query, {"password_hash": 0}).skip(skip).limit(limit).to_list(limit)
@@ -175,7 +177,6 @@ async def create_user(data: CreateUserRequest, request: Request):
             )
             
             # 3. Send welcome message
-            from datetime import datetime, timezone
             now = datetime.now(timezone.utc)
             welcome_text = f"Welcome to the team, @{doc['username']}! 👋"
             
@@ -243,11 +244,25 @@ async def create_user(data: CreateUserRequest, request: Request):
 async def get_user(user_id: str, request: Request):
     current = await get_current_user(request)
     try:
-        user = await db.users.find_one({"_id": ObjectId(user_id)}, {"password_hash": 0})
+        # Cross-Org IDOR fix: filter by org_id
+        user = await db.users.find_one({"_id": ObjectId(user_id), "org_id": current.get("org_id")}, {"password_hash": 0})
     except Exception:
         raise HTTPException(status_code=404, detail="User not found")
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # PII Exposure fix: limit fields for regular users
+    if current["system_role"] == "employee" and current["id"] != user_id:
+        # Only allow seeing basic info for other employees
+        return {
+            "id": str(user["_id"]),
+            "full_name": user.get("full_name"),
+            "username": user.get("username"),
+            "avatar_url": user.get("avatar_url"),
+            "department_id": user.get("department_id"),
+            "system_role": user.get("system_role"),
+        }
+        
     return serialize_doc(user)
 
 
@@ -275,7 +290,11 @@ async def update_user(user_id: str, data: UpdateUserRequest, request: Request):
 
     update["updated_at"] = datetime.now(timezone.utc)
     try:
-        result = await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": update})
+        # Cross-Org IDOR fix: filter by org_id
+        result = await db.users.update_one(
+            {"_id": ObjectId(user_id), "org_id": current.get("org_id")}, 
+            {"$set": update}
+        )
     except Exception:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -302,7 +321,8 @@ async def delete_user(user_id: str, request: Request):
     if current["system_role"] != "admin":
         raise HTTPException(status_code=403, detail="Only admin can delete users")
 
-    result = await db.users.delete_one({"_id": ObjectId(user_id)})
+    # Cross-Org IDOR fix: filter by org_id
+    result = await db.users.delete_one({"_id": ObjectId(user_id), "org_id": current.get("org_id")})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
 

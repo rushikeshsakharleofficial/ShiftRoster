@@ -45,9 +45,10 @@ class DisableMfaRequest(BaseModel):
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str, remember_me: bool = False):
     refresh_max_age = 2592000 if remember_me else 604800  # 30 days or 7 days
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=3600, path="/")
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax", max_age=refresh_max_age, path="/")
-    response.set_cookie(key="remember_me", value="1" if remember_me else "0", httponly=False, secure=False, samesite="lax", max_age=refresh_max_age, path="/")
+    # Set secure=True for production security
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="lax", max_age=3600, path="/")
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="lax", max_age=refresh_max_age, path="/")
+    response.set_cookie(key="remember_me", value="1" if remember_me else "0", httponly=False, secure=True, samesite="lax", max_age=refresh_max_age, path="/")
 
 
 @router.post("/login")
@@ -108,8 +109,7 @@ async def login(data: LoginRequest, request: Request, response: Response):
     user_data = serialize_doc(user)
     user_data.pop("password_hash", None)
     user_data.pop("mfa_secret", None)
-    user_data["access_token"] = access_token
-    user_data["refresh_token"] = refresh_token
+    # Tokens are now only in HTTP-only cookies for better security
     return user_data
 
 
@@ -147,8 +147,7 @@ async def verify_mfa(data: VerifyMfaRequest, response: Response):
     user_data = serialize_doc(user)
     user_data.pop("password_hash", None)
     user_data.pop("mfa_secret", None)
-    user_data["access_token"] = access_token
-    user_data["refresh_token"] = refresh_token
+    # Tokens are now only in HTTP-only cookies for better security
     return user_data
 
 
@@ -220,8 +219,6 @@ async def confirm_mfa(data: ConfirmMfaRequest, request: Request, response: Respo
         user_data.pop("password_hash", None)
         user_data.pop("mfa_secret", None)
         user_data["mfa_enabled"] = True
-        user_data["access_token"] = access_token
-        user_data["refresh_token"] = refresh_token
         return user_data
 
     return {"message": "MFA enabled successfully", "mfa_enabled": True}
@@ -288,11 +285,11 @@ async def generate_backup_codes(request: Request):
 
 @router.post("/admin/reset-user-mfa/{user_id}")
 async def admin_reset_user_mfa(user_id: str, request: Request):
-    """Admin or manager can disable MFA for an employee."""
+    """Only administrator can disable MFA for an employee to prevent privilege escalation."""
     from auth_utils import get_current_user
     current = await get_current_user(request)
-    if current["system_role"] not in ("admin", "manager"):
-        raise HTTPException(status_code=403, detail="Only admin or manager can reset user MFA")
+    if current["system_role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can reset user MFA")
 
     target = await db.users.find_one({"_id": ObjectId(user_id)})
     if not target:
@@ -323,8 +320,8 @@ async def refresh_token(request: Request, response: Response):
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         access_token = create_access_token(str(user["_id"]), user["email"])
-        response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=3600, path="/")
-        return {"message": "Token refreshed", "access_token": access_token}
+        response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="lax", max_age=3600, path="/")
+        return {"message": "Token refreshed"}
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token expired")
     except jwt.InvalidTokenError:

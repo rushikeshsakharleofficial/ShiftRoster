@@ -113,7 +113,10 @@ async def delete_template(template_id: str, request: Request):
     current = await get_current_user(request)
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    await db.shift_templates.delete_one({"_id": ObjectId(template_id)})
+    # Cross-Org IDOR fix: filter by org_id
+    result = await db.shift_templates.delete_one({"_id": ObjectId(template_id), "org_id": current.get("org_id")})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Template not found")
     return {"message": "Template deleted"}
 
 
@@ -133,7 +136,10 @@ async def update_template(template_id: str, data: ShiftTemplateUpdate, request: 
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     if not update:
         raise HTTPException(status_code=400, detail="No fields to update")
-    await db.shift_templates.update_one({"_id": ObjectId(template_id)}, {"$set": update})
+    # Cross-Org IDOR fix: filter by org_id
+    result = await db.shift_templates.update_one({"_id": ObjectId(template_id), "org_id": current.get("org_id")}, {"$set": update})
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Template not found")
     updated = await db.shift_templates.find_one({"_id": ObjectId(template_id)})
     await log_audit(current.get("org_id"), current["id"], "update", "shift_template", template_id)
     return serialize_doc(updated)
@@ -177,10 +183,13 @@ async def list_shifts(
         assignments = await db.shift_assignments.find({"shift_id": sdata["id"]}).to_list(50)
         assigned_users = []
         for a in assignments:
-            auser = await db.users.find_one({"_id": ObjectId(a["user_id"])}, {"password_hash": 0, "_id": 0})
+            # PII exposure fix: only return safe fields
+            auser = await db.users.find_one({"_id": ObjectId(a["user_id"])}, {"full_name": 1, "username": 1, "avatar_url": 1})
             ad = serialize_doc(a)
             if auser:
                 ad["user_name"] = auser.get("full_name", "")
+                ad["username"] = auser.get("username", "")
+                ad["avatar_url"] = auser.get("avatar_url", "")
             assigned_users.append(ad)
         sdata["assignments"] = assigned_users
         result.append(sdata)
@@ -218,7 +227,8 @@ async def create_shift(data: ShiftCreate, request: Request):
 @router.get("/shifts/{shift_id}")
 async def get_shift(shift_id: str, request: Request):
     current = await get_current_user(request)
-    shift = await db.shifts.find_one({"_id": ObjectId(shift_id)})
+    # Cross-Org IDOR fix: filter by org_id
+    shift = await db.shifts.find_one({"_id": ObjectId(shift_id), "org_id": current.get("org_id")})
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
     sdata = serialize_doc(shift)
@@ -236,7 +246,8 @@ async def update_shift(shift_id: str, data: ShiftUpdate, request: Request):
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc)
 
-    result = await db.shifts.update_one({"_id": ObjectId(shift_id)}, {"$set": update})
+    # Cross-Org IDOR fix: filter by org_id
+    result = await db.shifts.update_one({"_id": ObjectId(shift_id), "org_id": current.get("org_id")}, {"$set": update})
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Shift not found")
 
@@ -260,7 +271,11 @@ async def delete_shift(shift_id: str, request: Request):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     assignments = await db.shift_assignments.find({"shift_id": shift_id}).to_list(50)
-    await db.shifts.delete_one({"_id": ObjectId(shift_id)})
+    # Cross-Org IDOR fix: filter by org_id
+    result = await db.shifts.delete_one({"_id": ObjectId(shift_id), "org_id": current.get("org_id")})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Shift not found")
+        
     await db.shift_assignments.delete_many({"shift_id": shift_id})
     await log_audit(current.get("org_id"), current["id"], "delete", "shift", shift_id)
     for a in assignments:

@@ -30,25 +30,17 @@ export function AuthProvider({ children }) {
       return data;
     }
 
-    if (data.access_token) localStorage.setItem("access_token", data.access_token);
-    if (data.refresh_token) localStorage.setItem("refresh_token", data.refresh_token);
-    const { access_token, refresh_token, ...userData } = data;
-    setUser(userData);
-    return userData;
+    setUser(data);
+    return data;
   };
 
   const completeMfaLogin = (data) => {
-    if (data.access_token) localStorage.setItem("access_token", data.access_token);
-    if (data.refresh_token) localStorage.setItem("refresh_token", data.refresh_token);
-    const { access_token, refresh_token, ...userData } = data;
-    setUser(userData);
-    return userData;
+    setUser(data);
+    return data;
   };
 
   const logout = async () => {
     try { await authApi.logout(); } catch {}
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
     setUser(false);
   };
 

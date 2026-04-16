@@ -96,8 +96,8 @@ async def initial_setup(data: SetupRequest):
         raise HTTPException(status_code=403, detail="Setup already completed. System already has users.")
 
     email = data.admin_email.strip().lower()
-    if len(data.admin_password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if len(data.admin_password) < 12:
+        raise HTTPException(status_code=400, detail="Password must be at least 12 characters")
 
     # Create organization
     org_result = await db.organizations.insert_one({
@@ -174,12 +174,14 @@ async def initial_setup(data: SetupRequest):
             "created_at": datetime.now(timezone.utc),
         })
 
-    logger.info(f"Initial setup completed: org={data.org_name}, admin={email}")
+    masked_email = f"{email[:2]}***@{email.split('@')[1]}"
+    logger.info(f"Initial setup completed: org={data.org_name}, admin={masked_email}")
     return {"message": "Setup completed successfully", "org_id": org_id}
 
 
 # ── WebSocket Presence ──
 from presence_manager import presence
+from auth_utils import verify_access_token
 
 
 @app.websocket("/api/ws")
@@ -190,11 +192,18 @@ async def websocket_endpoint(ws: WebSocket):
         # Wait for auth message
         auth_msg = await asyncio.wait_for(ws.receive_text(), timeout=10)
         auth_data = json.loads(auth_msg)
-        user_id = auth_data.get("user_id")
-        if not user_id:
-            await ws.close()
+        token = auth_data.get("access_token")
+        
+        if not token:
+            await ws.close(code=1008)  # Policy Violation
             return
 
+        payload = verify_access_token(token)
+        if not payload:
+            await ws.close(code=1008)
+            return
+
+        user_id = payload.get("sub")
         user = await db.users.find_one({"_id": ObjectId(user_id)}, {"password_hash": 0})
         if not user:
             await ws.close()
