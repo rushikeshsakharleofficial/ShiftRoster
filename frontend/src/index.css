@@ -6,24 +6,58 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── LIGHT THEME (default) ── */
   :root {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 95%;
-    --card: 224 44% 9%;
+    --background: 0 0% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 214 32% 91%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 214 32% 91%;
+    --muted-foreground: 215 20% 45%;
+    --accent: 214 32% 91%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 88%;
+    --input: 214 32% 88%;
+    --ring: 217 91% 60%;
+    --chart-1: 160 60% 40%;
+    --chart-2: 199 89% 45%;
+    --chart-3: 215 20% 50%;
+    --chart-4: 43 96% 50%;
+    --chart-5: 239 84% 60%;
+    --radius: 0.5rem;
+    --sidebar-bg: 0 0% 100%;
+    --sidebar-border: 214 32% 88%;
+    --sidebar-text: 215 20% 45%;
+    --sidebar-active: 217 91% 60%;
+  }
+
+  /* ── DARK THEME (luxury) ── */
+  .dark {
+    --background: 222 47% 6%;          /* #0F1117 */
+    --foreground: 210 40% 95%;         /* #F1F5F9 */
+    --card: 224 44% 9%;                /* #13151F */
     --card-foreground: 210 40% 95%;
     --popover: 224 44% 9%;
     --popover-foreground: 210 40% 95%;
-    --primary: 217 91% 60%;
+    --primary: 217 91% 60%;            /* #3B82F6 */
     --primary-foreground: 0 0% 100%;
-    --secondary: 239 84% 67%;
+    --secondary: 239 84% 67%;          /* #6366F1 */
     --secondary-foreground: 0 0% 100%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 45%;
-    --accent: 217 33% 17%;
+    --muted: 222 40% 16%;              /* #1E2235 */
+    --muted-foreground: 215 20% 45%;   /* #64748B */
+    --accent: 222 40% 16%;
     --accent-foreground: 210 40% 95%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 222 40% 16%;
+    --border: 222 40% 16%;             /* #1E2235 */
     --input: 222 40% 16%;
     --ring: 217 91% 60%;
     --chart-1: 160 60% 45%;
@@ -31,42 +65,10 @@
     --chart-3: 215 20% 45%;
     --chart-4: 43 96% 56%;
     --chart-5: 239 84% 67%;
-    --radius: 0.5rem;
-    --sidebar-bg: 224 47% 5%;
+    --sidebar-bg: 224 47% 5%;          /* #0C0E18 */
     --sidebar-border: 222 40% 16%;
     --sidebar-text: 215 20% 45%;
     --sidebar-active: 217 91% 60%;
-  }
-
-  .dark {
-    --background: 224 47% 4%;
-    --foreground: 220 23% 95%;
-    --card: 224 47% 7%;
-    --card-foreground: 220 23% 95%;
-    --popover: 224 47% 7%;
-    --popover-foreground: 220 23% 95%;
-    --primary: 239 84% 67%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 224 33% 13%;
-    --secondary-foreground: 220 23% 95%;
-    --muted: 224 33% 13%;
-    --muted-foreground: 220 15% 60%;
-    --accent: 224 33% 13%;
-    --accent-foreground: 220 23% 95%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 220 23% 95%;
-    --border: 224 33% 15%;
-    --input: 224 33% 15%;
-    --ring: 239 84% 67%;
-    --chart-1: 160 60% 45%;
-    --chart-2: 199 89% 48%;
-    --chart-3: 220 15% 60%;
-    --chart-4: 43 96% 56%;
-    --chart-5: 239 84% 67%;
-    --sidebar-bg: 224 47% 5%;
-    --sidebar-border: 224 33% 15%;
-    --sidebar-text: 220 15% 60%;
-    --sidebar-active: 239 84% 67%;
   }
 }
 
@@ -77,8 +79,6 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
-    background-color: #0F1117;
-    color: #F1F5F9;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
