@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { authApi, formatApiError } from "@/lib/api";
 import { CalendarDays, ArrowRight, Loader2, Shield, KeyRound, Eye, EyeOff, Check } from "lucide-react";
+import ThemeToggle from "@/components/layout/ThemeToggle";
 
 // ─── Design tokens (inline styles to avoid config-missing Tailwind classes) ───
 const T = {
@@ -452,6 +453,9 @@ export default function LoginPage() {
   if (mfaStep === "verify") {
     return (
       <div style={styles.centerPage} data-testid="login-page">
+        <div className="fixed top-4 right-4 z-50">
+          <ThemeToggle />
+        </div>
         <div style={styles.mfaCard}>
           <div style={styles.mfaIconWrap}>
             <Shield size={24} color={T.primary} />
@@ -518,6 +522,9 @@ export default function LoginPage() {
   if (mfaStep === "setup") {
     return (
       <div style={styles.centerPage} data-testid="login-page">
+        <div className="fixed top-4 right-4 z-50">
+          <ThemeToggle />
+        </div>
         <div style={{ ...styles.mfaCard, maxWidth: "460px" }}>
           <div style={styles.mfaIconWrap}>
             <Shield size={24} color={T.primary} />
@@ -591,6 +598,9 @@ export default function LoginPage() {
   // ── Standard Login Screen ──────────────────────────────────────────────────
   return (
     <div style={styles.page} data-testid="login-page">
+      <div className="fixed top-4 right-4 z-50">
+        <ThemeToggle />
+      </div>
       {/* Left panel — branding + features */}
       <div style={styles.leftPanel} className="hidden lg:flex">
         <div style={styles.leftGlow} aria-hidden="true" />

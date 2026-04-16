@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarDays, ArrowRight, Loader2, Shield, Sparkles, ImageIcon, Upload, X } from "lucide-react";
 import { toast } from "sonner";
+import ThemeToggle from "@/components/layout/ThemeToggle";
 
 export default function SetupPage() {
   const navigate = useNavigate();
@@ -96,6 +97,9 @@ export default function SetupPage() {
 
   return (
     <div className="min-h-screen flex" data-testid="setup-page">
+      <div className="fixed top-4 right-4 z-50">
+        <ThemeToggle />
+      </div>
       {/* Left panel - Form */}
       <div className="flex-1 flex items-center justify-center p-6 md:p-12">
         <div className="w-full max-w-md">

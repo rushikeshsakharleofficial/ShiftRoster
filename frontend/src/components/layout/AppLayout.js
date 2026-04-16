@@ -330,12 +330,12 @@ export default function AppLayout() {
                     </AvatarFallback>
                   </Avatar>
                   {/* My own status dot */}
-                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-sidebar ${
+                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar ${
                     myStatus === "active" ? "bg-green-500"
                     : myStatus === "break" ? "bg-yellow-400"
-                    : myStatus === "leave" ? "border-2 border-red-400"
+                    : myStatus === "leave" ? "bg-red-400"
                     : "bg-muted-foreground/40"
-                  } border-2`} />
+                  }`} />
                 </div>
                 {sidebarOpen && (
                   <div className="flex-1 min-w-0">
@@ -481,7 +481,7 @@ export default function AppLayout() {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={openProfile}>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 relative" onClick={openProfile}>
                     <Avatar className="h-7 w-7">
                       {user?.avatar_url && (
                         <AvatarImage src={`${BACKEND_URL || ""}${user.avatar_url}`} />
@@ -490,6 +490,13 @@ export default function AppLayout() {
                         {initials}
                       </AvatarFallback>
                     </Avatar>
+                    {/* Status dot — bottom-right of avatar */}
+                    <span className={`absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full border-2 border-sidebar ${
+                      myStatus === "active" ? "bg-green-500"
+                      : myStatus === "break" ? "bg-yellow-400"
+                      : myStatus === "leave" ? "bg-red-400"
+                      : "bg-muted-foreground/40"
+                    }`} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>My Profile</TooltipContent>
