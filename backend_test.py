@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 
 class ShiftMasterAPITester:
-    def __init__(self, base_url: str = "http://localhost:8080/api"):
+    def __init__(self, base_url: str = "http://localhost:8000/api"):
         self.base_url = base_url
         self.session = requests.Session()
         self.access_token = None
