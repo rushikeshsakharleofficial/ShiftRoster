@@ -94,6 +94,13 @@ export default function AppLayout() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--sidebar-w',
+      sidebarOpen ? '240px' : '60px'
+    );
+  }, [sidebarOpen]);
+
   // WebSocket presence
   useEffect(() => {
     if (!user?.id) return;
@@ -277,8 +284,8 @@ export default function AppLayout() {
               className={({ isActive }) =>
                 `flex flex-row items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors group ${
                   isActive
-                    ? "-ml-px bg-primary/10 text-primary border-l-2 border-primary"
-                    : "text-muted-foreground border-l-2 border-transparent hover:text-foreground hover:bg-white/5"
+                    ? "bg-primary/10 text-primary relative before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-primary before:rounded-full"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/5"
                 }`
               }
               data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}

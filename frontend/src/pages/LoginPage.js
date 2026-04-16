@@ -5,352 +5,22 @@ import { authApi, formatApiError } from "@/lib/api";
 import { CalendarDays, ArrowRight, Loader2, Shield, KeyRound, Eye, EyeOff, Check } from "lucide-react";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 
-// ─── Design tokens (inline styles to avoid config-missing Tailwind classes) ───
-const T = {
-  bgPage:       "#0F1117",
-  bgLeft:       "#0C0E18",
-  bgCard:       "#13151F",
-  bgInput:      "#0F1117",
-  border:       "#1E2235",
-  borderFocus:  "#3B82F6",
-  primary:      "#3B82F6",
-  primaryDark:  "#2563EB",
-  primaryDeep:  "#1D4ED8",
-  textPrimary:  "#F1F5F9",
-  textMuted:    "#64748B",
-  textPlaceholder: "#334155",
-  errorBg:      "rgba(239,68,68,0.1)",
-  errorBorder:  "rgba(239,68,68,0.2)",
-  errorText:    "#F87171",
-};
-
-const styles = {
-  page: {
-    minHeight: "100vh",
-    display: "flex",
-    backgroundColor: T.bgPage,
-    fontFamily: "'Inter', sans-serif",
-    color: T.textPrimary,
-  },
-  leftPanel: {
-    width: "55%",
-    backgroundColor: T.bgLeft,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "3rem",
-    position: "relative",
-    overflow: "hidden",
-  },
-  leftGlow: {
-    position: "absolute",
-    inset: 0,
-    background: "radial-gradient(ellipse at 50% 50%, rgba(99,102,241,0.15), transparent 60%)",
-    pointerEvents: "none",
-  },
-  leftContent: {
-    position: "relative",
-    zIndex: 1,
-    maxWidth: "440px",
-    width: "100%",
-  },
-  iconWrap: {
-    width: "72px",
-    height: "72px",
-    borderRadius: "16px",
-    backgroundColor: "rgba(59,130,246,0.12)",
-    border: `1px solid rgba(59,130,246,0.25)`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: "2rem",
-  },
-  h1: {
-    fontSize: "2.25rem",
-    fontWeight: 700,
-    letterSpacing: "-0.03em",
-    color: T.textPrimary,
-    marginBottom: "0.75rem",
-    lineHeight: 1.15,
-  },
-  tagline: {
-    fontSize: "1rem",
-    color: T.textMuted,
-    lineHeight: 1.6,
-    marginBottom: "2.5rem",
-  },
-  featureList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "1rem",
-  },
-  featureItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.75rem",
-    fontSize: "0.875rem",
-    color: "#94A3B8",
-  },
-  checkIcon: {
-    width: "20px",
-    height: "20px",
-    borderRadius: "50%",
-    backgroundColor: "rgba(59,130,246,0.15)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  rightPanel: {
-    width: "45%",
-    backgroundColor: T.bgPage,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "2rem",
-  },
-  card: {
-    backgroundColor: T.bgCard,
-    border: `1px solid ${T.border}`,
-    borderRadius: "16px",
-    padding: "2rem",
-    width: "100%",
-    maxWidth: "420px",
-  },
-  cardTitle: {
-    fontSize: "1.625rem",
-    fontWeight: 700,
-    letterSpacing: "-0.025em",
-    color: T.textPrimary,
-    marginBottom: "0.375rem",
-  },
-  cardSubtitle: {
-    fontSize: "0.875rem",
-    color: T.textMuted,
-    marginBottom: "1.75rem",
-  },
-  label: {
-    display: "block",
-    fontSize: "0.8125rem",
-    fontWeight: 500,
-    color: "#94A3B8",
-    marginBottom: "0.375rem",
-  },
-  inputBase: {
-    width: "100%",
-    padding: "0.625rem 0.875rem",
-    backgroundColor: T.bgInput,
-    border: `1px solid ${T.border}`,
-    borderRadius: "8px",
-    color: T.textPrimary,
-    fontSize: "0.9375rem",
-    outline: "none",
-    transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-    boxSizing: "border-box",
-  },
-  inputFocus: {
-    borderColor: T.borderFocus,
-    boxShadow: `0 0 0 1px ${T.borderFocus}`,
-  },
-  passwordWrap: {
-    position: "relative",
-  },
-  eyeBtn: {
-    position: "absolute",
-    right: "0.75rem",
-    top: "50%",
-    transform: "translateY(-50%)",
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    color: T.textMuted,
-    padding: "0.25rem",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rememberRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: "0.25rem",
-  },
-  rememberLeft: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-  },
-  checkbox: {
-    width: "16px",
-    height: "16px",
-    accentColor: T.primary,
-    cursor: "pointer",
-  },
-  rememberLabel: {
-    fontSize: "0.8125rem",
-    color: "#94A3B8",
-    cursor: "pointer",
-  },
-  forgotLink: {
-    fontSize: "0.8125rem",
-    color: T.primary,
-    textDecoration: "none",
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    padding: 0,
-  },
-  submitBtn: {
-    width: "100%",
-    padding: "0.6875rem 1rem",
-    background: `linear-gradient(135deg, ${T.primaryDark}, ${T.primary})`,
-    border: "none",
-    borderRadius: "8px",
-    color: "#ffffff",
-    fontWeight: 600,
-    fontSize: "0.9375rem",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "0.5rem",
-    transition: "opacity 0.15s ease, background 0.15s ease",
-    marginTop: "1.25rem",
-  },
-  submitBtnDisabled: {
-    opacity: 0.6,
-    cursor: "not-allowed",
-  },
-  errorBox: {
-    padding: "0.75rem",
-    borderRadius: "8px",
-    backgroundColor: T.errorBg,
-    border: `1px solid ${T.errorBorder}`,
-    color: T.errorText,
-    fontSize: "0.875rem",
-    marginBottom: "1rem",
-  },
-  fieldGroup: {
-    marginBottom: "1rem",
-  },
-  footerNote: {
-    textAlign: "center",
-    fontSize: "0.75rem",
-    color: T.textMuted,
-    marginTop: "1.5rem",
-  },
-  mfaCodeInput: {
-    textAlign: "center",
-    fontSize: "1.5rem",
-    letterSpacing: "0.3em",
-    fontFamily: "monospace",
-  },
-  divider: {
-    height: "1px",
-    backgroundColor: T.border,
-    margin: "1.25rem 0",
-  },
-  // Single-panel centered layout for MFA screens
-  centerPage: {
-    minHeight: "100vh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: T.bgPage,
-    fontFamily: "'Inter', sans-serif",
-    color: T.textPrimary,
-    padding: "1.5rem",
-  },
-  mfaCard: {
-    backgroundColor: T.bgCard,
-    border: `1px solid ${T.border}`,
-    borderRadius: "16px",
-    padding: "2rem",
-    width: "100%",
-    maxWidth: "400px",
-  },
-  mfaIconWrap: {
-    width: "52px",
-    height: "52px",
-    borderRadius: "12px",
-    backgroundColor: "rgba(59,130,246,0.12)",
-    border: `1px solid rgba(59,130,246,0.25)`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: "1.25rem",
-  },
-  mfaTitle: {
-    fontSize: "1.5rem",
-    fontWeight: 700,
-    letterSpacing: "-0.025em",
-    color: T.textPrimary,
-    marginBottom: "0.375rem",
-  },
-  mfaSubtitle: {
-    fontSize: "0.875rem",
-    color: T.textMuted,
-    marginBottom: "1.5rem",
-    lineHeight: 1.5,
-  },
-  ghostBtn: {
-    width: "100%",
-    padding: "0.625rem 1rem",
-    background: "none",
-    border: `1px solid ${T.border}`,
-    borderRadius: "8px",
-    color: "#94A3B8",
-    fontWeight: 500,
-    fontSize: "0.875rem",
-    cursor: "pointer",
-    marginTop: "0.75rem",
-    transition: "border-color 0.15s ease",
-  },
-  qrWrap: {
-    display: "flex",
-    justifyContent: "center",
-    padding: "1rem",
-    backgroundColor: "#ffffff",
-    borderRadius: "8px",
-    border: `1px solid ${T.border}`,
-    marginBottom: "1rem",
-  },
-  manualKeyWrap: {
-    marginBottom: "1rem",
-  },
-  manualKeyLabel: {
-    fontSize: "0.75rem",
-    color: T.textMuted,
-    marginBottom: "0.375rem",
-    display: "block",
-  },
-  manualKey: {
-    display: "block",
-    fontSize: "0.75rem",
-    backgroundColor: T.bgInput,
-    border: `1px solid ${T.border}`,
-    borderRadius: "6px",
-    padding: "0.5rem 0.75rem",
-    fontFamily: "monospace",
-    wordBreak: "break-all",
-    userSelect: "all",
-    color: "#94A3B8",
-  },
-};
-
 // ─── Reusable styled input with focus state ───────────────────────────────────
-function StyledInput({ id, style: extraStyle = {}, ...props }) {
-  const [focused, setFocused] = useState(false);
+function StyledInput({ id, className = "", style: extraStyle = {}, ...props }) {
   return (
     <input
       id={id}
-      style={{
-        ...styles.inputBase,
-        ...(focused ? styles.inputFocus : {}),
-        ...extraStyle,
-      }}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
+      className={[
+        "w-full px-3.5 py-2.5 rounded-lg text-[0.9375rem]",
+        "bg-background border border-border text-foreground",
+        "placeholder:text-muted-foreground",
+        "outline-none transition-colors duration-150",
+        "focus:border-primary focus:ring-1 focus:ring-primary",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      style={Object.keys(extraStyle).length ? extraStyle : undefined}
       {...props}
     />
   );
@@ -452,27 +122,31 @@ export default function LoginPage() {
   // ── MFA Verify Screen ──────────────────────────────────────────────────────
   if (mfaStep === "verify") {
     return (
-      <div style={styles.centerPage} data-testid="login-page">
+      <div
+        className="min-h-screen flex items-center justify-center bg-background text-foreground p-6"
+        style={{ fontFamily: "'Inter', sans-serif" }}
+        data-testid="login-page"
+      >
         <div className="fixed top-4 right-4 z-50">
           <ThemeToggle />
         </div>
-        <div style={styles.mfaCard}>
-          <div style={styles.mfaIconWrap}>
-            <Shield size={24} color={T.primary} />
+        <div className="bg-card border border-border rounded-2xl p-8 w-full max-w-[400px]">
+          <div className="w-[52px] h-[52px] rounded-xl bg-primary/10 border border-primary/25 flex items-center justify-center mb-5">
+            <Shield size={24} className="text-primary" />
           </div>
 
-          <h1 style={styles.mfaTitle}>Two-factor verification</h1>
-          <p style={styles.mfaSubtitle}>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1.5">Two-factor verification</h1>
+          <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
             Open your authenticator app and enter the 6-digit code to continue.
           </p>
 
           <form onSubmit={handleVerifyMfa}>
             {error && (
-              <div style={styles.errorBox}>{error}</div>
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm mb-4">{error}</div>
             )}
 
-            <div style={styles.fieldGroup}>
-              <label htmlFor="mfa-code" style={styles.label}>Authentication Code</label>
+            <div className="mb-4">
+              <label htmlFor="mfa-code" className="block text-[0.8125rem] font-medium text-muted-foreground mb-1.5">Authentication Code</label>
               <StyledInput
                 id="mfa-code"
                 data-testid="mfa-code-input"
@@ -483,7 +157,7 @@ export default function LoginPage() {
                 placeholder="000000"
                 value={mfaCode}
                 onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
-                style={styles.mfaCodeInput}
+                className="text-center text-2xl tracking-[0.3em] font-mono"
                 autoFocus
                 required
               />
@@ -491,29 +165,30 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              style={{
-                ...styles.submitBtn,
-                ...(loading || mfaCode.length < 6 ? styles.submitBtnDisabled : {}),
-              }}
+              className={[
+                "w-full py-[0.6875rem] px-4 mt-5 rounded-lg font-semibold text-[0.9375rem] text-white",
+                "bg-gradient-to-br from-primary to-primary/80",
+                "flex items-center justify-center gap-2",
+                "transition-opacity duration-150",
+                loading || mfaCode.length < 6 ? "opacity-60 cursor-not-allowed" : "",
+              ].join(" ")}
               disabled={loading || mfaCode.length < 6}
             >
               {loading
-                ? <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} />
+                ? <Loader2 size={18} className="animate-spin" />
                 : <><span>Verify</span><ArrowRight size={16} /></>
               }
             </button>
 
             <button
               type="button"
-              style={styles.ghostBtn}
+              className="w-full py-2.5 px-4 mt-3 rounded-lg border border-border text-muted-foreground font-medium text-sm transition-colors duration-150 hover:border-muted-foreground bg-transparent cursor-pointer"
               onClick={() => { setMfaStep(null); setMfaCode(""); setError(""); }}
             >
               Back to login
             </button>
           </form>
         </div>
-
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
@@ -521,17 +196,21 @@ export default function LoginPage() {
   // ── MFA Setup Screen ───────────────────────────────────────────────────────
   if (mfaStep === "setup") {
     return (
-      <div style={styles.centerPage} data-testid="login-page">
+      <div
+        className="min-h-screen flex items-center justify-center bg-background text-foreground p-6"
+        style={{ fontFamily: "'Inter', sans-serif" }}
+        data-testid="login-page"
+      >
         <div className="fixed top-4 right-4 z-50">
           <ThemeToggle />
         </div>
-        <div style={{ ...styles.mfaCard, maxWidth: "460px" }}>
-          <div style={styles.mfaIconWrap}>
-            <Shield size={24} color={T.primary} />
+        <div className="bg-card border border-border rounded-2xl p-8 w-full max-w-[460px]">
+          <div className="w-[52px] h-[52px] rounded-xl bg-primary/10 border border-primary/25 flex items-center justify-center mb-5">
+            <Shield size={24} className="text-primary" />
           </div>
 
-          <h1 style={styles.mfaTitle}>Set up authenticator</h1>
-          <p style={styles.mfaSubtitle}>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1.5">Set up authenticator</h1>
+          <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
             Your administrator requires multi-factor authentication. Scan the QR code
             with Google Authenticator or any TOTP app, then enter the 6-digit code.
           </p>
@@ -539,23 +218,25 @@ export default function LoginPage() {
           {mfaSetupData && (
             <>
               {error && (
-                <div style={styles.errorBox}>{error}</div>
+                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm mb-4">{error}</div>
               )}
 
-              <div style={styles.qrWrap}>
+              <div className="flex justify-center p-4 bg-white rounded-lg border border-border mb-4">
                 <img src={mfaSetupData.qr_code} alt="MFA QR Code" style={{ width: "192px", height: "192px" }} />
               </div>
 
-              <div style={styles.manualKeyWrap}>
-                <span style={styles.manualKeyLabel}>Manual entry key</span>
-                <code style={styles.manualKey}>{mfaSetupData.manual_entry_key}</code>
+              <div className="mb-4">
+                <span className="block text-xs text-muted-foreground mb-1.5">Manual entry key</span>
+                <code className="block text-xs bg-background border border-border rounded-md px-3 py-2 font-mono break-all select-all text-muted-foreground">
+                  {mfaSetupData.manual_entry_key}
+                </code>
               </div>
 
-              <div style={styles.divider} />
+              <div className="h-px bg-border my-5" />
 
               <form onSubmit={handleConfirmMfaSetup}>
-                <div style={styles.fieldGroup}>
-                  <label htmlFor="setup-mfa-code" style={styles.label}>Verification Code</label>
+                <div className="mb-4">
+                  <label htmlFor="setup-mfa-code" className="block text-[0.8125rem] font-medium text-muted-foreground mb-1.5">Verification Code</label>
                   <StyledInput
                     id="setup-mfa-code"
                     data-testid="mfa-setup-code-input"
@@ -566,7 +247,7 @@ export default function LoginPage() {
                     placeholder="000000"
                     value={mfaCode}
                     onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
-                    style={styles.mfaCodeInput}
+                    className="text-center text-2xl tracking-[0.3em] font-mono"
                     autoFocus
                     required
                   />
@@ -574,14 +255,17 @@ export default function LoginPage() {
 
                 <button
                   type="submit"
-                  style={{
-                    ...styles.submitBtn,
-                    ...(loading || mfaCode.length < 6 ? styles.submitBtnDisabled : {}),
-                  }}
+                  className={[
+                    "w-full py-[0.6875rem] px-4 mt-5 rounded-lg font-semibold text-[0.9375rem] text-white",
+                    "bg-gradient-to-br from-primary to-primary/80",
+                    "flex items-center justify-center gap-2",
+                    "transition-opacity duration-150",
+                    loading || mfaCode.length < 6 ? "opacity-60 cursor-not-allowed" : "",
+                  ].join(" ")}
                   disabled={loading || mfaCode.length < 6}
                 >
                   {loading
-                    ? <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} />
+                    ? <Loader2 size={18} className="animate-spin" />
                     : <><span>Activate MFA</span><ArrowRight size={16} /></>
                   }
                 </button>
@@ -589,37 +273,48 @@ export default function LoginPage() {
             </>
           )}
         </div>
-
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
   // ── Standard Login Screen ──────────────────────────────────────────────────
   return (
-    <div style={styles.page} data-testid="login-page">
+    <div
+      className="min-h-screen flex bg-background text-foreground"
+      style={{ fontFamily: "'Inter', sans-serif" }}
+      data-testid="login-page"
+    >
       <div className="fixed top-4 right-4 z-50">
         <ThemeToggle />
       </div>
-      {/* Left panel — branding + features */}
-      <div style={styles.leftPanel} className="hidden lg:flex">
-        <div style={styles.leftGlow} aria-hidden="true" />
 
-        <div style={styles.leftContent}>
-          <div style={styles.iconWrap}>
-            <CalendarDays size={48} color={T.primary} />
+      {/* Left panel — branding + features */}
+      <div className="hidden lg:flex w-[55%] bg-sidebar items-center justify-center p-12 relative overflow-hidden">
+        {/* subtle glow */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: "radial-gradient(ellipse at 50% 50%, rgba(99,102,241,0.15), transparent 60%)" }}
+          aria-hidden="true"
+        />
+
+        <div className="relative z-10 max-w-[440px] w-full">
+          <div className="w-[72px] h-[72px] rounded-2xl bg-primary/10 border border-primary/25 flex items-center justify-center mb-8">
+            <CalendarDays size={48} className="text-primary" />
           </div>
 
-          <h1 style={styles.h1}>ShiftRoster</h1>
-          <p style={styles.tagline}>
+          <h1 className="text-[2.25rem] font-bold tracking-[-0.03em] text-foreground mb-3 leading-[1.15]">ShiftRoster</h1>
+          <p className="text-base text-muted-foreground leading-relaxed mb-10">
             Intelligent shift management<br />for modern teams.
           </p>
 
-          <ul style={styles.featureList} aria-label="Features">
+          <ul className="flex flex-col gap-4" aria-label="Features">
             {FEATURES.map((feat) => (
-              <li key={feat} style={styles.featureItem}>
-                <span style={styles.checkIcon} aria-hidden="true">
-                  <Check size={11} color={T.primary} strokeWidth={3} />
+              <li key={feat} className="flex items-center gap-3 text-sm text-slate-400">
+                <span
+                  className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center shrink-0"
+                  aria-hidden="true"
+                >
+                  <Check size={11} className="text-primary" strokeWidth={3} />
                 </span>
                 {feat}
               </li>
@@ -629,30 +324,27 @@ export default function LoginPage() {
       </div>
 
       {/* Right panel — login card */}
-      <div style={styles.rightPanel} className="flex-1 lg:w-auto">
-        <div style={styles.card}>
+      <div className="flex-1 lg:w-auto bg-background flex items-center justify-center p-8">
+        <div className="bg-card border border-border rounded-2xl p-8 w-full max-w-[420px]">
           {/* Mobile logo (hidden on lg+) */}
-          <div
-            className="flex lg:hidden items-center gap-2 mb-6"
-            style={{ color: T.textPrimary }}
-          >
-            <div style={{ ...styles.checkIcon, width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "rgba(59,130,246,0.12)" }}>
-              <CalendarDays size={18} color={T.primary} />
+          <div className="flex lg:hidden items-center gap-2 mb-6 text-foreground">
+            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+              <CalendarDays size={18} className="text-primary" />
             </div>
-            <span style={{ fontWeight: 700, fontSize: "1.1rem", letterSpacing: "-0.02em" }}>ShiftRoster</span>
+            <span className="font-bold text-[1.1rem] tracking-[-0.02em]">ShiftRoster</span>
           </div>
 
-          <h2 style={styles.cardTitle}>Welcome back</h2>
-          <p style={styles.cardSubtitle}>Sign in to your workspace</p>
+          <h2 className="text-[1.625rem] font-bold tracking-[-0.025em] text-foreground mb-1.5">Welcome back</h2>
+          <p className="text-sm text-muted-foreground mb-7">Sign in to your workspace</p>
 
           <form onSubmit={handleSubmit}>
             {error && (
-              <div data-testid="login-error" style={styles.errorBox}>{error}</div>
+              <div data-testid="login-error" className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm mb-4">{error}</div>
             )}
 
             {/* Email */}
-            <div style={styles.fieldGroup}>
-              <label htmlFor="email" style={styles.label}>Email or Username</label>
+            <div className="mb-4">
+              <label htmlFor="email" className="block text-[0.8125rem] font-medium text-muted-foreground mb-1.5">Email or Username</label>
               <StyledInput
                 id="email"
                 data-testid="login-email-input"
@@ -665,9 +357,9 @@ export default function LoginPage() {
             </div>
 
             {/* Password */}
-            <div style={styles.fieldGroup}>
-              <label htmlFor="password" style={styles.label}>Password</label>
-              <div style={styles.passwordWrap}>
+            <div className="mb-4">
+              <label htmlFor="password" className="block text-[0.8125rem] font-medium text-muted-foreground mb-1.5">Password</label>
+              <div className="relative">
                 <StyledInput
                   id="password"
                   data-testid="login-password-input"
@@ -680,7 +372,7 @@ export default function LoginPage() {
                 />
                 <button
                   type="button"
-                  style={styles.eyeBtn}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-muted-foreground p-1 flex items-center justify-center"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
                   tabIndex={-1}
@@ -694,19 +386,19 @@ export default function LoginPage() {
             </div>
 
             {/* Remember me + Forgot password */}
-            <div style={styles.rememberRow}>
-              <label style={styles.rememberLeft}>
+            <div className="flex items-center justify-between mt-1">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   id="remember-me"
                   type="checkbox"
-                  style={styles.checkbox}
+                  className="w-4 h-4 accent-primary cursor-pointer"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                   data-testid="remember-me-checkbox"
                 />
-                <span style={styles.rememberLabel}>Remember me for 30 days</span>
+                <span className="text-[0.8125rem] text-slate-400 cursor-pointer">Remember me for 30 days</span>
               </label>
-              <button type="button" style={styles.forgotLink}>
+              <button type="button" className="text-[0.8125rem] text-primary bg-transparent border-none cursor-pointer p-0">
                 Forgot password?
               </button>
             </div>
@@ -715,32 +407,27 @@ export default function LoginPage() {
             <button
               data-testid="login-submit-btn"
               type="submit"
-              style={{
-                ...styles.submitBtn,
-                ...(loading ? styles.submitBtnDisabled : {}),
-              }}
+              className={[
+                "w-full py-[0.6875rem] px-4 mt-5 rounded-lg font-semibold text-[0.9375rem] text-white",
+                "bg-gradient-to-br from-primary to-primary/80",
+                "flex items-center justify-center gap-2",
+                "transition-opacity duration-150",
+                loading ? "opacity-60 cursor-not-allowed" : "",
+              ].join(" ")}
               disabled={loading}
             >
               {loading
-                ? <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} />
+                ? <Loader2 size={18} className="animate-spin" />
                 : <><span>Sign In</span><ArrowRight size={16} /></>
               }
             </button>
           </form>
 
-          <p style={styles.footerNote}>
+          <p className="text-center text-xs text-muted-foreground mt-6">
             Account access is managed by your administrator.
           </p>
         </div>
       </div>
-
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-        input::placeholder { color: ${T.textPlaceholder}; }
-      `}</style>
     </div>
   );
 }
