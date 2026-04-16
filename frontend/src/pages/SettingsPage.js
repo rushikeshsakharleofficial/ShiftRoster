@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle, ImageIcon, Upload, X } from "lucide-react";
+import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle, ImageIcon, Upload, X, Mail, Server, Eye, EyeOff } from "lucide-react";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -58,6 +58,17 @@ export default function SettingsPage() {
   const [mandateAll, setMandateAll] = useState(false);
   const [mandateLoading, setMandateLoading] = useState(false);
 
+  // SMTP state
+  const [smtpForm, setSmtpForm] = useState({
+    smtp_host: "", smtp_port: "587", smtp_username: "", smtp_password: "",
+    smtp_from_email: "", smtp_from_name: "", smtp_use_tls: true, smtp_enabled: false,
+  });
+  const [smtpSaving, setSmtpSaving] = useState(false);
+  const [smtpTesting, setSmtpTesting] = useState(false);
+  const [smtpTestResult, setSmtpTestResult] = useState(null); // {ok: bool, msg: str}
+  const [smtpPasswordVisible, setSmtpPasswordVisible] = useState(false);
+  const [smtpTestEmail, setSmtpTestEmail] = useState("");
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -75,6 +86,16 @@ export default function SettingsPage() {
         });
         setMandateAll(!!data.mfa_org_mandate);
         setBrandForm({ brand_name: data.brand_name || data.name || "", logo_url: data.logo_url || "" });
+        setSmtpForm({
+          smtp_host: data.smtp_host || "",
+          smtp_port: String(data.smtp_port || "587"),
+          smtp_username: data.smtp_username || "",
+          smtp_password: data.smtp_password || "",
+          smtp_from_email: data.smtp_from_email || "",
+          smtp_from_name: data.smtp_from_name || "",
+          smtp_use_tls: data.smtp_use_tls !== false,
+          smtp_enabled: !!data.smtp_enabled,
+        });
       } catch {}
       setMfaEnabled(!!user?.mfa_enabled);
       setShareManagerName(user?.full_name || "");
@@ -116,6 +137,36 @@ export default function SettingsPage() {
       toast.error(formatApiError(err.response?.data?.detail));
     }
     setBrandSaving(false);
+  };
+
+  // SMTP
+  const handleSmtpSave = async () => {
+    setSmtpSaving(true);
+    try {
+      await orgApi.update({
+        ...smtpForm,
+        smtp_port: parseInt(smtpForm.smtp_port) || 587,
+      });
+      setSmtpTestResult({ ok: true, msg: "SMTP settings saved." });
+    } catch (e) {
+      setSmtpTestResult({ ok: false, msg: formatApiError(e.response?.data?.detail) || "Save failed" });
+    } finally {
+      setSmtpSaving(false);
+    }
+  };
+
+  const handleSmtpTest = async () => {
+    if (!smtpTestEmail) return;
+    setSmtpTesting(true);
+    setSmtpTestResult(null);
+    try {
+      const { data } = await orgApi.testEmail(smtpTestEmail);
+      setSmtpTestResult({ ok: true, msg: data.message });
+    } catch (e) {
+      setSmtpTestResult({ ok: false, msg: e.response?.data?.detail || "Test failed" });
+    } finally {
+      setSmtpTesting(false);
+    }
   };
 
   // MFA - Setup
@@ -359,6 +410,120 @@ export default function SettingsPage() {
               {brandSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Save Branding
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* SMTP Email Settings — admin only */}
+      {isAdmin && (
+        <Card className="border">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Mail className="h-5 w-5 text-primary" /> SMTP Email Settings
+            </CardTitle>
+            <CardDescription>Configure a relay server (Gmail, Outlook, or any SMTP) for outbound emails</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Enable toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Enable SMTP</p>
+                <p className="text-xs text-muted-foreground">Send system emails via your SMTP server</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSmtpForm(f => ({ ...f, smtp_enabled: !f.smtp_enabled }))}
+                className={`relative inline-flex h-6 w-11 rounded-full transition-colors ${smtpForm.smtp_enabled ? "bg-primary" : "bg-muted"}`}
+              >
+                <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform mt-1 ${smtpForm.smtp_enabled ? "translate-x-6" : "translate-x-1"}`} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>SMTP Host</Label>
+                <Input placeholder="smtp.gmail.com" value={smtpForm.smtp_host}
+                  onChange={e => setSmtpForm(f => ({ ...f, smtp_host: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Port</Label>
+                <Input placeholder="587" value={smtpForm.smtp_port}
+                  onChange={e => setSmtpForm(f => ({ ...f, smtp_port: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Username</Label>
+                <Input placeholder="you@gmail.com" value={smtpForm.smtp_username}
+                  onChange={e => setSmtpForm(f => ({ ...f, smtp_username: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5 relative">
+                <Label>Password / App Password</Label>
+                <div className="relative">
+                  <Input
+                    type={smtpPasswordVisible ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={smtpForm.smtp_password}
+                    onChange={e => setSmtpForm(f => ({ ...f, smtp_password: e.target.value }))}
+                    className="pr-9"
+                  />
+                  <button type="button" onClick={() => setSmtpPasswordVisible(v => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {smtpPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>From Email</Label>
+                <Input placeholder="noreply@yourcompany.com" value={smtpForm.smtp_from_email}
+                  onChange={e => setSmtpForm(f => ({ ...f, smtp_from_email: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>From Name</Label>
+                <Input placeholder="ShiftRoster" value={smtpForm.smtp_from_name}
+                  onChange={e => setSmtpForm(f => ({ ...f, smtp_from_name: e.target.value }))} />
+              </div>
+            </div>
+
+            {/* TLS toggle */}
+            <div className="flex items-center gap-3">
+              <button type="button"
+                onClick={() => setSmtpForm(f => ({ ...f, smtp_use_tls: !f.smtp_use_tls }))}
+                className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${smtpForm.smtp_use_tls ? "bg-primary" : "bg-muted"}`}>
+                <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform mt-[3px] ${smtpForm.smtp_use_tls ? "translate-x-4" : "translate-x-0.5"}`} />
+              </button>
+              <span className="text-sm">Use STARTTLS (recommended for port 587)</span>
+            </div>
+
+            {/* Hint for common providers */}
+            <div className="rounded-lg bg-muted/40 border border-border p-3 text-xs text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground">Common providers:</p>
+              <p>• Gmail: host=smtp.gmail.com, port=587, use App Password (2FA required)</p>
+              <p>• Outlook/Office365: host=smtp.office365.com, port=587</p>
+              <p>• SendGrid: host=smtp.sendgrid.net, port=587, user=apikey</p>
+            </div>
+
+            {/* Save button */}
+            <Button onClick={handleSmtpSave} disabled={smtpSaving} size="sm">
+              {smtpSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Server className="h-4 w-4 mr-2" />}
+              Save SMTP Settings
+            </Button>
+
+            {/* Test email */}
+            <div className="border-t border-border pt-4 space-y-2">
+              <p className="text-sm font-medium">Send Test Email</p>
+              <div className="flex gap-2">
+                <Input placeholder="test@example.com" value={smtpTestEmail}
+                  onChange={e => setSmtpTestEmail(e.target.value)} className="max-w-xs" />
+                <Button variant="outline" size="sm" onClick={handleSmtpTest}
+                  disabled={smtpTesting || !smtpTestEmail}>
+                  {smtpTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send Test"}
+                </Button>
+              </div>
+              {smtpTestResult && (
+                <p className={`text-xs ${smtpTestResult.ok ? "text-green-500" : "text-destructive"}`}>
+                  {smtpTestResult.ok ? "✓" : "✗"} {smtpTestResult.msg}
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

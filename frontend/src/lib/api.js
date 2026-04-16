@@ -215,6 +215,7 @@ export const nominationsApi = {
 export const orgApi = {
   get: () => api.get("/organization"),
   update: (data) => api.put("/organization", data),
+  testEmail: (recipient_email) => api.post("/organization/test-email", { recipient_email }),
 };
 
 // Holidays
