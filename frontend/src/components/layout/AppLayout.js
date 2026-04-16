@@ -238,35 +238,29 @@ export default function AppLayout() {
   const roleBadge = isAdmin ? "Admin" : isManager ? "Manager" : level || "Employee";
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "#0F1117" }}>
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar */}
       <aside
         data-testid="app-sidebar"
         className={`
           fixed inset-y-0 left-0 z-40 flex flex-col transition-all duration-300
+          bg-sidebar border-r border-border
           ${sidebarOpen ? "w-60" : "w-16"}
           ${mobileSidebar ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0 lg:static
         `}
-        style={{ backgroundColor: "#0C0E18", borderRight: "1px solid #1E2235" }}
       >
         {/* Logo */}
-        <div
-          className="flex flex-row items-center gap-2 px-4 h-14 shrink-0"
-          style={{ borderBottom: "1px solid #1E2235" }}
-        >
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden"
-            style={{ backgroundColor: "rgba(59,130,246,0.15)" }}
-          >
+        <div className="flex flex-row items-center gap-2 px-4 h-14 shrink-0 border-b border-border">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden bg-primary/10">
             {orgBrand.logo_url ? (
               <img src={orgBrand.logo_url} alt="logo" className="w-full h-full object-cover rounded-lg" />
             ) : (
-              <CalendarDays className="h-[18px] w-[18px]" style={{ color: "#3B82F6" }} />
+              <CalendarDays className="h-[18px] w-[18px] text-primary" />
             )}
           </div>
           {sidebarOpen && (
-            <span className="font-semibold text-sm tracking-tight truncate" style={{ color: "#F1F5F9" }}>
+            <span className="font-semibold text-sm tracking-tight truncate text-foreground">
               {orgBrand.name}
             </span>
           )}
@@ -282,56 +276,32 @@ export default function AppLayout() {
               onClick={() => setMobileSidebar(false)}
               className={({ isActive }) =>
                 `flex flex-row items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors group ${
-                  isActive ? "-ml-px" : ""
+                  isActive
+                    ? "-ml-px bg-primary/10 text-primary border-l-2 border-primary"
+                    : "text-muted-foreground border-l-2 border-transparent hover:text-foreground hover:bg-white/5"
                 }`
               }
-              style={({ isActive }) =>
-                isActive
-                  ? {
-                      backgroundColor: "rgba(59,130,246,0.1)",
-                      color: "#3B82F6",
-                      borderLeft: "2px solid #3B82F6",
-                    }
-                  : {
-                      color: "#64748B",
-                      borderLeft: "2px solid transparent",
-                    }
-              }
-              onMouseEnter={(e) => {
-                const link = e.currentTarget;
-                if (!link.dataset.active) {
-                  link.style.color = "#F1F5F9";
-                  link.style.backgroundColor = "rgba(255,255,255,0.05)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                const link = e.currentTarget;
-                if (!link.dataset.active) {
-                  link.style.color = "#64748B";
-                  link.style.backgroundColor = "transparent";
-                }
-              }}
               data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
             >
               {({ isActive }) => (
                 <>
                   <item.icon
-                    className={`shrink-0 transition-transform duration-200 ${sidebarOpen ? "" : "mx-auto"}`}
-                    style={{ width: 18, height: 18, color: isActive ? "#3B82F6" : undefined }}
+                    className={`shrink-0 transition-transform duration-200 ${sidebarOpen ? "" : "mx-auto"} ${isActive ? "text-primary" : ""}`}
+                    style={{ width: 18, height: 18 }}
                   />
                   {sidebarOpen && <span className="truncate">{item.label}</span>}
                   {item.to === "/notifications" && unreadCount > 0 && sidebarOpen && (
                     <span
-                      className="ml-auto text-[10px] h-5 px-1.5 rounded-full flex items-center justify-center font-semibold animate-in zoom-in"
-                      style={{ backgroundColor: "#3B82F6", color: "#fff", minWidth: 20 }}
+                      className="ml-auto text-[10px] h-5 px-1.5 rounded-full flex items-center justify-center font-semibold animate-in zoom-in bg-primary text-primary-foreground"
+                      style={{ minWidth: 20 }}
                     >
                       {unreadCount}
                     </span>
                   )}
                   {item.to === "/chat" && chatUnread > 0 && sidebarOpen && (
                     <span
-                      className="ml-auto text-[10px] h-5 px-1.5 rounded-full flex items-center justify-center font-semibold animate-in zoom-in"
-                      style={{ backgroundColor: "#3B82F6", color: "#fff", minWidth: 20 }}
+                      className="ml-auto text-[10px] h-5 px-1.5 rounded-full flex items-center justify-center font-semibold animate-in zoom-in bg-primary text-primary-foreground"
+                      style={{ minWidth: 20 }}
                     >
                       {chatUnread > 99 ? "99+" : chatUnread}
                     </span>
@@ -343,17 +313,14 @@ export default function AppLayout() {
         </nav>
 
         {/* Separator */}
-        <div style={{ borderTop: "1px solid #1E2235", margin: "4px 0" }} />
+        <div className="border-t border-border" style={{ margin: "4px 0" }} />
 
         {/* User section */}
         <div className="p-3 shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <div
-                className="flex items-center gap-2 cursor-pointer rounded-lg px-2 py-2 transition-colors"
-                style={{ color: "#F1F5F9" }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                className="flex items-center gap-2 cursor-pointer rounded-lg px-2 py-2 transition-colors text-foreground hover:bg-white/5"
               >
                 <div className="relative shrink-0">
                   <Avatar className="h-8 w-8">
@@ -363,26 +330,23 @@ export default function AppLayout() {
                     </AvatarFallback>
                   </Avatar>
                   {/* My own status dot */}
-                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 ${
+                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-sidebar ${
                     myStatus === "active" ? "bg-green-500"
                     : myStatus === "break" ? "bg-yellow-400"
                     : myStatus === "leave" ? "border-2 border-red-400"
                     : "bg-muted-foreground/40"
-                  }`} style={{ borderColor: "#0C0E18" }} />
+                  } border-2`} />
                 </div>
                 {sidebarOpen && (
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate" style={{ color: "#F1F5F9" }}>{user?.full_name}</p>
-                    <span
-                      className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                      style={{ backgroundColor: "rgba(59,130,246,0.15)", color: "#3B82F6" }}
-                    >
+                    <p className="text-xs font-medium truncate text-foreground">{user?.full_name}</p>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-primary/10 text-primary">
                       {myStatus === "active" ? roleBadge : myStatus === "break" ? "On Break" : "On Leave"}
                     </span>
                   </div>
                 )}
                 {sidebarOpen && (
-                  <Settings className="h-4 w-4 shrink-0" style={{ color: "#64748B" }} />
+                  <Settings className="h-4 w-4 shrink-0 text-muted-foreground" />
                 )}
               </div>
             </DropdownMenuTrigger>
@@ -409,35 +373,32 @@ export default function AppLayout() {
       )}
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0" style={{ backgroundColor: "#0F1117" }}>
+      <div className="flex-1 flex flex-col min-w-0 bg-background">
         {/* Header */}
         <header
           data-testid="app-header"
-          className="h-14 flex items-center justify-between px-4 shrink-0 z-20"
-          style={{ backgroundColor: "#0C0E18", borderBottom: "1px solid #1E2235" }}
+          className="h-14 flex items-center justify-between px-4 shrink-0 z-20 bg-sidebar border-b border-border"
         >
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden h-8 w-8"
+              className="lg:hidden h-8 w-8 text-muted-foreground"
               onClick={() => setMobileSidebar(!mobileSidebar)}
               data-testid="mobile-menu-btn"
-              style={{ color: "#64748B" }}
             >
               {mobileSidebar ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="hidden lg:flex h-8 w-8"
+              className="hidden lg:flex h-8 w-8 text-muted-foreground"
               onClick={() => setSidebarOpen(!sidebarOpen)}
               data-testid="sidebar-toggle-btn"
-              style={{ color: "#64748B" }}
             >
               <Menu className="h-4 w-4" />
             </Button>
-            <span className="hidden lg:block font-semibold text-lg" style={{ color: "#F1F5F9" }}>
+            <span className="hidden lg:block font-semibold text-lg text-foreground">
               {navItems.find((n) => n.to === location.pathname || (n.to !== "/" && location.pathname.startsWith(n.to)))?.label || "Dashboard"}
             </span>
           </div>
@@ -451,16 +412,12 @@ export default function AppLayout() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-9 w-9 relative"
+                  className="h-9 w-9 relative text-muted-foreground"
                   data-testid="header-notifications-btn"
-                  style={{ color: "#64748B" }}
                 >
                   <Bell className="h-4 w-4" />
                   {unreadCount > 0 && (
-                    <span
-                      className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full text-[10px] flex items-center justify-center font-semibold"
-                      style={{ backgroundColor: "#3B82F6", color: "#fff" }}
-                    >
+                    <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full text-[10px] flex items-center justify-center font-semibold bg-primary text-primary-foreground">
                       {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
                   )}
@@ -542,10 +499,9 @@ export default function AppLayout() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9"
+              className="h-9 w-9 text-muted-foreground"
               onClick={handleLogout}
               data-testid="logout-btn"
-              style={{ color: "#64748B" }}
             >
               <LogOut className="h-4 w-4" />
             </Button>
@@ -611,7 +567,7 @@ export default function AppLayout() {
         </Dialog>
 
         {/* Page content */}
-        <main className={`flex-1 flex flex-col min-h-0 ${isFullBleed ? "" : "p-4 md:p-6 lg:p-8"}`} style={{ backgroundColor: "#0F1117" }}>
+        <main className={`flex-1 flex flex-col min-h-0 bg-background ${isFullBleed ? "" : "p-4 md:p-6 lg:p-8"}`}>
           <div className={`animate-fade-in flex-1 min-h-0 ${isFullBleed ? "overflow-hidden" : "relative overflow-auto"}`}>
             <Outlet />
           </div>

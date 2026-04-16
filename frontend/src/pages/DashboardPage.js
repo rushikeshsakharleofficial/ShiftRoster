@@ -64,23 +64,23 @@ export default function DashboardPage() {
   ] : [];
 
   return (
-    <div data-testid="dashboard-page" className="space-y-6 min-h-screen bg-[#0F1117] p-6">
+    <div data-testid="dashboard-page" className="space-y-6 min-h-screen bg-background p-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[#F1F5F9] tracking-tight">
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">
             Welcome back, {user?.full_name?.split(" ")[0]}
           </h1>
-          <p className="text-sm text-[#64748B] mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             {new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/20 text-xs px-2 py-0.5 rounded-full font-medium">
+          <span className="bg-primary/10 text-primary border border-primary/20 text-xs px-2 py-0.5 rounded-full font-medium">
             {user?.system_role?.toUpperCase()}
           </span>
           {user?.employee_level && (
-            <span className="bg-[#13151F] text-[#64748B] border border-[#1E2235] text-xs px-2 py-0.5 rounded-full font-medium">
+            <span className="bg-card text-muted-foreground border border-border text-xs px-2 py-0.5 rounded-full font-medium">
               {user.employee_level}
             </span>
           )}
@@ -88,14 +88,14 @@ export default function DashboardPage() {
       </div>
 
       {/* Clock In/Out */}
-      <div className="bg-[#13151F] border border-[#1E2235] rounded-xl p-5 flex items-center justify-between">
+      <div className="bg-card border border-border rounded-xl p-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="bg-[#3B82F6]/10 rounded-lg p-2.5 flex items-center justify-center">
-            <Clock className="h-5 w-5 text-[#3B82F6]" />
+          <div className="bg-primary/10 rounded-lg p-2.5 flex items-center justify-center">
+            <Clock className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <p className="text-sm font-medium text-[#F1F5F9]">{clockedIn ? "You are clocked in" : "Ready to start your shift?"}</p>
-            <p className="text-xs text-[#64748B]">{new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</p>
+            <p className="text-sm font-medium text-foreground">{clockedIn ? "You are clocked in" : "Ready to start your shift?"}</p>
+            <p className="text-xs text-muted-foreground">{new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</p>
           </div>
         </div>
         {clockedIn ? (
@@ -103,7 +103,7 @@ export default function DashboardPage() {
             data-testid="clock-out-btn"
             onClick={handleClockOut}
             disabled={clockLoading}
-            className="bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 transition-colors hover:bg-rose-500/20"
+            className="bg-destructive/10 text-destructive border border-destructive/20 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 transition-colors hover:bg-destructive/20"
           >
             {clockLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clock Out"}
           </button>
@@ -112,7 +112,7 @@ export default function DashboardPage() {
             data-testid="clock-in-btn"
             onClick={handleClockIn}
             disabled={clockLoading}
-            className="bg-gradient-to-r from-[#2563EB] to-[#3B82F6] text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 transition-opacity hover:opacity-90"
+            className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 transition-opacity hover:opacity-90"
           >
             {clockLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clock In"}
           </button>
@@ -124,20 +124,20 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {loading ? (
             Array(8).fill(0).map((_, i) => (
-              <div key={i} className="bg-[#13151F] border border-[#1E2235] rounded-xl p-5 animate-pulse">
-                <div className="h-16 bg-[#1E2235] rounded" />
+              <div key={i} className="bg-card border border-border rounded-xl p-5 animate-pulse">
+                <div className="h-16 bg-border rounded" />
               </div>
             ))
           ) : (
             statCards.map((s) => (
-              <div key={s.label} className="bg-[#13151F] border border-[#1E2235] rounded-xl p-5 hover:border-[#2D3555] transition-colors">
+              <div key={s.label} className="bg-card border border-border rounded-xl p-5 hover:border-primary/30 transition-colors">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#64748B] uppercase tracking-wider font-medium">{s.label}</span>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{s.label}</span>
                   <div className={`h-8 w-8 rounded-lg ${s.iconBg} flex items-center justify-center`}>
                     <s.icon className={`h-4 w-4 ${s.iconColor}`} />
                   </div>
                 </div>
-                <p className="text-3xl font-bold text-[#F1F5F9] font-mono tabular-nums tracking-tight mt-3">{s.value}</p>
+                <p className="text-3xl font-bold text-foreground font-mono tabular-nums tracking-tight mt-3">{s.value}</p>
               </div>
             ))
           )}
@@ -147,7 +147,7 @@ export default function DashboardPage() {
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div
-          className="bg-[#13151F] border border-[#1E2235] rounded-xl p-5 cursor-pointer hover:border-[#2D3555] hover:-translate-y-0.5 transition-all flex items-center gap-3"
+          className="bg-card border border-border rounded-xl p-5 cursor-pointer hover:border-primary/30 hover:-translate-y-0.5 transition-all flex items-center gap-3"
           onClick={() => navigate("/shifts")}
           data-testid="quick-action-shifts"
         >
@@ -155,12 +155,12 @@ export default function DashboardPage() {
             <CalendarDays className="h-5 w-5 text-indigo-400" />
           </div>
           <div>
-            <p className="text-sm font-medium text-[#F1F5F9]">Shift Calendar</p>
-            <p className="text-xs text-[#64748B]">View and manage shifts</p>
+            <p className="text-sm font-medium text-foreground">Shift Calendar</p>
+            <p className="text-xs text-muted-foreground">View and manage shifts</p>
           </div>
         </div>
         <div
-          className="bg-[#13151F] border border-[#1E2235] rounded-xl p-5 cursor-pointer hover:border-[#2D3555] hover:-translate-y-0.5 transition-all flex items-center gap-3"
+          className="bg-card border border-border rounded-xl p-5 cursor-pointer hover:border-primary/30 hover:-translate-y-0.5 transition-all flex items-center gap-3"
           onClick={() => navigate("/leave")}
           data-testid="quick-action-leave"
         >
@@ -168,12 +168,12 @@ export default function DashboardPage() {
             <ClipboardList className="h-5 w-5 text-orange-400" />
           </div>
           <div>
-            <p className="text-sm font-medium text-[#F1F5F9]">Leave Requests</p>
-            <p className="text-xs text-[#64748B]">Manage time off</p>
+            <p className="text-sm font-medium text-foreground">Leave Requests</p>
+            <p className="text-xs text-muted-foreground">Manage time off</p>
           </div>
         </div>
         <div
-          className="bg-[#13151F] border border-[#1E2235] rounded-xl p-5 cursor-pointer hover:border-[#2D3555] hover:-translate-y-0.5 transition-all flex items-center gap-3"
+          className="bg-card border border-border rounded-xl p-5 cursor-pointer hover:border-primary/30 hover:-translate-y-0.5 transition-all flex items-center gap-3"
           onClick={() => navigate("/attendance")}
           data-testid="quick-action-attendance"
         >
@@ -181,8 +181,8 @@ export default function DashboardPage() {
             <Clock className="h-5 w-5 text-emerald-400" />
           </div>
           <div>
-            <p className="text-sm font-medium text-[#F1F5F9]">Attendance</p>
-            <p className="text-xs text-[#64748B]">Clock in/out records</p>
+            <p className="text-sm font-medium text-foreground">Attendance</p>
+            <p className="text-xs text-muted-foreground">Clock in/out records</p>
           </div>
         </div>
       </div>

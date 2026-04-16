@@ -16,11 +16,7 @@ module.exports = {
   			geist: ['Geist', 'Inter', 'sans-serif'],
   		},
   		colors: {
-  			surface: '#13151F',
-  			'surface-2': '#1A1D2E',
-  			'border-subtle': '#1E2235',
-  			brand: '#3B82F6',
-  			'brand-dim': 'rgba(59,130,246,0.1)',
+  			sidebar: 'hsl(var(--sidebar-bg))',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {
