@@ -53,78 +53,92 @@ export default function DashboardPage() {
   };
 
   const statCards = stats ? [
-    { label: "Total Employees", value: stats.total_employees, icon: Users, color: "text-emerald-500" },
-    { label: "Total Managers", value: stats.total_managers, icon: UserCheck, color: "text-sky-500" },
-    { label: "Active Users", value: stats.active_employees, icon: TrendingUp, color: "text-violet-500" },
-    { label: "Departments", value: stats.total_departments, icon: Building2, color: "text-amber-500" },
-    { label: "Total Shifts", value: stats.total_shifts, icon: CalendarDays, color: "text-indigo-500" },
-    { label: "Clocked In Today", value: stats.clocked_in_today, icon: Clock, color: "text-emerald-500" },
-    { label: "Pending Leaves", value: stats.pending_leaves, icon: ClipboardList, color: "text-orange-500" },
-    { label: "Pending Swaps", value: stats.pending_swaps, icon: ArrowLeftRight, color: "text-rose-500" },
+    { label: "Total Employees", value: stats.total_employees, icon: Users, iconBg: "bg-emerald-500/10", iconColor: "text-emerald-400" },
+    { label: "Total Managers", value: stats.total_managers, icon: UserCheck, iconBg: "bg-sky-500/10", iconColor: "text-sky-400" },
+    { label: "Active Users", value: stats.active_employees, icon: TrendingUp, iconBg: "bg-violet-500/10", iconColor: "text-violet-400" },
+    { label: "Departments", value: stats.total_departments, icon: Building2, iconBg: "bg-amber-500/10", iconColor: "text-amber-400" },
+    { label: "Total Shifts", value: stats.total_shifts, icon: CalendarDays, iconBg: "bg-indigo-500/10", iconColor: "text-indigo-400" },
+    { label: "Clocked In", value: stats.clocked_in_today, icon: Clock, iconBg: "bg-emerald-500/10", iconColor: "text-emerald-400" },
+    { label: "Pending Leaves", value: stats.pending_leaves, icon: ClipboardList, iconBg: "bg-orange-500/10", iconColor: "text-orange-400" },
+    { label: "Pending Swaps", value: stats.pending_swaps, icon: ArrowLeftRight, iconBg: "bg-rose-500/10", iconColor: "text-rose-400" },
   ] : [];
 
   return (
-    <div data-testid="dashboard-page" className="space-y-6">
+    <div data-testid="dashboard-page" className="space-y-6 min-h-screen bg-[#0F1117] p-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-2xl font-bold text-[#F1F5F9] tracking-tight">
             Welcome back, {user?.full_name?.split(" ")[0]}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-[#64748B] mt-1">
             {new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs">{user?.system_role?.toUpperCase()}</Badge>
-          {user?.employee_level && <Badge variant="secondary" className="text-xs">{user.employee_level}</Badge>}
+          <span className="bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/20 text-xs px-2 py-0.5 rounded-full font-medium">
+            {user?.system_role?.toUpperCase()}
+          </span>
+          {user?.employee_level && (
+            <span className="bg-[#13151F] text-[#64748B] border border-[#1E2235] text-xs px-2 py-0.5 rounded-full font-medium">
+              {user.employee_level}
+            </span>
+          )}
         </div>
       </div>
 
       {/* Clock In/Out */}
-      <Card className="border">
-        <CardContent className="p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Clock className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-medium">{clockedIn ? "You are clocked in" : "Ready to start your shift?"}</p>
-              <p className="text-xs text-muted-foreground">{new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</p>
-            </div>
+      <div className="bg-[#13151F] border border-[#1E2235] rounded-xl p-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="bg-[#3B82F6]/10 rounded-lg p-2.5 flex items-center justify-center">
+            <Clock className="h-5 w-5 text-[#3B82F6]" />
           </div>
-          <Button
-            data-testid={clockedIn ? "clock-out-btn" : "clock-in-btn"}
-            variant={clockedIn ? "destructive" : "default"}
-            size="sm"
-            onClick={clockedIn ? handleClockOut : handleClockIn}
+          <div>
+            <p className="text-sm font-medium text-[#F1F5F9]">{clockedIn ? "You are clocked in" : "Ready to start your shift?"}</p>
+            <p className="text-xs text-[#64748B]">{new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</p>
+          </div>
+        </div>
+        {clockedIn ? (
+          <button
+            data-testid="clock-out-btn"
+            onClick={handleClockOut}
             disabled={clockLoading}
+            className="bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 transition-colors hover:bg-rose-500/20"
           >
-            {clockLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : (clockedIn ? "Clock Out" : "Clock In")}
-          </Button>
-        </CardContent>
-      </Card>
+            {clockLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clock Out"}
+          </button>
+        ) : (
+          <button
+            data-testid="clock-in-btn"
+            onClick={handleClockIn}
+            disabled={clockLoading}
+            className="bg-gradient-to-r from-[#2563EB] to-[#3B82F6] text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 transition-opacity hover:opacity-90"
+          >
+            {clockLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clock In"}
+          </button>
+        )}
+      </div>
 
       {/* Stats Grid */}
       {(isAdmin || isManager) && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {loading ? (
             Array(8).fill(0).map((_, i) => (
-              <Card key={i} className="border animate-pulse">
-                <CardContent className="p-4"><div className="h-16 bg-muted rounded" /></CardContent>
-              </Card>
+              <div key={i} className="bg-[#13151F] border border-[#1E2235] rounded-xl p-5 animate-pulse">
+                <div className="h-16 bg-[#1E2235] rounded" />
+              </div>
             ))
           ) : (
             statCards.map((s) => (
-              <Card key={s.label} className="border hover:-translate-y-0.5 transition-transform">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <s.icon className={`h-4 w-4 ${s.color}`} />
-                    <span className="text-2xl font-bold">{s.value}</span>
+              <div key={s.label} className="bg-[#13151F] border border-[#1E2235] rounded-xl p-5 hover:border-[#2D3555] transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#64748B] uppercase tracking-wider font-medium">{s.label}</span>
+                  <div className={`h-8 w-8 rounded-lg ${s.iconBg} flex items-center justify-center`}>
+                    <s.icon className={`h-4 w-4 ${s.iconColor}`} />
                   </div>
-                  <p className="text-xs text-muted-foreground">{s.label}</p>
-                </CardContent>
-              </Card>
+                </div>
+                <p className="text-3xl font-bold text-[#F1F5F9] font-mono tabular-nums tracking-tight mt-3">{s.value}</p>
+              </div>
             ))
           )}
         </div>
@@ -132,39 +146,45 @@ export default function DashboardPage() {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border cursor-pointer hover:-translate-y-0.5 transition-transform" onClick={() => navigate("/shifts")} data-testid="quick-action-shifts">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-indigo-500/10 flex items-center justify-center">
-              <CalendarDays className="h-5 w-5 text-indigo-500" />
-            </div>
-            <div>
-              <p className="text-sm font-medium">Shift Calendar</p>
-              <p className="text-xs text-muted-foreground">View and manage shifts</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border cursor-pointer hover:-translate-y-0.5 transition-transform" onClick={() => navigate("/leave")} data-testid="quick-action-leave">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
-              <ClipboardList className="h-5 w-5 text-orange-500" />
-            </div>
-            <div>
-              <p className="text-sm font-medium">Leave Requests</p>
-              <p className="text-xs text-muted-foreground">Manage time off</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border cursor-pointer hover:-translate-y-0.5 transition-transform" onClick={() => navigate("/attendance")} data-testid="quick-action-attendance">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-              <Clock className="h-5 w-5 text-emerald-500" />
-            </div>
-            <div>
-              <p className="text-sm font-medium">Attendance</p>
-              <p className="text-xs text-muted-foreground">Clock in/out records</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div
+          className="bg-[#13151F] border border-[#1E2235] rounded-xl p-5 cursor-pointer hover:border-[#2D3555] hover:-translate-y-0.5 transition-all flex items-center gap-3"
+          onClick={() => navigate("/shifts")}
+          data-testid="quick-action-shifts"
+        >
+          <div className="h-10 w-10 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+            <CalendarDays className="h-5 w-5 text-indigo-400" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-[#F1F5F9]">Shift Calendar</p>
+            <p className="text-xs text-[#64748B]">View and manage shifts</p>
+          </div>
+        </div>
+        <div
+          className="bg-[#13151F] border border-[#1E2235] rounded-xl p-5 cursor-pointer hover:border-[#2D3555] hover:-translate-y-0.5 transition-all flex items-center gap-3"
+          onClick={() => navigate("/leave")}
+          data-testid="quick-action-leave"
+        >
+          <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
+            <ClipboardList className="h-5 w-5 text-orange-400" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-[#F1F5F9]">Leave Requests</p>
+            <p className="text-xs text-[#64748B]">Manage time off</p>
+          </div>
+        </div>
+        <div
+          className="bg-[#13151F] border border-[#1E2235] rounded-xl p-5 cursor-pointer hover:border-[#2D3555] hover:-translate-y-0.5 transition-all flex items-center gap-3"
+          onClick={() => navigate("/attendance")}
+          data-testid="quick-action-attendance"
+        >
+          <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+            <Clock className="h-5 w-5 text-emerald-400" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-[#F1F5F9]">Attendance</p>
+            <p className="text-xs text-[#64748B]">Clock in/out records</p>
+          </div>
+        </div>
       </div>
     </div>
   );
