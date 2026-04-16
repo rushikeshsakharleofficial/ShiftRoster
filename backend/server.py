@@ -193,28 +193,43 @@ from auth_utils import verify_access_token
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     user_id = None
+    user = None
+    user_info = None
     try:
-        # Wait for auth message
-        auth_msg = await asyncio.wait_for(ws.receive_text(), timeout=10)
-        auth_data = json.loads(auth_msg)
-        token = auth_data.get("access_token")
-        
-        if not token:
-            await ws.close(code=1008)  # Policy Violation
-            return
+        # Auth strategy 1: cookie (same-origin requests via nginx proxy)
+        token = ws.cookies.get("access_token")
+        if token:
+            payload = verify_access_token(token)
+            if payload:
+                uid = payload.get("sub")
+                u = await db.users.find_one({"_id": ObjectId(uid)}, {"password_hash": 0})
+                if u:
+                    user_id = uid
+                    user = u
+                    user_info = serialize_doc(user)
 
-        payload = verify_access_token(token)
-        if not payload:
-            await ws.close(code=1008)
-            return
+        # Auth strategy 2: first-message token (fallback / legacy clients)
+        if not user_id:
+            auth_msg = await asyncio.wait_for(ws.receive_text(), timeout=10)
+            auth_data = json.loads(auth_msg)
+            token = auth_data.get("access_token")
 
-        user_id = payload.get("sub")
-        user = await db.users.find_one({"_id": ObjectId(user_id)}, {"password_hash": 0})
-        if not user:
-            await ws.close()
-            return
+            if not token:
+                await ws.close(code=1008)
+                return
 
-        user_info = serialize_doc(user)
+            payload = verify_access_token(token)
+            if not payload:
+                await ws.close(code=1008)
+                return
+
+            user_id = payload.get("sub")
+            user = await db.users.find_one({"_id": ObjectId(user_id)}, {"password_hash": 0})
+            if not user:
+                await ws.close()
+                return
+
+            user_info = serialize_doc(user)
 
         # Auto-detect initial status: check for approved leave today
         initial_status = "active"

@@ -128,7 +128,17 @@ export function ChatProvider({ children }) {
       const res = isChannel
         ? await chatApi.sendChannelMessage(channelId, payload)
         : await chatApi.sendDMMessage(channelId, payload);
-      return res.data;
+      const msg = res.data;
+      if (msg && msg.id) {
+        // Optimistic update: append immediately so sender sees their message
+        const current = messagesRef.current[channelId] || [];
+        if (!current.some((m) => m.id === msg.id)) {
+          const updated = [...current, msg];
+          messagesRef.current = { ...messagesRef.current, [channelId]: updated };
+          setMessages((prev) => ({ ...prev, [channelId]: updated }));
+        }
+      }
+      return msg;
     } catch {
       return null;
     }
