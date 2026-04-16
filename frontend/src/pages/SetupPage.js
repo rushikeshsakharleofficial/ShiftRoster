@@ -62,8 +62,8 @@ export default function SetupPage() {
       toast.error("Passwords do not match");
       return;
     }
-    if (form.admin_password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (form.admin_password.length < 12) {
+      toast.error("Password must be at least 12 characters");
       return;
     }
 
@@ -221,7 +221,7 @@ export default function SetupPage() {
                   <Input
                     id="admin_password"
                     type="password"
-                    placeholder="Minimum 6 characters"
+                    placeholder="Minimum 12 characters"
                     value={form.admin_password}
                     onChange={(e) => setForm({ ...form, admin_password: e.target.value })}
                     required

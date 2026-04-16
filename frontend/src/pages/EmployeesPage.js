@@ -57,6 +57,10 @@ export default function EmployeesPage() {
   useEffect(() => { loadData(); }, [search, roleFilter, deptFilter]);
 
   const handleCreate = async () => {
+    if (form.password.length < 12) {
+      toast.error("Password must be at least 12 characters");
+      return;
+    }
     setSaving(true);
     try {
       const payload = { ...form };
@@ -376,7 +380,7 @@ export default function EmployeesPage() {
 
             {!showEdit && (
               <div className="space-y-1.5">
-                <Label>Password</Label>
+                <Label>Password <span className="text-muted-foreground text-xs">(min 12 chars)</span></Label>
                 <Input data-testid="emp-password-input" type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
               </div>
             )}

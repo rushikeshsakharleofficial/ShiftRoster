@@ -35,11 +35,16 @@ from routes.chat import router as chat_router
 
 app = FastAPI(title="ShiftRoster API", version="2.0.0")
 
-# CORS - use permissive CORS since auth is via Bearer tokens
+# CORS - allow credentials for HTTP-only cookies
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=[
+        "https://bot.linuxhardened.com",
+        "http://72.62.231.43:8080",
+        "http://localhost:8080",
+        "http://localhost:3000"
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

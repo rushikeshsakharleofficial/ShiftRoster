@@ -45,10 +45,10 @@ class DisableMfaRequest(BaseModel):
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str, remember_me: bool = False):
     refresh_max_age = 2592000 if remember_me else 604800  # 30 days or 7 days
-    # Set secure=True for production security
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="lax", max_age=3600, path="/")
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="lax", max_age=refresh_max_age, path="/")
-    response.set_cookie(key="remember_me", value="1" if remember_me else "0", httponly=False, secure=True, samesite="lax", max_age=refresh_max_age, path="/")
+    # Set secure=False for testing; re-enable for production HTTPS
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=3600, path="/")
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax", max_age=refresh_max_age, path="/")
+    response.set_cookie(key="remember_me", value="1" if remember_me else "0", httponly=False, secure=False, samesite="lax", max_age=refresh_max_age, path="/")
 
 
 @router.post("/login")
@@ -320,7 +320,7 @@ async def refresh_token(request: Request, response: Response):
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         access_token = create_access_token(str(user["_id"]), user["email"])
-        response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="lax", max_age=3600, path="/")
+        response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=3600, path="/")
         return {"message": "Token refreshed"}
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token expired")

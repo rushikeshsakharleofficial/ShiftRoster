@@ -42,8 +42,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        REACT_APP_BACKEND_URL: ${PROTOCOL:-http}://${DOMAIN:-localhost}
     container_name: shiftroster-frontend
     restart: unless-stopped
     depends_on:
