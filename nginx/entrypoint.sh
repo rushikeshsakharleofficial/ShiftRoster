@@ -63,6 +63,7 @@ server {
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header X-Frame-Options SAMEORIGIN;
     add_header X-Content-Type-Options nosniff;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: http: https:; connect-src 'self' http: https: ws: wss:;";
 
 ${COMMON_LOCATIONS}
 }
@@ -79,6 +80,10 @@ server {
     ssl_certificate /etc/ssl/nginx/nginx-selfsigned.crt;
     ssl_certificate_key /etc/ssl/nginx/nginx-selfsigned.key;
     ssl_protocols TLSv1.2 TLSv1.3;
+
+    add_header X-Frame-Options SAMEORIGIN;
+    add_header X-Content-Type-Options nosniff;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: http: https:; connect-src 'self' http: https: ws: wss:;";
 
 ${COMMON_LOCATIONS}
 }

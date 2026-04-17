@@ -217,7 +217,7 @@ export function ChatProvider({ children }) {
 
   // Mute channel
   const muteChannel = useCallback(async (channelId, isMuted) => {
-    await api.post(`/chat/channels/${channelId}/mute`, { is_muted: isMuted });
+    await chatApi.muteChannel(channelId, { is_muted: isMuted });
     setChannels((prev) => prev.map((ch) => ch.id === channelId ? { ...ch, is_muted: isMuted } : ch));
   }, []);
 
@@ -377,6 +377,8 @@ export function ChatProvider({ children }) {
       loadChannels,
       userCache,
       updateCache,
+      leaveChannel,
+      muteChannel,
     }}>
       {children}
     </ChatContext.Provider>

@@ -30,9 +30,11 @@ import {
   ChevronRight, Send, Smile, Pencil, Trash2, Reply, X, MoreHorizontal,
   UserPlus, LogIn, LogOut, PanelRightOpen, PanelRightClose, Loader2,
   Paperclip, FileText, Download, Image as ImageIcon, Zap, Info,
-  Search as SearchIcon, UserCircle, Settings, Bell, Pin, Clock, AlertCircle, CheckCircle2
+  Search as SearchIcon, UserCircle, Settings, Bell, Pin, Clock, AlertCircle, CheckCircle2,
+  LayoutDashboard
 } from "lucide-react";
 import MediaMenu from "@/components/chat/MediaMenu";
+import ThemeToggle from "@/components/layout/ThemeToggle";
 import * as crypto from "@/lib/crypto";
 import { format, isSameDay } from "date-fns";
 
@@ -96,6 +98,7 @@ export default function ChatPage() {
     loadMessages, loadMoreMessages, sendMessage, editMessage, deleteMessage,
     reactToMessage, typingUsers, unreadCounts, markRead, createChannel,
     joinChannel, openDM, loadChannels, userCache, updateCache,
+    leaveChannel, muteChannel,
   } = useChat();
 
   // Layout State

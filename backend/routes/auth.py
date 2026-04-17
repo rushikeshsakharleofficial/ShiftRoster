@@ -61,10 +61,14 @@ async def login(data: LoginRequest, request: Request, response: Response):
     attempt = await db.login_attempts.find_one({"identifier": identifier})
     if attempt and attempt.get("count", 0) >= 5:
         lockout_until = attempt.get("locked_until")
-        if lockout_until and datetime.now(timezone.utc) < lockout_until:
-            raise HTTPException(status_code=429, detail="Too many login attempts. Try again in 15 minutes.")
-        else:
-            await db.login_attempts.delete_one({"identifier": identifier})
+        # Ensure lockout_until is aware for comparison
+        if lockout_until:
+            if lockout_until.tzinfo is None:
+                lockout_until = lockout_until.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) < lockout_until:
+                raise HTTPException(status_code=429, detail="Too many login attempts. Try again in 15 minutes.")
+            else:
+                await db.login_attempts.delete_one({"identifier": identifier})
 
     # Accept email OR username
     if "@" in raw:
