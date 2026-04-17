@@ -403,8 +403,27 @@ async def mandate_mfa(data: MandateMfaRequest, request: Request):
 @router.post("/{user_id}/avatar")
 async def upload_avatar(user_id: str, request: Request, file: UploadFile = File(...)):
     """Upload or replace a user's avatar image (max 5 MB, images only)."""
+    # --- IDOR Fix ---
+    # 1. Get current user and target user
     current = await get_current_user(request)
-    if current["system_role"] not in ("admin", "manager") and current["id"] != user_id:
+    target_user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 2. Authorization check
+    is_admin = current["system_role"] == "admin"
+    is_self = current["id"] == user_id
+    is_manager = current["system_role"] == "manager"
+    
+    allowed = False
+    if is_admin or is_self:
+        allowed = True
+    elif is_manager:
+        manager_dept_ids = await get_manager_dept_ids(current["id"], db)
+        if target_user.get("department_id") in manager_dept_ids:
+            allowed = True
+    
+    if not allowed:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     UPLOADS_DIR.mkdir(exist_ok=True)
