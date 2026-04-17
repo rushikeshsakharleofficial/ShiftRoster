@@ -577,13 +577,19 @@ async def update_organization(request: Request):
                    "work_week_start", "overtime_daily_threshold", "overtime_weekly_threshold",
                    "attendance_enabled",
                    "smtp_host", "smtp_port", "smtp_username", "smtp_password",
-                   "smtp_from_email", "smtp_from_name", "smtp_use_tls", "smtp_enabled"]
+                   "smtp_from_email", "smtp_from_name", "smtp_use_tls", "smtp_enabled",
+                   "chat_features", "purge_policy_days"]
     else:
         allowed = ["attendance_enabled"]
 
     update = {k: v for k, v in body.items() if k in allowed and v is not None}
     if "attendance_enabled" in body and body["attendance_enabled"] is False:
         update["attendance_enabled"] = False
+    
+    # Explicitly handle chat_features if present
+    if "chat_features" in body and is_admin:
+        update["chat_features"] = body["chat_features"]
+
     if "smtp_password" in body:
         update["smtp_password"] = body["smtp_password"]
     update["updated_at"] = datetime.now(timezone.utc)

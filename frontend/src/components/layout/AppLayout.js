@@ -16,6 +16,7 @@ import { notificationsApi, orgApi, usersApi } from "@/lib/api";
 import { useChat } from "@/contexts/ChatContext";
 import { getAvatarColor, cn } from "@/lib/utils";
 import FlipClock from "@/components/ui/flip-clock";
+import { Toggle, GooeyFilter } from "@/components/ui/liquid-toggle";
 import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
@@ -44,6 +45,7 @@ export default function AppLayout() {
   const [notifications, setNotifications] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [attendanceEnabled, setAttendanceEnabled] = useState(false);
+  const [chatFeatures, setChatFeatures] = useState({ encryption_enabled: false, gifs_enabled: false, disappearing_mode_enabled: false });
   const [orgBrand, setOrgBrand] = useState({ name: "ShiftRoster", logo_url: "" });
   const wsRef = useRef(null);
 
@@ -98,40 +100,44 @@ export default function AppLayout() {
   // WebSocket presence
   useEffect(() => {
     if (!user?.id || !BACKEND_URL) return;
-    const wsUrl = BACKEND_URL.replace(/^http/, "ws") + "/api/ws";
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    try {
+      const wsUrl = BACKEND_URL.replace(/^http/, "ws") + "/api/ws";
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-    // Expose to ChatPage / ChatContext for typing events (set immediately, before open)
-    window._appLayoutWsRef = ws;
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ user_id: user.id }));
-    };
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "presence_update") {
-          setOnlineUsers(msg.online_users || []);
-        } else if (msg.type && msg.type.startsWith("chat_")) {
-          // Dispatch to ChatContext via CustomEvent
-          window.dispatchEvent(new CustomEvent("ws:chat", { detail: msg }));
+      // Expose to ChatPage / ChatContext for typing events (set immediately, before open)
+      window._appLayoutWsRef = ws;
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ user_id: user.id }));
+      };
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === "presence_update") {
+            setOnlineUsers(msg.online_users || []);
+          } else if (msg.type && msg.type.startsWith("chat_")) {
+            // Dispatch to ChatContext via CustomEvent
+            window.dispatchEvent(new CustomEvent("ws:chat", { detail: msg }));
+          }
+        } catch {}
+      };
+
+      const heartbeat = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "heartbeat", current_view: window.location.pathname }));
         }
-      } catch {}
-    };
+      }, 30000);
 
-    const heartbeat = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "heartbeat", current_view: window.location.pathname }));
-      }
-    }, 30000);
-
-    return () => {
-      clearInterval(heartbeat);
-      ws.close();
-      if (window._appLayoutWsRef === ws) {
-        window._appLayoutWsRef = null;
-      }
-    };
+      return () => {
+        clearInterval(heartbeat);
+        ws.close();
+        if (window._appLayoutWsRef === ws) {
+          window._appLayoutWsRef = null;
+        }
+      };
+    } catch (err) {
+      console.error("WebSocket setup failed:", err);
+    }
   }, [user?.id]);
 
   const openProfile = () => {
@@ -230,7 +236,7 @@ export default function AppLayout() {
     { to: "/notifications", icon: Bell, label: "Notifications", show: true },
     { to: "/reports", icon: BarChart3, label: "Reports", show: isAdmin || isManager },
     { to: "/audit-log", icon: ScrollText, label: "Audit Log", show: isAdmin },
-    { to: "/settings", icon: Settings, label: "Settings", show: isAdmin || isManager },
+    { to: "/settings", icon: Settings, label: "Settings", show: true },
   ].filter((n) => n.show);
 
   const initials = user?.full_name
@@ -255,6 +261,7 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
+      <GooeyFilter />
       {/* Sidebar */}
       <aside
         data-testid="app-sidebar"
@@ -268,19 +275,17 @@ export default function AppLayout() {
       >
         {/* Logo */}
         <div className="flex flex-row items-center gap-2 px-4 h-14 border-b border-border shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0 overflow-hidden">
-            {orgBrand.logo_url ? (
+          {orgBrand.logo_url && (
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0 overflow-hidden">
               <img src={orgBrand.logo_url} alt="logo" className="w-full h-full object-cover rounded-lg" />
-            ) : (
-              <CalendarDays className="h-4 w-4 text-primary-foreground" />
-            )}
-          </div>
+            </div>
+          )}
           {sidebarOpen && <span className="font-bold text-base tracking-tight truncate">{orgBrand.name}</span>}
         </div>
 
         {/* Nav & Team Status */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <nav className="flex-none py-3 px-2 space-y-0.5">
+        <ScrollArea className="flex-1">
+          <nav className="py-3 px-2 space-y-0.5">
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
@@ -310,42 +315,40 @@ export default function AppLayout() {
 
           {/* Team Status Panel */}
           {sidebarOpen && (
-            <div className="flex-1 flex flex-col border-t border-border/50 min-h-0">
+            <div className="flex flex-col border-t border-border/50 min-h-0">
               <div className="px-5 py-3 flex items-center justify-between shrink-0">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Team Status</span>
                 <Badge variant="outline" className="text-[9px] h-4 px-1">{onlineUsers.length}</Badge>
               </div>
-              <ScrollArea className="flex-1">
-                <div className="px-2 pb-4 space-y-0.5">
-                  {onlineUsers.map((u) => (
-                    <div key={u.id} className="flex items-center gap-3 px-3 py-1.5 rounded-md hover:bg-accent/30 transition-colors group">
-                      <div className="relative shrink-0">
-                        <Avatar className="h-6 w-6">
-                          {u.avatar && <AvatarImage src={`${BACKEND_URL || ""}${u.avatar}`} />}
-                          <AvatarFallback className={`text-[8px] font-bold ${getAvatarColor(u.name || "User")}`}>
-                            {(u.name || "User").split(" ").map(n => n[0]).join("").slice(0,2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="absolute -bottom-1 -right-1 bg-[hsl(var(--sidebar-bg))] rounded-full p-0.5">
-                          {renderStatusIcon(u.status, "h-2 w-2")}
-                        </div>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium truncate leading-none">{u.name || "Unknown User"}</p>
-                        <p className="text-[9px] text-muted-foreground truncate mt-1 capitalize">{u.status === "active" ? (u.system_role || "Employee") : `On ${u.status}`}</p>
+              <div className="px-2 pb-4 space-y-0.5">
+                {onlineUsers.map((u) => (
+                  <div key={u.id} className="flex items-center gap-3 px-3 py-1.5 rounded-md hover:bg-accent/30 transition-colors group">
+                    <div className="relative shrink-0">
+                      <Avatar className="h-6 w-6">
+                        {u.avatar && <AvatarImage src={`${BACKEND_URL || ""}${u.avatar}`} />}
+                        <AvatarFallback className={`text-[8px] font-bold ${getAvatarColor(u.name || "User")}`}>
+                          {(u.name || "User").split(" ").map(n => n[0]).join("").slice(0,2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="absolute -bottom-1 -right-1 bg-[hsl(var(--sidebar-bg))] rounded-full p-0.5">
+                        {renderStatusIcon(u.status, "h-2 w-2")}
                       </div>
                     </div>
-                  ))}
-                  {onlineUsers.length === 0 && (
-                    <div className="px-3 py-4 text-center">
-                      <p className="text-[10px] text-muted-foreground italic">No one else online</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate leading-none">{u.name || "Unknown User"}</p>
+                      <p className="text-[9px] text-muted-foreground truncate mt-1 capitalize">{u.status === "active" ? (u.system_role || "Employee") : `On ${u.status}`}</p>
                     </div>
-                  )}
-                </div>
-              </ScrollArea>
+                  </div>
+                ))}
+                {onlineUsers.length === 0 && (
+                  <div className="px-3 py-4 text-center">
+                    <p className="text-[10px] text-muted-foreground italic">No one else online</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
-        </div>
+        </ScrollArea>
 
         {/* User section */}
         <div className="border-t border-border p-3 shrink-0">

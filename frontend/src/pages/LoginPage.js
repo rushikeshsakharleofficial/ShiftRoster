@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { authApi, formatApiError } from "@/lib/api";
+import { authApi, orgApi, formatApiError } from "@/lib/api";
 import { CalendarDays, ArrowRight, Loader2, Shield, KeyRound, Eye, EyeOff, Check } from "lucide-react";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 
@@ -42,6 +42,16 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [orgBrand, setOrgBrand] = useState({ name: "ShiftRoster", logo_url: "" });
+
+  useEffect(() => {
+    orgApi.get().then(({ data }) => {
+      setOrgBrand({ 
+        name: data.brand_name || data.name || "ShiftRoster", 
+        logo_url: data.logo_url || "" 
+      });
+    }).catch(() => {});
+  }, []);
 
   // MFA state
   const [mfaStep, setMfaStep] = useState(null); // null | 'verify' | 'setup'
@@ -298,11 +308,13 @@ export default function LoginPage() {
         />
 
         <div className="relative z-10 max-w-[440px] w-full">
-          <div className="w-[72px] h-[72px] rounded-2xl bg-primary/10 border border-primary/25 flex items-center justify-center mb-8">
-            <CalendarDays size={48} className="text-primary" />
-          </div>
+          {orgBrand.logo_url && (
+            <div className="w-[72px] h-[72px] rounded-2xl bg-primary/10 border border-primary/25 flex items-center justify-center mb-8 overflow-hidden">
+              <img src={orgBrand.logo_url} alt="logo" className="w-full h-full object-cover" />
+            </div>
+          )}
 
-          <h1 className="text-[2.25rem] font-bold tracking-[-0.03em] text-foreground mb-3 leading-[1.15]">ShiftRoster</h1>
+          <h1 className="text-[2.25rem] font-bold tracking-[-0.03em] text-foreground mb-3 leading-[1.15]">{orgBrand.name}</h1>
           <p className="text-base text-muted-foreground leading-relaxed mb-10">
             Intelligent shift management<br />for modern teams.
           </p>
@@ -328,10 +340,12 @@ export default function LoginPage() {
         <div className="bg-card border border-border rounded-2xl p-8 w-full max-w-[420px]">
           {/* Mobile logo (hidden on lg+) */}
           <div className="flex lg:hidden items-center gap-2 mb-6 text-foreground">
-            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-              <CalendarDays size={18} className="text-primary" />
-            </div>
-            <span className="font-bold text-[1.1rem] tracking-[-0.02em]">ShiftRoster</span>
+            {orgBrand.logo_url && (
+              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
+                <img src={orgBrand.logo_url} alt="logo" className="w-full h-full object-cover" />
+              </div>
+            )}
+            <span className="font-bold text-[1.1rem] tracking-[-0.02em]">{orgBrand.name}</span>
           </div>
 
           <h2 className="text-[1.625rem] font-bold tracking-[-0.025em] text-foreground mb-1.5">Welcome back</h2>

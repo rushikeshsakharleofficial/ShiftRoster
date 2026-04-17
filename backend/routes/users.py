@@ -32,6 +32,8 @@ class CreateUserRequest(BaseModel):
     employment_type: str = "full_time"
     skills: List[str] = []
     mfa_mandated: bool = False
+    disappearing_timer: Optional[str] = None
+    public_key: Optional[str] = None
 
 
 class UpdateUserRequest(BaseModel):
@@ -48,6 +50,8 @@ class UpdateUserRequest(BaseModel):
     skills: Optional[List[str]] = None
     status: Optional[str] = None
     mfa_mandated: Optional[bool] = None
+    disappearing_timer: Optional[str] = None
+    public_key: Optional[str] = None
 
 
 class ChangeLevelRequest(BaseModel):
@@ -67,8 +71,7 @@ async def list_users(
     limit: int = 50,
 ):
     current = await get_current_user(request)
-    if current["system_role"] not in ("admin", "manager"):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    is_admin_or_mgr = current["system_role"] in ("admin", "manager")
 
     query = {"org_id": current.get("org_id")}
     if role:
@@ -79,7 +82,6 @@ async def list_users(
         mgr_depts = await get_manager_dept_ids(current["id"], db)
         allowed = set(mgr_depts)
         if department_id:
-            # Further filter to only the requested dept if it's in their scope
             if department_id in allowed:
                 query["department_id"] = department_id
             else:
@@ -94,7 +96,7 @@ async def list_users(
     if status:
         query["status"] = status
     if search:
-        # Sanitize regex special characters to prevent ReDoS
+        import re
         safe_search = re.escape(search)
         query["$or"] = [
             {"full_name": {"$regex": safe_search, "$options": "i"}},
@@ -102,8 +104,17 @@ async def list_users(
             {"username": {"$regex": safe_search, "$options": "i"}},
         ]
 
-    users = await db.users.find(query, {"password_hash": 0}).skip(skip).limit(limit).to_list(limit)
+    # If employee, they can only see basic info of others in the same org
+    projection = {"password_hash": 0}
+    if not is_admin_or_mgr:
+        projection = {
+            "id": 1, "full_name": 1, "username": 1, "avatar_url": 1, 
+            "department_id": 1, "system_role": 1, "status": 1
+        }
+
+    users = await db.users.find(query, projection).skip(skip).limit(limit).to_list(limit)
     total = await db.users.count_documents(query)
+    
     return {"users": serialize_list(users), "total": total}
 
 
@@ -148,6 +159,8 @@ async def create_user(data: CreateUserRequest, request: Request):
         "mfa_enabled": False,
         "mfa_mandated": data.mfa_mandated,
         "mfa_secret": None,
+        "disappearing_timer": data.disappearing_timer,
+        "public_key": data.public_key,
         "created_by": current["id"],
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),

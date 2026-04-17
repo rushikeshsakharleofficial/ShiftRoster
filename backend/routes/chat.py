@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, Query, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from db import db
 from auth_utils import get_current_user, create_notification
@@ -32,6 +32,9 @@ class MessageCreate(BaseModel):
     file_name: Optional[str] = None
     file_size: Optional[int] = None
     file_type: Optional[str] = None
+    is_encrypted: bool = False
+    encrypted_keys: Optional[dict] = None
+    iv: Optional[str] = None
 
 
 class MessageEdit(BaseModel):
@@ -112,6 +115,21 @@ def _user_initials(name: str) -> str:
     if not parts:
         return "?"
     return "".join(p[0] for p in parts[:2]).upper()
+
+
+def _parse_timer(timer_str: str) -> Optional[timedelta]:
+    if not timer_str:
+        return None
+    try:
+        if timer_str.endswith("d"):
+            return timedelta(days=int(timer_str[:-1]))
+        if timer_str.endswith("h"):
+            return timedelta(hours=int(timer_str[:-1]))
+        if timer_str.endswith("m"):
+            return timedelta(minutes=int(timer_str[:-1]))
+    except Exception:
+        pass
+    return None
 
 
 # ── Channel Endpoints ──
@@ -527,6 +545,19 @@ async def send_channel_message(channel_id: str, data: MessageCreate, request: Re
             pass
 
     now = datetime.now(timezone.utc)
+    
+    # Calculate expires_at for disappearing mode
+    expires_at = None
+    try:
+        org = await db.organizations.find_one({"_id": ObjectId(org_id)})
+        chat_features = org.get("chat_features", {})
+        if chat_features.get("disappearing_mode_enabled"):
+            timer = _parse_timer(user.get("disappearing_timer"))
+            if timer:
+                expires_at = now + timer
+    except Exception:
+        pass
+
     msg_doc = {
         "org_id": org_id,
         "channel_id": channel_id,
@@ -538,8 +569,14 @@ async def send_channel_message(channel_id: str, data: MessageCreate, request: Re
         "type": "file" if data.file_url and not text else "text",
         "reply_to": reply_to,
         "reactions": [],
+        "is_encrypted": data.is_encrypted,
+        "encrypted_keys": data.encrypted_keys,
+        "iv": data.iv,
         "created_at": now,
     }
+    if expires_at:
+        msg_doc["expires_at"] = expires_at
+
     if data.file_url:
         msg_doc["file_url"] = data.file_url
         msg_doc["file_name"] = data.file_name or ""
@@ -930,6 +967,19 @@ async def send_dm_message(dm_id: str, data: MessageCreate, request: Request):
             pass
 
     now = datetime.now(timezone.utc)
+    
+    # Calculate expires_at for disappearing mode
+    expires_at = None
+    try:
+        org = await db.organizations.find_one({"_id": ObjectId(org_id)})
+        chat_features = org.get("chat_features", {})
+        if chat_features.get("disappearing_mode_enabled"):
+            timer = _parse_timer(user.get("disappearing_timer"))
+            if timer:
+                expires_at = now + timer
+    except Exception:
+        pass
+
     msg_doc = {
         "org_id": org_id,
         "channel_id": dm_id,
@@ -941,8 +991,14 @@ async def send_dm_message(dm_id: str, data: MessageCreate, request: Request):
         "type": "file" if data.file_url and not text else "text",
         "reply_to": reply_to,
         "reactions": [],
+        "is_encrypted": data.is_encrypted,
+        "encrypted_keys": data.encrypted_keys,
+        "iv": data.iv,
         "created_at": now,
     }
+    if expires_at:
+        msg_doc["expires_at"] = expires_at
+
     if data.file_url:
         msg_doc["file_url"] = data.file_url
         msg_doc["file_name"] = data.file_name or ""

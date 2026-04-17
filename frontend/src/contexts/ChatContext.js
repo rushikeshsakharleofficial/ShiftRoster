@@ -113,11 +113,12 @@ export function ChatProvider({ children }) {
   }, []);
 
   // Send message
-  const sendMessage = useCallback(async (channelId, text, replyToId = null, isChannel = true, fileData = null) => {
+  const sendMessage = useCallback(async (channelId, text, replyToId = null, isChannel = true, fileData = null, extraPayload = {}) => {
     try {
       const payload = {
         text: text || "",
         reply_to_id: replyToId || undefined,
+        ...extraPayload,
         ...(fileData ? {
           file_url: fileData.url,
           file_name: fileData.file_name,

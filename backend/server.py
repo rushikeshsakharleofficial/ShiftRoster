@@ -34,6 +34,7 @@ from routes.sticky_notes import router as sticky_notes_router
 from routes.chat import router as chat_router
 from routes.handovers import router as handovers_router
 from routes.tasks import router as tasks_router
+from tasks.purging import run_purging_task
 
 app = FastAPI(title="ShiftRoster API", version="2.0.0")
 
@@ -341,6 +342,8 @@ async def startup():
     await db.audit_logs.create_index([("entity", 1), ("entity_id", 1)])
     await db.sticky_notes.create_index([("org_id", 1), ("note_date", 1)])
     await db.sticky_notes.create_index([("user_id", 1)])
+    await db.tasks.create_index([("org_id", 1), ("assigned_to", 1), ("status", 1)])
+    await db.handovers.create_index([("org_id", 1), ("created_at", -1)])
 
     # Chat indexes
     await db.chat_channels.create_index([("org_id", 1), ("type", 1)])
@@ -350,6 +353,12 @@ async def startup():
     await db.chat_read_receipts.create_index(
         [("channel_id", 1), ("user_id", 1)], unique=True
     )
+    
+    # TTL for expiring messages
+    await db.chat_messages.create_index("expires_at", expireAfterSeconds=0)
+
+    # Start background tasks
+    asyncio.create_task(run_purging_task())
 
     logger.info("ShiftRoster API started successfully")
 

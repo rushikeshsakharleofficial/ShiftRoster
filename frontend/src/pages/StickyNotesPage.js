@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Toggle } from "@/components/ui/liquid-toggle";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
@@ -643,7 +643,7 @@ export default function StickyNotesPage() {
                     {form.is_public ? <Globe className="h-4 w-4 text-primary" /> : <Lock className="h-4 w-4 text-muted-foreground" />}
                     <span className="text-sm font-medium">{form.is_public ? "Public" : "Private"}</span>
                   </div>
-                  <Switch
+                  <Toggle
                     checked={form.is_public}
                     onCheckedChange={(v) => setForm({ ...form, is_public: v })}
                     onClick={(e) => e.stopPropagation()}
@@ -658,7 +658,7 @@ export default function StickyNotesPage() {
                     <Pin className={cn("h-4 w-4", form.pinned ? "text-primary" : "text-muted-foreground")} />
                     <span className="text-sm font-medium">Pinned</span>
                   </div>
-                  <Switch
+                  <Toggle
                     checked={form.pinned}
                     onCheckedChange={(v) => setForm({ ...form, pinned: v })}
                     onClick={(e) => e.stopPropagation()}

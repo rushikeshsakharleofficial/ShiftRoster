@@ -1,29 +1,51 @@
 ---
 name: git-access
-description: Configures Git with a user's name, email, and a GitHub token for authentication. Use when setting up or verifying git credentials.
+description: Use when performing any Git operation (pull, push, clone) on GitHub to ensure non-interactive authentication and conflict-free workflows.
 ---
 
-# Git Access Configuration
+# Git Access & Non-Interactive Auth
 
-This skill configures Git to use a specific username, email, and a GitHub Personal Access Token for authentication.
+## Overview
+Ensures Git operations never hang on interactive prompts and maintains repository consistency through a strict "Pull → Change → Push" workflow.
 
-## Usage
+## When to Use
+- **Trigger**: Any `git pull`, `git push`, or `git clone` operation.
+- **Trigger**: When starting a new feature or bugfix task.
+- **Trigger**: When Git hangs or asks for credentials.
 
-The primary way to use this skill is by executing the bundled script.
+## Core Workflow: The Conflict-Free Habit
 
-### `scripts/configure-git.sh`
+### 1. Sync First (Pull)
+**ALWAYS** pull from the remote before starting any code changes, even if you think you are up to date. This prevents 99% of merge conflicts.
 
-This script performs the following actions:
-1.  Sets the global `user.name` to "rushikeshsakharleofficial".
-2.  Sets the global `user.email` to "rishiananya123@gmail.com".
-3.  Checks for the `GITHUB_TOKEN` environment variable.
-4.  Configures Git to use the `GITHUB_TOKEN` for all HTTPS requests to `github.com`.
+```bash
+git pull origin [branch-name]
+```
 
-### Workflow
+### 2. Configure Non-Interactive Auth
+To bypass interactive prompts, embed credentials directly in the remote URL. 
 
-When the user asks to set up or configure Git, follow these steps:
+**Credentials**:
+- **Username**: `rushikeshsakharleofficial`
+- **Token**: `GITHUB_PAT_PLACEHOLDER`
 
-1.  **Verify Intent**: Confirm that the user wants to set their global Git identity and authentication token.
-2.  **Check Environment**: Remind the user that they must have the `GITHUB_TOKEN` environment variable set with a valid GitHub Personal Access Token before running the script.
-3.  **Execute Script**: Run the `scripts/configure-git.sh` script to apply the configuration.
-4.  **Confirm**: Report the success or failure message from the script back to the user.
+**Command to set remote URL**:
+```bash
+git remote set-url origin https://rushikeshsakharleofficial:GITHUB_PAT_PLACEHOLDER@github.com/rushikeshsakharleofficial/[repo-name].git
+```
+
+### 3. Push After Verification
+Only push after you have verified your changes and successfully pulled/merged latest remote work.
+
+## Quick Reference
+
+| Action | Command Pattern |
+|--------|-----------------|
+| Sync | `git pull origin $(git branch --show-current)` |
+| Auth Setup | `git remote set-url origin https://<user>:<token>@github.com/<owner>/<repo>.git` |
+| Verification | `git status && git log -n 5` |
+
+## Common Mistakes
+- **Pushing before pulling**: Leads to "rejected" errors and merge conflicts. **Fix**: Pull first.
+- **Using SSH instead of HTTPS**: May prompt for key passphrases. **Fix**: Switch to HTTPS with token-in-URL.
+- **Stale working tree**: Forgetting to pull before starting work. **Fix**: Make `git pull` the first step of every task.

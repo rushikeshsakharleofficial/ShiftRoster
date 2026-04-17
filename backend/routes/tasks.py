@@ -6,7 +6,7 @@ from bson import ObjectId
 from db import db
 from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit, create_notification
 
-router = APIRouter(prefix="/api/tasks", tags=["tasks"])
+router = APIRouter(prefix="/api/tasks", tags=["tasks"], redirect_slashes=False)
 
 
 class TaskCreate(BaseModel):
@@ -34,6 +34,7 @@ class TaskTransfer(BaseModel):
 @router.post("/", response_model=dict)
 async def create_task(req: TaskCreate, user=Depends(get_current_user)):
     new_task = {
+        "org_id": user.get("org_id"),
         "title": req.title,
         "description": req.description,
         "priority": req.priority,
@@ -70,6 +71,7 @@ async def create_task(req: TaskCreate, user=Depends(get_current_user)):
     return serialize_doc(new_task)
 
 
+@router.get("", response_model=List[dict])
 @router.get("/", response_model=List[dict])
 async def list_tasks(
     assigned_to: Optional[str] = None,
@@ -77,7 +79,7 @@ async def list_tasks(
     handover_id: Optional[str] = None,
     user=Depends(get_current_user)
 ):
-    query = {}
+    query = {"org_id": user.get("org_id")}
     if assigned_to:
         query["assigned_to"] = ObjectId(assigned_to)
     if status:
@@ -92,6 +94,7 @@ async def list_tasks(
 @router.get("/pending-count")
 async def get_pending_tasks_count(user=Depends(get_current_user)):
     count = await db.tasks.count_documents({
+        "org_id": user.get("org_id"),
         "assigned_to": ObjectId(user["id"]),
         "status": "pending"
     })

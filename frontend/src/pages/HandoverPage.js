@@ -386,7 +386,13 @@ function TaskCard({ task, onComplete, onTransfer, onShowAudit, getUserName, isDe
             {task.due_date && (
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Clock className="h-3 w-3" />
-                <span>{format(new Date(task.due_date), "MMM d, p")}</span>
+                <span>{(() => {
+                  try {
+                    return format(new Date(task.due_date), "MMM d, p");
+                  } catch (e) {
+                    return "Invalid date";
+                  }
+                })()}</span>
               </div>
             )}
           </div>

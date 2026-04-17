@@ -21,6 +21,7 @@ import StickyNotesPage from "@/pages/StickyNotesPage";
 import ShiftTemplatesPage from "@/pages/ShiftTemplatesPage";
 import HandoverPage from "@/pages/HandoverPage";
 import ChatPage from "@/pages/ChatPage";
+import ChatLayout from "@/components/layout/ChatLayout";
 import { ChatProvider } from "@/contexts/ChatContext";
 import { Toaster } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -100,7 +101,18 @@ export default function App() {
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/audit-log" element={<AuditLogPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+          </Route>
+
+          {/* Standalone Full-Screen Chat */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <ChatLayout />
+              </ProtectedRoute>
+            }
+          >
             <Route path="/chat" element={<ChatPage />} />
+            <Route path="/chat/:channelId" element={<ChatPage />} />
           </Route>
 
           {/* Catch all */}

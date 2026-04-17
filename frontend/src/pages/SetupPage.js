@@ -104,9 +104,11 @@ export default function SetupPage() {
       <div className="flex-1 flex items-center justify-center p-6 md:p-12">
         <div className="w-full max-w-md">
           <div className="flex items-center gap-2 mb-8">
-            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-              <CalendarDays className="h-5 w-5 text-primary-foreground" />
-            </div>
+            {form.logo_url && (
+              <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center overflow-hidden">
+                <img src={form.logo_url} alt="logo" className="w-full h-full object-cover" />
+              </div>
+            )}
             <div>
               <span className="text-xl font-semibold tracking-tight">ShiftRoster</span>
               <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Open Source</p>
@@ -275,11 +277,19 @@ export default function SetupPage() {
       {/* Right panel - Visual */}
       <div className="hidden lg:flex flex-1 items-center justify-center bg-primary/5 relative overflow-hidden">
         <div className="relative z-10 max-w-md text-center px-8">
-          <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
-            <CalendarDays className="h-10 w-10 text-primary" />
-          </div>
+          {form.logo_url ? (
+            <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6 overflow-hidden">
+              <img src={form.logo_url} alt="logo" className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className="w-20 h-20 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-6">
+               <span className="text-primary-foreground text-3xl font-bold">
+                 {(form.org_name || "S").substring(0, 1).toUpperCase()}
+               </span>
+            </div>
+          )}
           <h2 className="text-2xl font-semibold tracking-tight mb-3">
-            Welcome to ShiftRoster
+            Welcome to {form.org_name || "ShiftRoster"}
           </h2>
           <p className="text-muted-foreground text-sm leading-relaxed mb-4">
             Open source shift roster and management dashboard. Streamline scheduling,

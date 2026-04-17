@@ -1,31 +1,39 @@
 #!/bin/bash
-# Configures Git user and authentication.
+# Configures Git for non-interactive authentication.
 
-# Exit immediately if a command exits with a non-zero status.
 set -e
 
 USERNAME="rushikeshsakharleofficial"
+TOKEN="GITHUB_PAT_PLACEHOLDER"
 EMAIL="rishiananya123@gmail.com"
 
-echo "Configuring Git with user: $USERNAME and email: $EMAIL..."
-
-# Configure git user name and email
+echo "Setting global Git user..."
 git config --global user.name "$USERNAME"
 git config --global user.email "$EMAIL"
 
-echo "Checking for GITHUB_TOKEN environment variable..."
+# Detect the current remote URL
+CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
 
-# Check for token in env var
-if [ -z "$GITHUB_TOKEN" ]; then
-  echo "Error: The GITHUB_TOKEN environment variable is not set."
-  echo "Please set it to your GitHub Personal Access Token."
-  exit 1
+if [[ -n "$CURRENT_REMOTE" ]]; then
+    echo "Current remote: $CURRENT_REMOTE"
+    
+    # Check if already authenticated with token
+    if [[ "$CURRENT_REMOTE" == *"$TOKEN"* ]]; then
+        echo "Git is already configured with token-based URL."
+    else
+        # Construct the new URL
+        # Strip existing auth if present (user:pass@ or user@)
+        CLEAN_URL=$(echo "$CURRENT_REMOTE" | sed -E 's/https?:\/\/[^@]+@/https:\/\//')
+        
+        # Insert new auth
+        AUTH_URL=$(echo "$CLEAN_URL" | sed -E "s|https?://|https://$USERNAME:$TOKEN@|")
+        
+        echo "Updating origin to use non-interactive authentication..."
+        git remote set-url origin "$AUTH_URL"
+        echo "Remote updated."
+    fi
+else
+    echo "Warning: No 'origin' remote found. Run this inside a git repository."
 fi
 
-echo "Configuring Git to use GITHUB_TOKEN for authentication..."
-
-# Configure git to use the token for HTTPS authentication with GitHub
-git config --global http.https://github.com/.extraheader "AUTHORIZATION: bearer $GITHUB_TOKEN"
-
 echo "Git configuration complete."
-echo "Git will now use your token for authentication with github.com."
