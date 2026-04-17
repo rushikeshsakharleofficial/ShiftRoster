@@ -19,6 +19,7 @@ import AuditLogPage from "@/pages/AuditLogPage";
 import SettingsPage from "@/pages/SettingsPage";
 import StickyNotesPage from "@/pages/StickyNotesPage";
 import ShiftTemplatesPage from "@/pages/ShiftTemplatesPage";
+import HandoverPage from "@/pages/HandoverPage";
 import ChatPage from "@/pages/ChatPage";
 import { ChatProvider } from "@/contexts/ChatContext";
 import { Toaster } from "sonner";
@@ -94,6 +95,7 @@ export default function App() {
             <Route path="/swap-requests" element={<SwapRequestsPage />} />
             <Route path="/sticky-notes" element={<StickyNotesPage />} />
             <Route path="/shift-templates" element={<ShiftTemplatesPage />} />
+            <Route path="/handovers" element={<HandoverPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/audit-log" element={<AuditLogPage />} />

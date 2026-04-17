@@ -224,6 +224,23 @@ export const holidaysApi = {
   create: (data) => api.post("/public-holidays", data),
 };
 
+// Handovers
+export const handoversApi = {
+  list: () => api.get("/handovers"),
+  create: (data) => api.post("/handovers", data),
+  complete: (id) => api.post(`/handovers/${id}/complete`),
+};
+
+// Tasks
+export const tasksApi = {
+  list: (params) => api.get("/tasks", { params }),
+  create: (data) => api.post("/tasks", data),
+  update: (id, data) => api.put(`/tasks/${id}`, data),
+  transfer: (id, data) => api.post(`/tasks/${id}/transfer`, data),
+  complete: (id) => api.post(`/tasks/${id}/complete`),
+  getPendingCount: () => api.get("/tasks/pending-count"),
+};
+
 // Chat
 export const chatApi = {
   // Channels

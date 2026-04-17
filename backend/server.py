@@ -32,6 +32,8 @@ from routes.leave import router as leave_router
 from routes.operations import router as operations_router
 from routes.sticky_notes import router as sticky_notes_router
 from routes.chat import router as chat_router
+from routes.handovers import router as handovers_router
+from routes.tasks import router as tasks_router
 
 app = FastAPI(title="ShiftRoster API", version="2.0.0")
 
@@ -62,6 +64,8 @@ app.include_router(leave_router)
 app.include_router(operations_router)
 app.include_router(sticky_notes_router)
 app.include_router(chat_router)
+app.include_router(handovers_router)
+app.include_router(tasks_router)
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
