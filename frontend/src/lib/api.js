@@ -218,6 +218,14 @@ export const orgApi = {
   testEmail: (recipient_email) => api.post("/organization/test-email", { recipient_email }),
 };
 
+// Announcements
+export const announcementsApi = {
+  list: () => api.get("/announcements"),
+  listActive: () => api.get("/announcements/active"),
+  create: (data) => api.post("/announcements", data),
+  delete: (id) => api.delete(`/announcements/${id}`),
+};
+
 // Holidays
 export const holidaysApi = {
   list: () => api.get("/public-holidays"),
@@ -249,6 +257,7 @@ export const chatApi = {
   getChannel: (id) => api.get(`/chat/channels/${id}`),
   joinChannel: (id) => api.post(`/chat/channels/${id}/join`),
   leaveChannel: (id) => api.post(`/chat/channels/${id}/leave`),
+  muteChannel: (id, data) => api.post(`/chat/channels/${id}/mute`, data),
   inviteToChannel: (id, data) => api.post(`/chat/channels/${id}/invite`, data),
   getChannelMembers: (id) => api.get(`/chat/channels/${id}/members`),
   getChannelMessages: (id, params) => api.get(`/chat/channels/${id}/messages`, { params }),

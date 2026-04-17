@@ -250,11 +250,202 @@ async def disable_mfa(data: DisableMfaRequest, request: Request):
     return {"message": "MFA disabled", "mfa_enabled": False}
 
 
+class RecoveryRequest(BaseModel):
+    email: str
+    message: Optional[str] = None
+
+
+@router.post("/forgot-password")
+async def forgot_password_request(data: RecoveryRequest, request: Request):
+    """User forgot password. Send email if SMTP is up, else alert manager."""
+    from auth_utils import generate_setup_token, hash_setup_token
+    from email_utils import send_email
+
+    user = await db.users.find_one({"email": data.email.lower().strip()})
+    if not user:
+        return {"message": "If this account exists, instructions have been sent."}
+
+    org = await db.organizations.find_one({"_id": ObjectId(user["org_id"])})
+    token = generate_setup_token()
+    expires = datetime.now(timezone.utc) + timedelta(hours=2) # Shorter window for resets
+    
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {
+            "password_setup_token": hash_setup_token(token),
+            "password_setup_expires": expires,
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+
+    origin = request.headers.get("origin", "https://bot.linuxhardened.com")
+    reset_link = f"{origin}/setup-password?token={token}"
+    
+    smtp_success = False
+    if org.get("smtp_enabled"):
+        html = f"""
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+            <h2 style="color: #4f46e5;">Password Reset Request</h2>
+            <p>Hello {user['full_name']},</p>
+            <p>We received a request to reset your ShiftMaster password.</p>
+            <div style="margin: 30px 0;">
+                <a href="{reset_link}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Reset Password</a>
+            </div>
+            <p>This link will expire in 2 hours. If you did not request this, please ignore this email.</p>
+        </div>
+        """
+        smtp_success = await send_email(org, user["email"], "Password Reset Request", html)
+
+    # Notify managers regardless, so they can manually provide the link if needed
+    managers = await db.users.find({
+        "org_id": user["org_id"], 
+        "system_role": {"$in": ["admin", "manager"]}
+    }).to_list(10)
+
+    for mgr in managers:
+        await create_notification(
+            user_id=str(mgr["_id"]),
+            ntype="security",
+            title="Password Reset Request",
+            body=f"{user['full_name']} requested a password reset. Link: {reset_link if not smtp_success else 'Sent via Email'}",
+            link=f"/settings?tab=security"
+        )
+
+    return {"message": "If this account exists, instructions have been sent."}
+
+@router.post("/mfa-recovery-request")
+async def request_mfa_recovery(data: RecoveryRequest):
+    """User has lost MFA access. Send alert to their manager/admin."""
+    user = await db.users.find_one({"email": data.email.lower().strip()})
+    if not user:
+        # Don't leak user existence
+        return {"message": "If this account exists, a recovery request has been sent to your manager."}
+    
+    if not user.get("mfa_enabled"):
+        return {"message": "MFA is not enabled for this account."}
+
+    # Find managers
+    managers = []
+    if user.get("department_id"):
+        # Users in a department report to their department managers
+        # (Simplified: list all managers in the org for now, or specific ones)
+        cursor = db.users.find({"org_id": user["org_id"], "system_role": {"$in": ["manager", "admin"]}})
+        managers = await cursor.to_list(20)
+    else:
+        # No department? Report to admins
+        cursor = db.users.find({"org_id": user["org_id"], "system_role": "admin"})
+        managers = await cursor.to_list(20)
+
+    for mgr in managers:
+        await create_notification(
+            user_id=str(mgr["_id"]),
+            ntype="mfa_recovery",
+            title="MFA Recovery Request",
+            body=f"User {user['full_name']} (@{user['username']}) is requesting an MFA reset. Reason: {data.message or 'Lost access'}",
+            link=f"/settings?tab=security&reset_user={user['_id']}"
+        )
+        
+        # Log audit
+        await log_audit(
+            org_id=user["org_id"],
+            actor_id=str(user["_id"]),
+            action="mfa_recovery_requested",
+            entity="user",
+            entity_id=str(user["_id"]),
+            diff={"manager_id": str(mgr["_id"])}
+        )
+
+    return {"message": "If this account exists, a recovery request has been sent to your manager."}
+
+
+
 @router.post("/logout")
 async def logout(response: Response):
     response.delete_cookie("access_token", path="/")
     response.delete_cookie("refresh_token", path="/")
     return {"message": "Logged out"}
+
+
+@router.post("/admin/reset-user-mfa/{user_id}")
+async def admin_reset_mfa(user_id: str, request: Request):
+    """Admin/Manager resets a user's MFA."""
+    from auth_utils import get_current_user
+    current = await get_current_user(request)
+    
+    if current["system_role"] not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    user = await db.users.find_one({"_id": ObjectId(user_id), "org_id": current["org_id"]})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {
+            "mfa_enabled": False, 
+            "mfa_secret": None, 
+            "mfa_backup_codes": [],
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    await log_audit(
+        org_id=current["org_id"],
+        actor_id=current["id"],
+        action="mfa_reset_by_admin",
+        entity="user",
+        entity_id=user_id,
+        diff={"user_email": user["email"]}
+    )
+    
+    await create_notification(
+        user_id=user_id,
+        ntype="system",
+        title="MFA Reset",
+        body=f"Your MFA has been reset by {current['full_name']}. Please set it up again next time you log in."
+    )
+
+    return {"message": f"MFA for {user['full_name']} has been reset."}
+
+
+class SetupPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+
+@router.post("/setup-password")
+async def setup_password(data: SetupPasswordRequest):
+    """New user sets their password for the first time using a secure token."""
+    from auth_utils import hash_password, hash_setup_token
+    
+    hashed_token = hash_setup_token(data.token)
+    user = await db.users.find_one({
+        "password_setup_token": hashed_token,
+        "password_setup_expires": {"$gt": datetime.now(timezone.utc)}
+    })
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired setup token")
+    
+    if len(data.password) < 12:
+        raise HTTPException(status_code=400, detail="Password must be at least 12 characters")
+
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {
+            "password_hash": hash_password(data.password),
+            "password_setup_token": None,
+            "password_setup_expires": None,
+            "status": "active",
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    await log_audit(user["org_id"], str(user["_id"]), "setup_password", "user", str(user["_id"]))
+    
+    return {"message": "Password set successfully. You can now log in."}
+
+
 
 
 @router.get("/me")

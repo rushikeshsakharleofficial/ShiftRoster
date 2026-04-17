@@ -60,6 +60,30 @@ export default function LoginPage() {
   const [mfaSetupData, setMfaSetupData] = useState(null);
   const [mfaSecret, setMfaSecret] = useState("");
 
+  // Recovery state
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryMessage, setRecoveryMessage] = useState("");
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoverySent, setRecoverySent] = useState(false);
+  const [recoveryType, setRecoveryType] = useState("mfa"); // 'mfa' | 'password'
+
+  const handleRecoveryRequest = async () => {
+    setRecoveryLoading(true);
+    try {
+      const endpoint = recoveryType === "password" ? "/forgot-password" : "/mfa-recovery-request";
+      await authApi.post(endpoint, { 
+        email: recoveryEmail || email, 
+        message: recoveryMessage 
+      });
+      setRecoverySent(true);
+    } catch (err) {
+      setError(formatApiError(err));
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -197,7 +221,69 @@ export default function LoginPage() {
             >
               Back to login
             </button>
+            
+            <button
+              type="button"
+              onClick={() => {
+                setRecoveryEmail(email);
+                setRecoveryOpen(true);
+                setRecoverySent(false);
+              }}
+              className="w-full mt-4 text-xs text-muted-foreground hover:text-primary transition-colors font-medium underline-offset-4 hover:underline"
+            >
+              Lost MFA access?
+            </button>
           </form>
+
+          {/* Recovery Dialog */}
+          {recoveryOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-background/80 backdrop-blur-sm animate-in fade-in">
+              <div className="bg-card border border-border rounded-2xl p-8 w-full max-w-[420px] shadow-2xl animate-in zoom-in-95 duration-200">
+                <h2 className="text-xl font-bold mb-2">Request MFA Reset</h2>
+                <p className="text-sm text-muted-foreground mb-6">
+                  {recoverySent 
+                    ? "Your request has been sent. Your manager or admin will contact you once it's reviewed."
+                    : "If you've lost your device and backup codes, enter your email below to request a manual reset from your manager."
+                  }
+                </p>
+
+                {!recoverySent ? (
+                  <div className="space-y-4 text-left">
+                    <div className="space-y-1.5">
+                      <label className="text-[0.8125rem] font-medium text-muted-foreground">Email Address</label>
+                      <StyledInput 
+                        value={recoveryEmail} 
+                        onChange={(e) => setRecoveryEmail(e.target.value)}
+                        placeholder="your@email.com"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[0.8125rem] font-medium text-muted-foreground">Message (Optional)</label>
+                      <textarea
+                        className="w-full px-3.5 py-2.5 rounded-lg text-sm bg-background border border-border text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary min-h-[80px] resize-none"
+                        placeholder="e.g. Lost my phone while traveling"
+                        value={recoveryMessage}
+                        onChange={(e) => setRecoveryMessage(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                      <Button variant="outline" className="flex-1" onClick={() => setRecoveryOpen(false)}>Cancel</Button>
+                      <Button 
+                        className="flex-1" 
+                        onClick={handleRecoveryRequest}
+                        disabled={recoveryLoading || !recoveryEmail}
+                      >
+                        {recoveryLoading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+                        Send
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button className="w-full" onClick={() => setRecoveryOpen(false)}>Got it</Button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -412,7 +498,16 @@ export default function LoginPage() {
                 />
                 <span className="text-[0.8125rem] text-slate-400 cursor-pointer">Remember me for 30 days</span>
               </label>
-              <button type="button" className="text-[0.8125rem] text-primary bg-transparent border-none cursor-pointer p-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setRecoveryEmail(email);
+                  setRecoveryOpen(true);
+                  setRecoverySent(false);
+                  setRecoveryType("password");
+                }}
+                className="text-[0.8125rem] text-primary bg-transparent border-none cursor-pointer p-0 hover:underline"
+              >
                 Forgot password?
               </button>
             </div>
@@ -436,6 +531,63 @@ export default function LoginPage() {
               }
             </button>
           </form>
+
+          {/* Recovery Dialog (Shared for MFA and Password) */}
+          {recoveryOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-background/80 backdrop-blur-sm animate-in fade-in">
+              <div className="bg-card border border-border rounded-2xl p-8 w-full max-w-[420px] shadow-2xl animate-in zoom-in-95 duration-200">
+                <h2 className="text-xl font-bold mb-2">
+                  {recoveryType === "password" ? "Reset Password" : "Request MFA Reset"}
+                </h2>
+                <p className="text-sm text-muted-foreground mb-6">
+                  {recoverySent 
+                    ? "Instructions have been sent. If an email wasn't received, please contact your manager for a manual setup link."
+                    : recoveryType === "password" 
+                      ? "Enter your email to receive a password reset link. If your organization has no email setup, this will notify your manager."
+                      : "If you've lost your device and backup codes, enter your email below to request a manual reset from your manager."
+                  }
+                </p>
+
+                {!recoverySent ? (
+                  <div className="space-y-4 text-left">
+                    <div className="space-y-1.5">
+                      <label className="text-[0.8125rem] font-medium text-muted-foreground">Email Address</label>
+                      <StyledInput 
+                        value={recoveryEmail} 
+                        onChange={(e) => setRecoveryEmail(e.target.value)}
+                        placeholder="your@email.com"
+                      />
+                    </div>
+                    {recoveryType === "mfa" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[0.8125rem] font-medium text-muted-foreground">Message (Optional)</label>
+                        <textarea
+                          className="w-full px-3.5 py-2.5 rounded-lg text-sm bg-background border border-border text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary min-h-[80px] resize-none"
+                          placeholder="e.g. Lost my phone while traveling"
+                          value={recoveryMessage}
+                          onChange={(e) => setRecoveryMessage(e.target.value)}
+                        />
+                      </div>
+                    )}
+                    <div className="flex gap-3 pt-2">
+                      <Button variant="outline" className="flex-1" onClick={() => setRecoveryOpen(false)}>Cancel</Button>
+                      <Button 
+                        className="flex-1" 
+                        onClick={handleRecoveryRequest}
+                        disabled={recoveryLoading || !recoveryEmail}
+                      >
+                        {recoveryLoading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+                        {recoveryType === "password" ? "Reset" : "Send"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button className="w-full" onClick={() => setRecoveryOpen(false)}>Got it</Button>
+                )}
+              </div>
+            </div>
+          )}
+
 
           <p className="text-center text-xs text-muted-foreground mt-6">
             Account access is managed by your administrator.

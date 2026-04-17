@@ -209,6 +209,18 @@ export function ChatProvider({ children }) {
     setChannels((prev) => prev.map((ch) => ch.id === channelId ? { ...ch, is_member: true } : ch));
   }, []);
 
+  // Leave channel
+  const leaveChannel = useCallback(async (channelId) => {
+    await chatApi.leaveChannel(channelId);
+    setChannels((prev) => prev.map((ch) => ch.id === channelId ? { ...ch, is_member: false } : ch));
+  }, []);
+
+  // Mute channel
+  const muteChannel = useCallback(async (channelId, isMuted) => {
+    await api.post(`/chat/channels/${channelId}/mute`, { is_muted: isMuted });
+    setChannels((prev) => prev.map((ch) => ch.id === channelId ? { ...ch, is_muted: isMuted } : ch));
+  }, []);
+
   // Open DM
   const openDM = useCallback(async (userId) => {
     const res = await chatApi.openDM({ user_id: userId });

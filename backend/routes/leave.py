@@ -152,13 +152,27 @@ async def create_leave_request(data: LeaveRequestCreate, request: Request):
     if data.leave_type not in valid_types:
         raise HTTPException(status_code=400, detail=f"Invalid leave type. Must be one of: {valid_types}")
 
+    # Integrity: Recalculate days count server-side
+    try:
+        from_dt = datetime.strptime(data.from_date, "%Y-%m-%d")
+        to_dt = datetime.strptime(data.to_date, "%Y-%m-%d")
+        if from_dt > to_dt:
+            raise HTTPException(status_code=400, detail="From date cannot be after To date")
+        
+        # Inclusive calculation
+        diff_days = (to_dt - from_dt).days + 1
+        days_count = float(diff_days)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Expected YYYY-MM-DD")
+
     doc = {
         "org_id": current.get("org_id"),
         "user_id": current["id"],
+        "user_name": current.get("full_name"),
         "leave_type": data.leave_type,
         "from_date": data.from_date,
         "to_date": data.to_date,
-        "days_count": data.days_count,
+        "days_count": days_count,
         "notes": data.notes,
         "status": "pending",
         "reviewed_by": None,

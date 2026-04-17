@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import ThemeToggle from "@/components/layout/ThemeToggle";
+import AnnouncementBanner from "@/components/layout/AnnouncementBanner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -232,7 +233,7 @@ export default function AppLayout() {
     { to: "/shift-templates", icon: LayoutTemplate, label: "Shift Templates", show: isAdmin || isManager },
     { to: "/handovers", icon: ClipboardList, label: "Handovers", show: true },
     { to: "/sticky-notes", icon: StickyNote, label: "Sticky Notes", show: true },
-    { to: "/chat", icon: MessageSquare, label: "Chat", show: true },
+    { to: "/chat", icon: MessageSquare, label: "Chat", show: true, external: true },
     { to: "/notifications", icon: Bell, label: "Notifications", show: true },
     { to: "/reports", icon: BarChart3, label: "Reports", show: isAdmin || isManager },
     { to: "/audit-log", icon: ScrollText, label: "Audit Log", show: isAdmin },
@@ -287,29 +288,43 @@ export default function AppLayout() {
         <ScrollArea className="flex-1">
           <nav className="py-3 px-2 space-y-0.5">
             {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === "/"}
-                onClick={() => setMobileSidebar(false)}
-                className={({ isActive }) =>
-                  `flex flex-row items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-200 group ${
-                    isActive
-                      ? "bg-primary/10 text-primary font-medium shadow-sm ring-1 ring-primary/20"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                  }`
-                }
-                data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-              >
-                <item.icon className={`h-4 w-4 shrink-0 transition-transform duration-200 ${sidebarOpen ? "" : "mx-auto"} group-hover:scale-110`} />
-                {sidebarOpen && <span className="truncate">{item.label}</span>}
-                {item.to === "/notifications" && unreadCount > 0 && sidebarOpen && (
-                  <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{unreadCount}</Badge>
-                )}
-                {item.to === "/chat" && chatUnread > 0 && sidebarOpen && (
-                  <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{chatUnread > 99 ? "99+" : chatUnread}</Badge>
-                )}
-              </NavLink>
+              item.external ? (
+                <button
+                  key={item.to}
+                  onClick={() => window.open(item.to, "_blank", "noopener,noreferrer")}
+                  className={`w-full flex flex-row items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-200 group text-muted-foreground hover:bg-accent hover:text-accent-foreground`}
+                >
+                  <item.icon className={`h-4 w-4 shrink-0 transition-transform duration-200 ${sidebarOpen ? "" : "mx-auto"} group-hover:scale-110`} />
+                  {sidebarOpen && <span className="truncate">{item.label}</span>}
+                  {item.to === "/chat" && chatUnread > 0 && sidebarOpen && (
+                    <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{chatUnread > 99 ? "99+" : chatUnread}</Badge>
+                  )}
+                </button>
+              ) : (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === "/"}
+                  onClick={() => setMobileSidebar(false)}
+                  className={({ isActive }) =>
+                    `flex flex-row items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-200 group ${
+                      isActive
+                        ? "bg-primary/10 text-primary font-medium shadow-sm ring-1 ring-primary/20"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    }`
+                  }
+                  data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                >
+                  <item.icon className={`h-4 w-4 shrink-0 transition-transform duration-200 ${sidebarOpen ? "" : "mx-auto"} group-hover:scale-110`} />
+                  {sidebarOpen && <span className="truncate">{item.label}</span>}
+                  {item.to === "/notifications" && unreadCount > 0 && sidebarOpen && (
+                    <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{unreadCount}</Badge>
+                  )}
+                  {item.to === "/chat" && chatUnread > 0 && sidebarOpen && (
+                    <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{chatUnread > 99 ? "99+" : chatUnread}</Badge>
+                  )}
+                </NavLink>
+              )
             ))}
           </nav>
 

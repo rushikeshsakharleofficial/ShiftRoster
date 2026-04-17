@@ -359,6 +359,25 @@ async def leave_channel(channel_id: str, request: Request):
     return {"message": "Left channel"}
 
 
+class MuteChannelRequest(BaseModel):
+    is_muted: bool
+
+
+@router.post("/channels/{channel_id}/mute")
+async def mute_channel(channel_id: str, data: MuteChannelRequest, request: Request):
+    user = await get_current_user(request)
+    user_id = user["id"]
+    org_id = user["org_id"]
+
+    await db.chat_muted_channels.update_one(
+        {"channel_id": channel_id, "user_id": user_id, "org_id": org_id},
+        {"$set": {"is_muted": data.is_muted, "updated_at": datetime.now(timezone.utc)}},
+        upsert=True
+    )
+
+    return {"message": "Preference updated", "is_muted": data.is_muted}
+
+
 @router.post("/channels/{channel_id}/invite")
 async def invite_to_channel(channel_id: str, data: InviteUser, request: Request):
     user = await get_current_user(request)

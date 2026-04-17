@@ -5,6 +5,7 @@ import { setupApi } from "@/lib/api";
 import AppLayout from "@/components/layout/AppLayout";
 import LoginPage from "@/pages/LoginPage";
 import SetupPage from "@/pages/SetupPage";
+import SetupPasswordPage from "@/pages/SetupPasswordPage";
 import DashboardPage from "@/pages/DashboardPage";
 import ShiftCalendarPage from "@/pages/ShiftCalendarPage";
 import EmployeesPage from "@/pages/EmployeesPage";
@@ -77,6 +78,14 @@ export default function App() {
             }
           />
           <Route path="/setup" element={<SetupPage />} />
+          <Route
+            path="/setup-password"
+            element={
+              <PublicRoute>
+                <SetupPasswordPage />
+              </PublicRoute>
+            }
+          />
 
           {/* Protected routes */}
           <Route

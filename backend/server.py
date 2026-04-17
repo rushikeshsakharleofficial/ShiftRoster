@@ -34,6 +34,7 @@ from routes.sticky_notes import router as sticky_notes_router
 from routes.chat import router as chat_router
 from routes.handovers import router as handovers_router
 from routes.tasks import router as tasks_router
+from routes.announcements import router as announcements_router
 from tasks.purging import run_purging_task
 
 app = FastAPI(title="ShiftRoster API", version="2.0.0")

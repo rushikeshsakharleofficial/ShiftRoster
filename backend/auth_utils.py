@@ -222,3 +222,23 @@ def verify_mfa_temp_token(token: str) -> str:
         raise HTTPException(status_code=401, detail="MFA token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid MFA token")
+
+
+def generate_backup_codes(count=10):
+    """Generate a list of 8-char alphanumeric backup codes."""
+    import secrets
+    import string
+    codes = []
+    for _ in range(count):
+        code = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+        codes.append(code)
+    return codes
+
+
+def generate_setup_token():
+    import secrets
+    return secrets.token_urlsafe(32)
+
+def hash_setup_token(token: str) -> str:
+    import hashlib
+    return hashlib.sha256(token.encode()).hexdigest()

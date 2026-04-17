@@ -165,6 +165,19 @@ export default function ChatPage() {
     }
   }, [currentMessages]);
 
+  // Auto-expand textarea logic
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+      const scrollHeight = inputRef.current.scrollHeight;
+      // 10 lines approx: lineHeight (20px) * 10 + padding (24px) = 224px
+      // Using a slightly safer calculation based on actual scrollHeight
+      const maxHeight = 224; 
+      inputRef.current.style.height = (scrollHeight > maxHeight ? maxHeight : scrollHeight) + "px";
+      inputRef.current.style.overflowY = scrollHeight > maxHeight ? "auto" : "hidden";
+    }
+  }, [inputText]);
+
   const handleSend = async () => {
     const text = inputText.trim();
     if (!text && !pendingFile) return;
@@ -190,24 +203,35 @@ export default function ChatPage() {
       setPendingFile(null);
     } catch (err) { console.error("Send failed:", err); }
   };
+const onChannelClick = (id) => {
+  navigate(`/chat/${id}`);
+  setActiveChannelId(id);
+};
 
-  const onChannelClick = (id) => {
-    navigate(`/chat/${id}`);
-    setActiveChannelId(id);
-  };
-
-  return (
-    <div className="flex h-full w-full overflow-hidden bg-background">
-      {/* 1. SIDEBAR (Left Panel) */}
-      <div className="w-[300px] border-r border-border bg-muted/10 flex flex-col shrink-0 overflow-hidden">
-        <div className="p-4 border-b border-border shrink-0 flex items-center justify-between">
+return (
+  <div className="flex h-full w-full overflow-hidden bg-background">
+    {/* 1. SIDEBAR (Left Panel) */}
+    <div className="w-[300px] border-r border-border bg-muted/10 flex flex-col shrink-0 overflow-hidden">
+      <div className="p-4 border-b border-border shrink-0 flex items-center justify-between">
+        <div className="flex flex-col">
           <h2 className="text-lg font-bold tracking-tight">Messages</h2>
+          <button 
+            onClick={() => navigate("/")}
+            className="text-[10px] text-primary hover:underline flex items-center gap-1 font-bold uppercase tracking-wider mt-0.5"
+          >
+            <LayoutDashboard className="h-2.5 w-2.5" /> Back to Dashboard
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
           <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setShowCreateChannel(true)}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
-        
-        <div className="px-4 py-3 shrink-0">
+      </div>
+
+      <div className="px-4 py-3 shrink-0">
+...
           <div className="relative group">
             <SearchIcon className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <Input placeholder="Search messages..." className="pl-9 h-9 bg-muted/40 border-none focus-visible:ring-1 focus-visible:ring-primary/30 rounded-lg text-xs" />
@@ -488,11 +512,27 @@ export default function ChatPage() {
               </div>
 
               <div className="space-y-3 pt-4 border-t border-border/50">
-                <Button variant="outline" className="w-full justify-start gap-3 h-10 rounded-xl text-xs font-semibold group border-dashed">
-                  <Bell className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                  Mute Notifications
+                <Button 
+                  variant="outline" 
+                  className={cn(
+                    "w-full justify-start gap-3 h-10 rounded-xl text-xs font-semibold group border-dashed",
+                    activeChannel.is_muted && "bg-muted text-muted-foreground"
+                  )}
+                  onClick={() => muteChannel(activeChannelId, !activeChannel.is_muted)}
+                >
+                  <Bell className={cn("h-4 w-4 transition-colors", activeChannel.is_muted ? "text-muted-foreground" : "text-muted-foreground group-hover:text-primary")} />
+                  {activeChannel.is_muted ? "Unmute Notifications" : "Mute Notifications"}
                 </Button>
-                <Button variant="outline" className="w-full justify-start gap-3 h-10 rounded-xl text-xs font-semibold group border-dashed text-rose-500 hover:text-rose-600 hover:bg-rose-50 border-rose-100">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start gap-3 h-10 rounded-xl text-xs font-semibold group border-dashed text-rose-500 hover:text-rose-600 hover:bg-rose-50 border-rose-100"
+                  onClick={async () => {
+                    if (confirm(`Are you sure you want to leave #${activeChannel.name}?`)) {
+                      await leaveChannel(activeChannelId);
+                      navigate("/chat");
+                    }
+                  }}
+                >
                   <LogOut className="h-4 w-4" />
                   Leave Channel
                 </Button>

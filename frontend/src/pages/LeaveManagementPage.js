@@ -38,18 +38,38 @@ export default function LeaveManagementPage() {
   useEffect(() => { loadData(); }, [filter]);
 
   const handleCreate = async () => {
+    if (new Date(form.from_date) > new Date(form.to_date)) {
+      toast.error("From date cannot be after To date");
+      return;
+    }
     setSaving(true);
     try {
       await leaveApi.create(form);
       toast.success("Leave request submitted");
       setShowCreate(false);
-      setForm({ leave_type: "annual", from_date: "", to_date: "", days_count: 1, notes: "" });
+      setForm({ leave_type: "annual", from_date: "", to_date: "", days_count: 0, notes: "" });
       loadData();
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail));
     }
     setSaving(false);
   };
+
+  // Auto-calculate days
+  useEffect(() => {
+    if (form.from_date && form.to_date) {
+      const start = new Date(form.from_date);
+      const end = new Date(form.to_date);
+      if (start <= end) {
+        const diffTime = Math.abs(end - start);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // Inclusive
+        setForm(f => ({ ...f, days_count: diffDays }));
+      } else {
+        setForm(f => ({ ...f, days_count: 0 }));
+      }
+    }
+  }, [form.from_date, form.to_date]);
+
 
   const handleReview = async (id, status) => {
     try {
@@ -177,7 +197,23 @@ export default function LeaveManagementPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Days</Label>
-              <Input data-testid="leave-days-input" type="number" min={0.5} step={0.5} value={form.days_count} onChange={e => setForm({...form, days_count: parseFloat(e.target.value) || 0})} />
+              <div className="relative">
+                <Input 
+                  data-testid="leave-days-input" 
+                  type="number" 
+                  value={form.days_count} 
+                  readOnly 
+                  className={cn(
+                    "bg-muted/50 font-bold",
+                    form.days_count > 0 ? "text-primary border-primary/30" : "text-muted-foreground"
+                  )}
+                />
+                {form.days_count > 0 && (
+                  <p className="text-[9px] text-primary font-medium mt-1 animate-in fade-in slide-in-from-top-1">
+                    Days are calculated automatically (inclusive)
+                  </p>
+                )}
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Notes</Label>
