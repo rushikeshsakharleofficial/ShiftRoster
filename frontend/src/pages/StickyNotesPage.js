@@ -560,13 +560,13 @@ export default function StickyNotesPage() {
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md flex flex-col max-h-[90vh]">
-          <DialogHeader className="shrink-0">
+        <DialogContent className="sm:max-w-md flex flex-col max-h-[90vh] p-0 overflow-hidden">
+          <DialogHeader className="shrink-0 px-6 pt-6">
             <DialogTitle>
               {editingNote ? "Edit Note" : "New Sticky Note"}
             </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto px-1">
+          <div className="flex-1 overflow-y-auto px-6">
             <div className="flex flex-col gap-5 py-4">
               {/* Date Picker Section */}
               <div className="space-y-2">
@@ -701,7 +701,7 @@ export default function StickyNotesPage() {
               </div>
             </div>
           </div>
-          <DialogFooter className="shrink-0 pt-2">
+          <DialogFooter className="shrink-0 px-6 py-4 border-t bg-muted/10">
             <Button
               variant="outline"
               onClick={() => setDialogOpen(false)}

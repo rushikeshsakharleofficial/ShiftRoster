@@ -9,11 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, List as TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
-  ClipboardType, CheckCircle2, Circle, ArrowRightLeft,
+  ClipboardList, CheckCircle2, Circle, ArrowRightLeft,
   Calendar, AlertCircle, History, User, Plus, Loader2,
   Clock, MoreHorizontal
 } from "lucide-react";
@@ -126,24 +126,24 @@ export default function HandoverPage() {
       <Tabs defaultValue="my-tasks" className="w-full">
         <div className="border-b mb-4">
           <div className="flex items-center justify-between max-w-screen-xl mx-auto px-1">
-            <div className="flex gap-6">
-              <TabsTrigger value="my-tasks" className="pb-2 border-b-2 border-transparent data-[state=active]:border-primary rounded-none shadow-none bg-transparent">
+            <TabsList className="flex gap-6 bg-transparent h-auto p-0 rounded-none border-b-0">
+              <TabsTrigger value="my-tasks" className="pb-2 border-b-2 border-transparent data-[state=active]:border-primary rounded-none shadow-none bg-transparent px-0 text-sm h-10">
                 My Pending ({myTasks.length})
               </TabsTrigger>
-              <TabsTrigger value="delegated" className="pb-2 border-b-2 border-transparent data-[state=active]:border-primary rounded-none shadow-none bg-transparent">
+              <TabsTrigger value="delegated" className="pb-2 border-b-2 border-transparent data-[state=active]:border-primary rounded-none shadow-none bg-transparent px-0 text-sm h-10">
                 Delegated ({delegatedTasks.length})
               </TabsTrigger>
-              <TabsTrigger value="completed" className="pb-2 border-b-2 border-transparent data-[state=active]:border-primary rounded-none shadow-none bg-transparent">
+              <TabsTrigger value="completed" className="pb-2 border-b-2 border-transparent data-[state=active]:border-primary rounded-none shadow-none bg-transparent px-0 text-sm h-10">
                 History
               </TabsTrigger>
-            </div>
+            </TabsList>
           </div>
         </div>
 
         <TabsContent value="my-tasks" className="space-y-4">
           {myTasks.length === 0 ? (
             <Card className="border-dashed py-12 flex flex-col items-center justify-center text-center">
-              <ClipboardType className="h-12 w-12 text-muted-foreground/20 mb-4" />
+              <ClipboardList className="h-12 w-12 text-muted-foreground/20 mb-4" />
               <p className="text-muted-foreground">No pending tasks for you</p>
             </Card>
           ) : (
@@ -165,7 +165,7 @@ export default function HandoverPage() {
         <TabsContent value="delegated" className="space-y-4">
           {delegatedTasks.length === 0 ? (
             <Card className="border-dashed py-12 flex flex-col items-center justify-center text-center">
-              <ClipboardType className="h-12 w-12 text-muted-foreground/20 mb-4" />
+              <ClipboardList className="h-12 w-12 text-muted-foreground/20 mb-4" />
               <p className="text-muted-foreground">You haven't delegated any tasks</p>
             </Card>
           ) : (
@@ -326,7 +326,7 @@ export default function HandoverPage() {
                     <span className="text-sm font-medium capitalize">{entry.action}</span>
                     <p className="text-xs text-muted-foreground">{entry.details}</p>
                     <span className="text-[10px] text-muted-foreground mt-1">
-                      {format(new Date(entry.timestamp), "PPp")}
+                      {entry.timestamp ? format(new Date(entry.timestamp), "PPp") : "Unknown time"}
                     </span>
                   </div>
                 </div>
@@ -398,7 +398,7 @@ function TaskCard({ task, onComplete, onTransfer, onShowAudit, getUserName, isDe
                 <span>Completed</span>
               </div>
               <span className="text-[10px] text-muted-foreground">
-                {format(new Date(task.completed_at), "MMM d")}
+                {task.completed_at ? format(new Date(task.completed_at), "MMM d") : ""}
               </span>
             </div>
           ) : (
