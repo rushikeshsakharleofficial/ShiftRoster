@@ -25,13 +25,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 import { 
   Hash, Lock, MessageSquare, Plus, Search, Users, ChevronDown,
   ChevronRight, Send, Smile, Pencil, Trash2, Reply, X, MoreHorizontal,
   UserPlus, LogIn, LogOut, PanelRightOpen, PanelRightClose, Loader2,
   Paperclip, FileText, Download, Image as ImageIcon, Zap, Info,
   Search as SearchIcon, UserCircle, Settings, Bell, Pin, Clock, AlertCircle, CheckCircle2,
-  LayoutDashboard
+  LayoutDashboard, Globe, ShieldCheck
 } from "lucide-react";
 import MediaMenu from "@/components/chat/MediaMenu";
 import ThemeToggle from "@/components/layout/ThemeToggle";
@@ -112,6 +114,7 @@ export default function ChatPage() {
   
   // Dialogs
   const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [createForm, setForm] = useState({ name: "", description: "", type: "public" });
 
   const scrollRef = useRef(null);
@@ -133,7 +136,9 @@ export default function ChatPage() {
 
   // Sync URL with active channel
   useEffect(() => {
-    if (urlChannelId && urlChannelId !== activeChannelId) {
+    if (!urlChannelId) {
+      setActiveChannelId(null);
+    } else if (urlChannelId !== activeChannelId) {
       setActiveChannelId(urlChannelId);
     }
   }, [urlChannelId, activeChannelId, setActiveChannelId]);
@@ -206,6 +211,43 @@ export default function ChatPage() {
       setPendingFile(null);
     } catch (err) { console.error("Send failed:", err); }
   };
+
+  const handleCreateChannel = async () => {
+    if (!createForm.name.trim()) return toast.error("Channel name is required");
+    setCreating(true);
+    try {
+      const ch = await createChannel(createForm);
+      toast.success(`Channel #${ch.name} created`);
+      setShowCreateChannel(false);
+      setForm({ name: "", description: "", type: "public" });
+      onChannelClick(ch.id);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to create channel");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleJoinChannel = async (id) => {
+    try {
+      await joinChannel(id);
+      toast.success("Joined channel");
+    } catch (err) {
+      toast.error("Failed to join channel");
+    }
+  };
+
+  const handleLeaveChannel = async (id) => {
+    if (!confirm(`Are you sure you want to leave this channel?`)) return;
+    try {
+      await leaveChannel(id);
+      toast.success("Left channel");
+      if (activeChannelId === id) navigate("/chat");
+    } catch (err) {
+      toast.error("Failed to leave channel");
+    }
+  };
+
 const onChannelClick = (id) => {
   navigate(`/chat/${id}`);
   setActiveChannelId(id);
@@ -234,7 +276,6 @@ return (
       </div>
 
       <div className="px-4 py-3 shrink-0">
-...
           <div className="relative group">
             <SearchIcon className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <Input placeholder="Search messages..." className="pl-9 h-9 bg-muted/40 border-none focus-visible:ring-1 focus-visible:ring-primary/30 rounded-lg text-xs" />
@@ -255,7 +296,8 @@ return (
                   onClick={() => onChannelClick(ch.id)}
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative",
-                    activeChannelId === ch.id ? "bg-primary/10 text-primary shadow-sm" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    activeChannelId === ch.id ? "bg-primary/10 text-primary shadow-sm" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                    !ch.is_member && "opacity-60"
                   )}
                 >
                   <div className={cn(
@@ -266,7 +308,7 @@ return (
                   </div>
                   <div className="flex-1 min-w-0 text-left">
                     <p className="text-xs font-semibold truncate leading-none">{ch.name}</p>
-                    <p className="text-[10px] opacity-60 truncate mt-1">{ch.last_message_preview || "No messages yet"}</p>
+                    <p className="text-[10px] opacity-60 truncate mt-1">{ch.is_member ? (ch.last_message_preview || "No messages yet") : "Click to join"}</p>
                   </div>
                   {unreadCounts[ch.id] > 0 && (
                     <Badge variant="destructive" className="ml-auto text-[9px] h-4.5 px-1.5 min-w-[18px] justify-center">{unreadCounts[ch.id]}</Badge>
@@ -351,6 +393,19 @@ return (
                 <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
                   Connect with your team instantly. Choose a channel from the left to start messaging.
                 </p>
+              </div>
+            ) : !activeChannel?.is_member && !isActiveDM ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-12 mt-20">
+                <div className="w-20 h-20 rounded-3xl bg-primary/5 flex items-center justify-center mb-6">
+                  <LogIn className="h-10 w-10 text-muted-foreground" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">Join #{activeChannel?.name}</h3>
+                <p className="text-muted-foreground max-w-sm text-sm mb-6">
+                  You are viewing this channel but are not a member yet. Join to participate in the conversation.
+                </p>
+                <Button onClick={() => handleJoinChannel(activeChannelId)} className="rounded-xl px-8">
+                  Join Channel
+                </Button>
               </div>
             ) : currentMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-20 mt-10">
@@ -437,7 +492,7 @@ return (
                     }
                   }}
                   placeholder={activeChannel ? `Message ${activeChannel.name}` : "Select a channel to chat"}
-                  disabled={!activeChannelId}
+                  disabled={!activeChannelId || (activeChannel && !activeChannel.is_member && !isActiveDM)}
                   className="flex-1 min-h-[44px] max-h-[200px] bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm py-3 px-2 resize-none custom-scrollbar"
                 />
 
@@ -514,32 +569,41 @@ return (
                 </div>
               </div>
 
-              <div className="space-y-3 pt-4 border-t border-border/50">
-                <Button 
-                  variant="outline" 
-                  className={cn(
-                    "w-full justify-start gap-3 h-10 rounded-xl text-xs font-semibold group border-dashed",
-                    activeChannel.is_muted && "bg-muted text-muted-foreground"
+              {!isActiveDM && (
+                <div className="space-y-3 pt-4 border-t border-border/50">
+                  <Button 
+                    variant="outline" 
+                    className={cn(
+                      "w-full justify-start gap-3 h-10 rounded-xl text-xs font-semibold group border-dashed",
+                      activeChannel.is_muted && "bg-muted text-muted-foreground"
+                    )}
+                    onClick={() => muteChannel(activeChannelId, !activeChannel.is_muted)}
+                  >
+                    <Bell className={cn("h-4 w-4 transition-colors", activeChannel.is_muted ? "text-muted-foreground" : "text-muted-foreground group-hover:text-primary")} />
+                    {activeChannel.is_muted ? "Unmute Notifications" : "Mute Notifications"}
+                  </Button>
+                  
+                  {activeChannel.is_member ? (
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start gap-3 h-10 rounded-xl text-xs font-semibold group border-dashed text-rose-500 hover:text-rose-600 hover:bg-rose-50 border-rose-100"
+                      onClick={() => handleLeaveChannel(activeChannelId)}
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Leave Channel
+                    </Button>
+                  ) : (
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start gap-3 h-10 rounded-xl text-xs font-semibold group border-dashed text-primary hover:bg-primary/5 border-primary/20"
+                      onClick={() => handleJoinChannel(activeChannelId)}
+                    >
+                      <LogIn className="h-4 w-4" />
+                      Join Channel
+                    </Button>
                   )}
-                  onClick={() => muteChannel(activeChannelId, !activeChannel.is_muted)}
-                >
-                  <Bell className={cn("h-4 w-4 transition-colors", activeChannel.is_muted ? "text-muted-foreground" : "text-muted-foreground group-hover:text-primary")} />
-                  {activeChannel.is_muted ? "Unmute Notifications" : "Mute Notifications"}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="w-full justify-start gap-3 h-10 rounded-xl text-xs font-semibold group border-dashed text-rose-500 hover:text-rose-600 hover:bg-rose-50 border-rose-100"
-                  onClick={async () => {
-                    if (confirm(`Are you sure you want to leave #${activeChannel.name}?`)) {
-                      await leaveChannel(activeChannelId);
-                      navigate("/chat");
-                    }
-                  }}
-                >
-                  <LogOut className="h-4 w-4" />
-                  Leave Channel
-                </Button>
-              </div>
+                </div>
+              )}
             </div>
           </ScrollArea>
         </div>
@@ -547,15 +611,83 @@ return (
 
       {/* Dialogs */}
       <Dialog open={showCreateChannel} onOpenChange={setShowCreateChannel}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Create Channel</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4 text-sm font-medium">
-            <div className="space-y-1.5"><Input placeholder="channel-name" value={createForm.name} onChange={e => setForm({...createForm, name: e.target.value.toLowerCase().replace(/\s+/g, '-')})} /></div>
-            <div className="space-y-1.5"><Textarea placeholder="What's this channel about?" value={createForm.description} onChange={e => setForm({...createForm, description: e.target.value})} /></div>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-primary" /> Create Channel
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-6 text-sm font-medium">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Name</Label>
+              <Input 
+                placeholder="e.g. engineering-team" 
+                value={createForm.name} 
+                onChange={e => setForm({...createForm, name: e.target.value.toLowerCase().replace(/\s+/g, '-')})} 
+                className="rounded-xl h-11"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Description (Optional)</Label>
+              <Textarea 
+                placeholder="What's this channel about?" 
+                value={createForm.description} 
+                onChange={e => setForm({...createForm, description: e.target.value})} 
+                className="rounded-xl min-h-[100px] resize-none"
+              />
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Channel Type</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...createForm, type: "public" })}
+                  className={cn(
+                    "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left",
+                    createForm.type === "public" ? "border-primary bg-primary/5" : "border-border hover:border-border/80 bg-background"
+                  )}
+                >
+                  <div className={cn("p-2 rounded-lg", createForm.type === "public" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground")}>
+                    <Globe className="h-5 w-5" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-bold">Public</p>
+                    <p className="text-[10px] opacity-60 font-medium">Anyone in org can join</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...createForm, type: "private" })}
+                  className={cn(
+                    "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left",
+                    createForm.type === "private" ? "border-primary bg-primary/5" : "border-border hover:border-border/80 bg-background"
+                  )}
+                >
+                  <div className={cn("p-2 rounded-lg", createForm.type === "private" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground")}>
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-bold">Private</p>
+                    <p className="text-[10px] opacity-60 font-medium">Invite only access</p>
+                  </div>
+                </button>
+              </div>
+            </div>
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateChannel(false)}>Cancel</Button>
-            <Button onClick={async () => { await createChannel(createForm); setShowCreateChannel(false); }}>Create</Button>
+            <Button variant="outline" onClick={() => setShowCreateChannel(false)} className="rounded-xl h-11">Cancel</Button>
+            <Button 
+              onClick={handleCreateChannel} 
+              disabled={creating || !createForm.name.trim()}
+              className="rounded-xl h-11 px-8"
+            >
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Channel"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

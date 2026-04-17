@@ -212,7 +212,13 @@ export function ChatProvider({ children }) {
   // Leave channel
   const leaveChannel = useCallback(async (channelId) => {
     await chatApi.leaveChannel(channelId);
-    setChannels((prev) => prev.map((ch) => ch.id === channelId ? { ...ch, is_member: false } : ch));
+    setChannels((prev) => {
+      const ch = prev.find(c => c.id === channelId);
+      if (ch && ch.type === "private") {
+        return prev.filter(c => c.id !== channelId);
+      }
+      return prev.map((c) => c.id === channelId ? { ...c, is_member: false } : c);
+    });
   }, []);
 
   // Mute channel
