@@ -121,6 +121,11 @@ test_reports/*.md
 # Build artifacts
 build_log.txt
 
+# Test scripts (dev only, not for production master)
+backend_test.py
+qa_test_suite.py
+tests/
+
 # AI / IDE tool configs (local only)
 .emergent/
 .gemini/
