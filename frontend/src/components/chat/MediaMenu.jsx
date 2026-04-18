@@ -109,21 +109,19 @@ export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEn
   };
 
   const renderEmojiPicker = () => (
-    <div style={{ width: "100%", overflow: "hidden" }}>
-      <Picker
-        data={data}
-        onEmojiSelect={handleEmojiClick}
-        theme={pickerTheme}
-        set="native"
-        skinTonePosition="search"
-        previewPosition="none"
-        navPosition="bottom"
-        perLine={8}
-        maxFrequentRows={2}
-        width="100%"
-        autoFocus={true}
-      />
-    </div>
+    <Picker
+      data={data}
+      onEmojiSelect={handleEmojiClick}
+      theme={pickerTheme}
+      set="native"
+      skinTonePosition="search"
+      previewPosition="none"
+      navPosition="bottom"
+      perLine={8}
+      maxFrequentRows={2}
+      width="100%"
+      autoFocus={true}
+    />
   );
 
   return (
@@ -139,10 +137,18 @@ export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEn
           <Smile className="h-4.5 w-4.5" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[352px] p-0 border-border shadow-xl overflow-hidden" align="start" side="top">
+      <PopoverContent
+        className="w-[352px] p-0 overflow-hidden rounded-xl border border-border bg-background"
+        style={{
+          boxShadow: "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10)",
+          zIndex: 9999,
+        }}
+        align="start"
+        side="top"
+      >
         {gifsEnabled ? (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <div className="px-3 pt-3 flex items-center justify-between border-b border-border bg-muted/20">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full overflow-hidden">
+            <div className="px-3 pt-3 flex items-center justify-between border-b border-border bg-card">
               <TabsList className="grid grid-cols-2 w-32 h-8">
                 <TabsTrigger value="emojis" className="text-xs">
                   <Smile className="h-3 w-3 mr-1.5" /> Emojis
@@ -153,7 +159,7 @@ export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEn
               </TabsList>
             </div>
 
-            <TabsContent value="emojis" className="m-0 border-none outline-none">
+            <TabsContent value="emojis" className="m-0 border-none outline-none overflow-hidden">
               {renderEmojiPicker()}
             </TabsContent>
 
@@ -200,7 +206,7 @@ export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEn
             </TabsContent>
           </Tabs>
         ) : (
-          <div className="w-full">
+          <div className="w-full overflow-hidden">
             {renderEmojiPicker()}
           </div>
         )}

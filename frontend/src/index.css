@@ -146,3 +146,35 @@
   background: hsl(var(--primary) / 0.15);
   color: inherit;
 }
+
+/* ── Emoji-mart picker reset ── */
+/* Strip the picker's own border-radius, shadow, and border so the
+   PopoverContent wrapper is the single styled surface. */
+em-emoji-picker {
+  --border-radius: 0px;
+  --shadow: none;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  width: 100% !important;
+  min-width: unset !important;
+  max-width: 100% !important;
+}
+
+/* Light mode picker background — fully opaque, no bleed */
+:root em-emoji-picker {
+  --rgb-background: 255, 255, 255;
+  --rgb-input: 241, 243, 245;
+  --rgb-color: 26, 26, 26;
+  --border-color: hsl(var(--border));
+  --category-icon-size: 18px;
+}
+
+/* Dark / AMOLED mode */
+.dark em-emoji-picker {
+  --rgb-background: 10, 10, 10;
+  --rgb-input: 26, 26, 26;
+  --rgb-color: 245, 245, 245;
+  --border-color: hsl(var(--border));
+  --category-icon-size: 18px;
+}
