@@ -50,8 +50,17 @@ def _serialize_subdoc(item: dict) -> dict:
 
 @router.post("/", response_model=dict)
 async def create_task(req: TaskCreate, user=Depends(get_current_user)):
-    if user.get("system_role") not in ("admin", "manager"):
-        raise HTTPException(status_code=403, detail="Only admin or manager can assign tasks")
+    is_employee = user.get("system_role") == "employee"
+
+    # Employees can only assign tasks to themselves
+    if is_employee:
+        assigned_to_id = user["id"]
+        self_assigned = True
+    else:
+        if not req.assigned_to:
+            raise HTTPException(status_code=400, detail="assigned_to is required")
+        assigned_to_id = req.assigned_to
+        self_assigned = False
 
     new_task = {
         "org_id": user.get("org_id"),
@@ -59,12 +68,13 @@ async def create_task(req: TaskCreate, user=Depends(get_current_user)):
         "description": req.description,
         "priority": req.priority,
         "due_date": datetime.fromisoformat(req.due_date.replace("Z", "+00:00")) if req.due_date else None,
-        "assigned_to": ObjectId(req.assigned_to),
+        "assigned_to": ObjectId(assigned_to_id),
         "handover_id": ObjectId(req.handover_id) if req.handover_id else None,
         "shift_id": ObjectId(req.shift_id) if req.shift_id else None,
         "created_by": ObjectId(user["id"]),
         "created_at": datetime.now(timezone.utc),
         "status": "pending",
+        "self_assigned": self_assigned,
         "completed_at": None,
         "completed_by": None,
         "transfer_reason": None,
@@ -74,19 +84,21 @@ async def create_task(req: TaskCreate, user=Depends(get_current_user)):
             "action": "created",
             "user_id": ObjectId(user["id"]),
             "timestamp": datetime.now(timezone.utc),
-            "details": f"Task created by {user.get('full_name', 'User')}"
+            "details": f"Task {'self-assigned' if self_assigned else 'created'} by {user.get('full_name', 'User')}"
         }]
     }
     result = await db.tasks.insert_one(new_task)
     new_task["_id"] = result.inserted_id
 
-    await create_notification(
-        req.assigned_to,
-        "task_assigned",
-        "New Task Assigned",
-        f"You have been assigned a new task: {req.title}",
-        f"/tasks",
-    )
+    # Don't notify yourself for self-assigned tasks
+    if not self_assigned:
+        await create_notification(
+            assigned_to_id,
+            "task_assigned",
+            "New Task Assigned",
+            f"You have been assigned a new task: {req.title}",
+            f"/tasks",
+        )
 
     await log_audit(None, user["id"], "create", "task", str(result.inserted_id))
     return serialize_doc(new_task)

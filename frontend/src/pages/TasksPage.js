@@ -59,6 +59,7 @@ export default function TasksPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = user?.system_role === "admin";
   const isManager = user?.system_role === "manager";
+  const isEmployee = user?.system_role === "employee";
   const canManage = isAdmin || isManager;
 
   const [tasks, setTasks] = useState([]);
@@ -141,20 +142,25 @@ export default function TasksPage() {
   const handleCardClick = (task) => openDetail(task.id);
 
   const handleAssignSubmit = async () => {
-    if (!assignForm.title.trim() || !assignForm.assigned_to) {
-      toast.error("Title and assignee required");
+    if (!assignForm.title.trim()) {
+      toast.error("Title required");
+      return;
+    }
+    if (canManage && !assignForm.assigned_to) {
+      toast.error("Assignee required");
       return;
     }
     setAssigning(true);
     try {
-      await tasksApi.create({
+      const payload = {
         title: assignForm.title.trim(),
         description: assignForm.description.trim(),
         priority: assignForm.priority,
         due_date: assignForm.due_date || null,
-        assigned_to: assignForm.assigned_to,
-      });
-      toast.success("Task assigned");
+      };
+      if (canManage) payload.assigned_to = assignForm.assigned_to;
+      await tasksApi.create(payload);
+      toast.success(isEmployee ? "Task added" : "Task assigned");
       setAssignOpen(false);
       setAssignForm({ title: "", description: "", priority: "medium", due_date: "", assigned_to: "" });
       loadTasks();
@@ -220,14 +226,12 @@ export default function TasksPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Tasks</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {canManage ? "Assign and track tasks across your team" : "Your assigned tasks"}
+            {canManage ? "Assign and track tasks across your team" : "Your tasks"}
           </p>
         </div>
-        {canManage && (
-          <Button onClick={() => setAssignOpen(true)} size="sm" className="gap-2">
-            <Plus className="h-4 w-4" /> Assign Task
-          </Button>
-        )}
+        <Button onClick={() => setAssignOpen(true)} size="sm" className="gap-2">
+          <Plus className="h-4 w-4" /> {isEmployee ? "Add Task" : "Assign Task"}
+        </Button>
       </div>
 
       {/* Filters */}
@@ -305,6 +309,9 @@ export default function TasksPage() {
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${pc.class}`}>{pc.label}</Badge>
+                    {task.self_assigned && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 border-blue-500/20 dark:text-blue-400">Self Assigned</Badge>
+                    )}
                     {due && (
                       <span className={`flex items-center gap-1 text-[10px] ${overdue ? "text-destructive" : "text-muted-foreground"}`}>
                         {overdue ? <AlertCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
@@ -338,7 +345,7 @@ export default function TasksPage() {
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Assign Task</DialogTitle>
+            <DialogTitle>{isEmployee ? "Add Task" : "Assign Task"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1">
@@ -382,25 +389,33 @@ export default function TasksPage() {
                 />
               </div>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Assign To *</Label>
-              <Select value={assignForm.assigned_to} onValueChange={v => setAssignForm(f => ({ ...f, assigned_to: v }))}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="Select employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map(e => (
-                    <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {canManage && (
+              <div className="space-y-1">
+                <Label className="text-xs">Assign To *</Label>
+                <Select value={assignForm.assigned_to} onValueChange={v => setAssignForm(f => ({ ...f, assigned_to: v }))}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Select employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map(e => (
+                      <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {isEmployee && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">Self Assigned</span>
+                Task will be assigned to you
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setAssignOpen(false)}>Cancel</Button>
             <Button size="sm" onClick={handleAssignSubmit} disabled={assigning}>
               {assigning && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-              Assign
+              {isEmployee ? "Add Task" : "Assign"}
             </Button>
           </DialogFooter>
         </DialogContent>
