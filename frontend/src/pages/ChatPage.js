@@ -121,23 +121,34 @@ const isOnlyEmojis = (text) => {
 
 // Renders a contiguous block of messages from the same author. Avatar + name
 // appear once at the top; subsequent bubbles are tightly stacked.
-function MessageGroup({ messages, isOwn, user }) {
+function MessageGroup({ messages, isOwn, user, userCache, isDM }) {
   const first = messages[0];
-  const showHeader = !isOwn;
+  // Resolve display name: message field → userCache → fallback
+  const cached = userCache?.[first.sender_id];
+  const displayName =
+    first.sender_name?.trim() ||
+    cached?.full_name?.trim() ||
+    cached?.username?.trim() ||
+    first.sender_username?.trim() ||
+    "Unknown";
+
+  // Show name in group channels for ALL incoming messages (not own, not DM)
+  const showHeader = !isOwn && !isDM;
+
   return (
     <div className={cn("group flex gap-3 px-4", isOwn ? "flex-row-reverse" : "flex-row")}>
       {!isOwn && (
-        <Avatar className="h-8 w-8 shrink-0 mt-auto">
+        <Avatar className="h-8 w-8 shrink-0 mt-1">
           <AvatarImage src={`${BACKEND_URL}${first.avatar_url}`} />
-          <AvatarFallback className={cn("text-[10px] font-semibold text-white", getAvatarColor(first.sender_name))}>
-            {first.sender_initials}
+          <AvatarFallback className={cn("text-[10px] font-semibold text-white", getAvatarColor(displayName))}>
+            {first.sender_initials || displayName.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
       )}
 
       <div className={cn("flex flex-col max-w-[75%] gap-0.5", isOwn ? "items-end" : "items-start")}>
         {showHeader && (
-          <span className="text-[11px] font-semibold text-foreground/80 ml-1 mb-0.5">{first.sender_name}</span>
+          <span className="text-xs font-semibold text-foreground ml-1 mb-0.5 leading-none">{displayName}</span>
         )}
         {messages.map((msg, idx) => {
           const emojiOnly = isOnlyEmojis(msg.text);
@@ -944,6 +955,8 @@ export default function ChatPage() {
                     messages={block.messages}
                     isOwn={isOwn}
                     user={user}
+                    userCache={userCache}
+                    isDM={isActiveDM}
                   />
                 );
               })}
