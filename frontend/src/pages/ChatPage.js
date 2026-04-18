@@ -28,7 +28,9 @@ import {
   LayoutDashboard, Globe, ShieldCheck,
   FileText, Download, Zap, LogIn, Loader2, Paperclip,
   Menu, ChevronUp, User2, Settings, SquarePen,
+  Mic, PlusCircle,
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import MediaMenu from "@/components/chat/MediaMenu";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import * as crypto from "@/lib/crypto";
@@ -548,88 +550,93 @@ export default function ChatPage() {
                 />
               </div>
 
-              {/* List */}
-              <ScrollArea className="flex-1">
-                <div className="px-2 pb-4 space-y-4">
-                  {/* Channels */}
-                  <div className="space-y-1">
-                    <div className="px-2 pt-2 pb-1 flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">Channels</span>
-                    </div>
-                    {filteredChannels.length === 0 && (
-                      <div className="px-3 py-2 text-[11px] text-muted-foreground/60 italic">No channels</div>
-                    )}
-                    {filteredChannels.map(ch => (
-                      <button
-                        key={ch.id}
-                        onClick={() => onChannelClick(ch.id)}
-                        className={cn(
-                          "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left",
-                          activeChannelId === ch.id
-                            ? "bg-accent text-accent-foreground"
-                            : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                        )}
-                      >
-                        <div className={cn(
-                          "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 channel-avatar text-sm",
-                          activeChannelId === ch.id && "ring-2 ring-primary ring-offset-2 ring-offset-background"
-                        )}>
-                          {ch.type === "private"
-                            ? <Lock className="h-4 w-4" />
-                            : <span>{ch.name?.charAt(0)?.toUpperCase() || "#"}</span>}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate leading-tight">{ch.name}</p>
-                          <p className="text-[11px] opacity-60 truncate mt-0.5">{ch.last_message_preview || "No messages yet"}</p>
-                        </div>
-                        {unreadCounts[ch.id] > 0 && (
-                          <Badge className="bg-primary text-primary-foreground text-[10px] h-5 px-1.5 min-w-[20px] justify-center rounded-full">
-                            {unreadCounts[ch.id]}
-                          </Badge>
-                        )}
-                      </button>
-                    ))}
-                  </div>
+              {/* Tabs: Chats (DMs) / Groups (channels) */}
+              <Tabs defaultValue="chats" className="flex-1 flex flex-col min-h-0">
+                <TabsList className="mx-3 mb-1 grid grid-cols-2 rounded-full bg-muted/60 p-1 h-9 shrink-0">
+                  <TabsTrigger value="chats" className="rounded-full text-xs gap-1.5 data-[state=active]:shadow-sm">
+                    <MessageSquare className="h-3.5 w-3.5" /> Chats
+                  </TabsTrigger>
+                  <TabsTrigger value="groups" className="rounded-full text-xs gap-1.5 data-[state=active]:shadow-sm">
+                    <Users className="h-3.5 w-3.5" /> Groups
+                  </TabsTrigger>
+                </TabsList>
 
-                  {/* DMs */}
-                  <div className="space-y-1">
-                    <div className="px-2 pt-2 pb-1">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">Direct Messages</span>
-                    </div>
-                    {filteredDms.length === 0 && (
-                      <div className="px-3 py-2 text-[11px] text-muted-foreground/60 italic">No direct messages</div>
-                    )}
-                    {filteredDms.map(dm => (
-                      <button
-                        key={dm.id}
-                        onClick={() => onChannelClick(dm.id)}
-                        className={cn(
-                          "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left",
-                          activeChannelId === dm.id
-                            ? "bg-accent text-accent-foreground"
-                            : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                        )}
-                      >
-                        <div className="relative shrink-0">
-                          <Avatar className="h-9 w-9 border border-border">
-                            <AvatarImage src={`${BACKEND_URL}${dm.avatar_url}`} />
-                            <AvatarFallback className={cn("text-xs font-bold", getAvatarColor(dm.name))}>
-                              {dm.name?.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-card flex items-center justify-center">
-                            <div className={cn("w-2 h-2 rounded-full", dm.is_online ? "bg-green-500" : "bg-muted-foreground/30")} />
+                <TabsContent value="chats" className="flex-1 mt-0 min-h-0 overflow-hidden">
+                  <ScrollArea className="h-full">
+                    <div className="px-2 pb-4 space-y-1 pt-2">
+                      {filteredDms.length === 0 ? (
+                        <div className="px-3 py-6 text-[11px] text-muted-foreground/60 italic text-center">No direct messages</div>
+                      ) : filteredDms.map(dm => (
+                        <button
+                          key={dm.id}
+                          onClick={() => onChannelClick(dm.id)}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left",
+                            activeChannelId === dm.id
+                              ? "bg-accent text-accent-foreground shadow-sm"
+                              : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                          )}
+                        >
+                          <div className="relative shrink-0">
+                            <Avatar className="h-10 w-10 border border-border">
+                              <AvatarImage src={`${BACKEND_URL}${dm.avatar_url}`} />
+                              <AvatarFallback className={cn("text-xs font-bold", getAvatarColor(dm.name))}>
+                                {dm.name?.charAt(0)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-card flex items-center justify-center">
+                              <div className={cn("w-2 h-2 rounded-full", dm.is_online ? "bg-green-500" : "bg-muted-foreground/30")} />
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate leading-tight">{dm.name}</p>
-                          <p className="text-[11px] opacity-60 truncate mt-0.5">@{dm.username}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </ScrollArea>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate leading-tight">{dm.name}</p>
+                            <p className="text-[11px] opacity-60 truncate mt-0.5">@{dm.username}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+
+                <TabsContent value="groups" className="flex-1 mt-0 min-h-0 overflow-hidden">
+                  <ScrollArea className="h-full">
+                    <div className="px-2 pb-4 space-y-1 pt-2">
+                      {filteredChannels.length === 0 ? (
+                        <div className="px-3 py-6 text-[11px] text-muted-foreground/60 italic text-center">No groups</div>
+                      ) : filteredChannels.map(ch => (
+                        <button
+                          key={ch.id}
+                          onClick={() => onChannelClick(ch.id)}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left",
+                            activeChannelId === ch.id
+                              ? "bg-accent text-accent-foreground shadow-sm"
+                              : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 channel-avatar text-base",
+                            activeChannelId === ch.id && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+                          )}>
+                            {ch.type === "private"
+                              ? <Lock className="h-4 w-4" />
+                              : <span>{ch.name?.charAt(0)?.toUpperCase() || "#"}</span>}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate leading-tight">{ch.name}</p>
+                            <p className="text-[11px] opacity-60 truncate mt-0.5">{ch.last_message_preview || "No messages yet"}</p>
+                          </div>
+                          {unreadCounts[ch.id] > 0 && (
+                            <Badge className="bg-primary text-primary-foreground text-[10px] h-5 px-1.5 min-w-[20px] justify-center rounded-full">
+                              {unreadCounts[ch.id]}
+                            </Badge>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+              </Tabs>
             </div>
           </ResizablePanel>
 
@@ -823,36 +830,28 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              {/* Input Bar */}
-              <div className="p-3 border-t border-border shrink-0 bg-card/80 backdrop-blur-xl">
-                <div className="max-w-4xl mx-auto">
-                  <div className={cn(
-                    "relative rounded-xl border transition-all p-1.5 shadow-sm",
-                    inputDisabled
-                      ? "bg-muted/20 border-border/30 opacity-60"
-                      : "bg-background border-border/60 focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10"
-                  )}>
-                    <div className="flex items-end gap-1.5">
-                      <div className="flex gap-0.5 pb-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 rounded-lg text-muted-foreground hover:bg-muted"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={inputDisabled}
-                        >
-                          <Paperclip className="h-4 w-4" />
-                        </Button>
-                        <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setPendingFile(e.target.files[0])} />
+              {/* Input Bar (composer) */}
+              <div className={cn(
+                "p-3 border-t border-border shrink-0 bg-card/80 backdrop-blur-xl",
+                inputDisabled && "opacity-60"
+              )}>
+                <div className="max-w-4xl mx-auto space-y-2">
+                  <div className="flex items-end gap-2">
+                    {/* + prefix: file attach */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10 rounded-full text-muted-foreground hover:bg-muted shrink-0 mb-0.5"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={inputDisabled}
+                      title="Attach file"
+                    >
+                      <PlusCircle className="h-5 w-5" />
+                    </Button>
+                    <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setPendingFile(e.target.files[0])} />
 
-                        <MediaMenu
-                          onEmojiSelect={handleEmojiSelect}
-                          onGifSelect={(gif) => { /* handled in prev logic */ }}
-                          gifsEnabled={orgGifsEnabled}
-                          disabled={inputDisabled}
-                        />
-                      </div>
-
+                    {/* Pill textarea + emoji */}
+                    <div className="flex-1 flex items-end bg-muted/60 rounded-3xl shadow-inner min-h-[44px] focus-within:ring-2 focus-within:ring-primary/20 transition-all">
                       <Textarea
                         ref={inputRef}
                         value={inputText}
@@ -865,36 +864,56 @@ export default function ChatPage() {
                         }}
                         placeholder={activeChannel ? `Message #${activeChannel.name}` : "Select a channel to start chatting..."}
                         disabled={inputDisabled}
-                        className="flex-1 min-h-[40px] max-h-[200px] bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm py-2.5 px-2 resize-none custom-scrollbar disabled:cursor-not-allowed"
+                        rows={1}
+                        className="flex-1 min-h-[44px] max-h-[200px] bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm py-3 px-4 resize-none custom-scrollbar disabled:cursor-not-allowed leading-tight"
                       />
-
-                      <div className="pb-1 pr-1">
-                        <Button
-                          size="icon"
-                          onClick={handleSend}
-                          disabled={!inputText.trim() && !pendingFile}
-                          className="h-9 w-9 rounded-lg shadow-md shadow-primary/20"
-                        >
-                          <Send className="h-4 w-4" />
-                        </Button>
+                      <div className="pb-1 pr-1.5 shrink-0">
+                        <MediaMenu
+                          onEmojiSelect={handleEmojiSelect}
+                          onGifSelect={(gif) => { /* handled in prev logic */ }}
+                          gifsEnabled={orgGifsEnabled}
+                          disabled={inputDisabled}
+                        />
                       </div>
                     </div>
 
-                    {pendingFile && (
-                      <div className="m-2 p-3 bg-background/50 rounded-lg border border-border flex items-center gap-3 animate-in slide-in-from-bottom-2">
-                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <FileText className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold truncate">{pendingFile.name}</p>
-                          <p className="text-[10px] text-muted-foreground uppercase font-medium">{(pendingFile.size / 1024).toFixed(1)} KB</p>
-                        </div>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setPendingFile(null)}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
+                    {/* Send (when content) or Mic (visual placeholder) */}
+                    {(inputText.trim() || pendingFile) ? (
+                      <Button
+                        size="icon"
+                        onClick={handleSend}
+                        disabled={inputDisabled}
+                        className="h-10 w-10 rounded-full shadow-md shadow-primary/20 shrink-0 mb-0.5"
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 rounded-full text-muted-foreground hover:bg-muted shrink-0 mb-0.5"
+                        disabled
+                        title="Voice messages coming soon"
+                      >
+                        <Mic className="h-5 w-5" />
+                      </Button>
                     )}
                   </div>
+
+                  {pendingFile && (
+                    <div className="p-3 bg-background/60 rounded-2xl border border-border flex items-center gap-3 animate-in slide-in-from-bottom-2">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <FileText className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold truncate">{pendingFile.name}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase font-medium">{(pendingFile.size / 1024).toFixed(1)} KB</p>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setPendingFile(null)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
