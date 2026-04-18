@@ -27,7 +27,7 @@ import {
   UserCircle, Bell, Clock,
   LayoutDashboard, Globe, ShieldCheck,
   FileText, Download, Zap, LogIn, Loader2, Paperclip,
-  ChevronUp, User2, Settings, SquarePen,
+  ChevronUp, User2, Settings, SquarePen, Pencil, Trash2, Check,
 } from "lucide-react";
 import MediaMenu from "@/components/chat/MediaMenu";
 import ThemeToggle from "@/components/layout/ThemeToggle";
@@ -121,9 +121,8 @@ const isOnlyEmojis = (text) => {
 
 // Renders a contiguous block of messages from the same author. Avatar + name
 // appear once at the top; subsequent bubbles are tightly stacked.
-function MessageGroup({ messages, isOwn, user, userCache, isDM }) {
+function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete }) {
   const first = messages[0];
-  // Resolve display name: message field → userCache → fallback
   const cached = userCache?.[first.sender_id];
   const displayName =
     first.sender_name?.trim() ||
@@ -132,8 +131,26 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM }) {
     first.sender_username?.trim() ||
     "Unknown";
 
-  // Show name in group channels for ALL incoming messages (not own, not DM)
   const showHeader = !isOwn && !isDM;
+
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState("");
+
+  const startEdit = (msg) => {
+    setEditingId(msg.id);
+    setEditText(msg.text || "");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditText("");
+  };
+
+  const submitEdit = async (msg) => {
+    if (!editText.trim() || editText.trim() === msg.text) { cancelEdit(); return; }
+    await onEdit(msg.id, editText.trim());
+    cancelEdit();
+  };
 
   return (
     <div className={cn("group flex gap-3 px-4", isOwn ? "flex-row-reverse" : "flex-row")}>
@@ -152,44 +169,80 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM }) {
         )}
         {messages.map((msg, idx) => {
           const emojiOnly = isOnlyEmojis(msg.text);
-          const isFirst = idx === 0;
           const isLast = idx === messages.length - 1;
+          const isEditing = editingId === msg.id;
           return (
-            <div key={msg.id} className={cn("flex flex-col", isOwn ? "items-end" : "items-start")}>
-              {emojiOnly && !msg.file_url ? (
-                <div className="text-4xl leading-none py-0.5">{msg.text}</div>
-              ) : (
-                <div
-                  className={cn(
-                    "px-4 py-2 text-[14px] leading-snug shadow-sm",
-                    isOwn
-                      ? "msg-outgoing text-white"
-                      : "msg-incoming",
-                    // Round corners — only the bubble adjacent to the avatar/edge
-                    // gets a flat corner; rest are fully rounded.
-                    isOwn
-                      ? cn(
-                          "rounded-2xl",
-                          isLast && "rounded-br-md"
-                        )
-                      : cn(
-                          "rounded-2xl",
-                          isLast && "rounded-bl-md"
-                        )
-                  )}
-                >
-                  {msg.text}
+            <div key={msg.id} className={cn("relative flex flex-col", isOwn ? "items-end" : "items-start")}>
+              {isEditing ? (
+                <div className="flex flex-col gap-1 min-w-[200px]">
+                  <Textarea
+                    className="text-sm resize-none rounded-xl border-primary focus-visible:ring-1"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitEdit(msg); }
+                      if (e.key === "Escape") cancelEdit();
+                    }}
+                    rows={2}
+                    autoFocus
+                  />
+                  <div className="flex gap-1 justify-end">
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={cancelEdit}><X className="h-3 w-3" /></Button>
+                    <Button size="icon" className="h-6 w-6" onClick={() => submitEdit(msg)}><Check className="h-3 w-3" /></Button>
+                  </div>
                 </div>
+              ) : (
+                <>
+                  <div className="relative group/msg">
+                    {emojiOnly && !msg.file_url ? (
+                      <div className="text-4xl leading-none py-0.5">{msg.text}</div>
+                    ) : (
+                      <div
+                        className={cn(
+                          "px-4 py-2 text-[14px] leading-snug shadow-sm",
+                          isOwn ? "msg-outgoing text-white" : "msg-incoming",
+                          isOwn
+                            ? cn("rounded-2xl", isLast && "rounded-br-md")
+                            : cn("rounded-2xl", isLast && "rounded-bl-md")
+                        )}
+                      >
+                        {msg.text}
+                        {msg.edited && <span className="text-[10px] opacity-60 ml-1">(edited)</span>}
+                      </div>
+                    )}
+                    {isOwn && (
+                      <div className={cn(
+                        "absolute top-1/2 -translate-y-1/2 hidden group-hover/msg:flex gap-0.5 items-center",
+                        "right-full mr-1.5"
+                      )}>
+                        <button
+                          onClick={() => startEdit(msg)}
+                          className="p-1 rounded-md bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                          title="Edit"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={() => onDelete(msg.id)}
+                          className="p-1 rounded-md bg-muted hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {msg.file_url && (
+                    <FileAttachment
+                      fileUrl={msg.file_url}
+                      fileName={msg.file_name}
+                      fileSize={msg.file_size}
+                      fileType={msg.file_type}
+                    />
+                  )}
+                </>
               )}
-              {msg.file_url && (
-                <FileAttachment
-                  fileUrl={msg.file_url}
-                  fileName={msg.file_name}
-                  fileSize={msg.file_size}
-                  fileType={msg.file_type}
-                />
-              )}
-              {isLast && (
+              {isLast && !isEditing && (
                 <span className={cn(
                   "text-[10px] text-muted-foreground/60 mt-0.5",
                   isOwn ? "mr-1" : "ml-1"
@@ -1028,6 +1081,8 @@ export default function ChatPage() {
                     user={user}
                     userCache={userCache}
                     isDM={isActiveDM}
+                    onEdit={editMessage}
+                    onDelete={deleteMessage}
                   />
                 );
               })}

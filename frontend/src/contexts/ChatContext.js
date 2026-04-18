@@ -149,7 +149,19 @@ export function ChatProvider({ children }) {
   const editMessage = useCallback(async (messageId, text) => {
     try {
       const res = await chatApi.editMessage(messageId, { text });
-      return res.data;
+      const updated = res.data;
+      setMessages((prev) => {
+        const next = { ...prev };
+        for (const [chId, msgs] of Object.entries(next)) {
+          if (msgs.some((m) => m.id === messageId)) {
+            next[chId] = msgs.map((m) => m.id === messageId ? { ...m, text, edited: true } : m);
+            messagesRef.current = next;
+            break;
+          }
+        }
+        return next;
+      });
+      return updated;
     } catch {
       return null;
     }
@@ -159,6 +171,17 @@ export function ChatProvider({ children }) {
   const deleteMessage = useCallback(async (messageId) => {
     try {
       await chatApi.deleteMessage(messageId);
+      setMessages((prev) => {
+        const next = { ...prev };
+        for (const [chId, msgs] of Object.entries(next)) {
+          if (msgs.some((m) => m.id === messageId)) {
+            next[chId] = msgs.filter((m) => m.id !== messageId);
+            messagesRef.current = next;
+            break;
+          }
+        }
+        return next;
+      });
       return true;
     } catch {
       return false;
