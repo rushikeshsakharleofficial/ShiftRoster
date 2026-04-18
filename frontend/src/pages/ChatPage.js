@@ -21,40 +21,20 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
-  Hash, Lock, MessageSquare, Plus, Search,
+  Hash, Lock, MessageSquare, Plus, Search, Users,
   Send, X, MoreHorizontal,
   LogOut, Info,
-  Search as SearchIcon, UserCircle, Bell, Clock,
+  UserCircle, Bell, Clock,
   LayoutDashboard, Globe, ShieldCheck,
   FileText, Download, Zap, LogIn, Loader2, Paperclip,
-  Menu, ChevronUp, User2, Settings, SquarePen,
+  ChevronUp, User2, Settings, SquarePen,
 } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MIcon } from "@/components/ui/material-icon";
 import MediaMenu from "@/components/chat/MediaMenu";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import * as crypto from "@/lib/crypto";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { format, isSameDay } from "date-fns";
-import {
-  SidebarInset,
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarFooter,
-  SidebarProvider,
-  useSidebar,
-} from "@/components/blocks/sidebar";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,12 +49,12 @@ const BACKEND_URL = import.meta.env.REACT_APP_BACKEND_URL;
 
 function DaySeparator({ date }) {
   return (
-    <div className="flex items-center my-8 px-8">
-      <div className="flex-1 h-px bg-border/40" />
-      <span className="mx-6 text-[10px] font-bold text-muted-foreground/60 bg-background px-3 uppercase tracking-[0.2em]">
+    <div className="flex items-center my-4">
+      <div className="flex-1 h-px bg-border/50" />
+      <span className="mx-3 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-[0.15em]">
         {format(new Date(date), "EEEE, MMMM do")}
       </span>
-      <div className="flex-1 h-px bg-border/40" />
+      <div className="flex-1 h-px bg-border/50" />
     </div>
   );
 }
@@ -83,30 +63,27 @@ function FileAttachment({ fileUrl, fileName, fileSize, fileType }) {
   const fullUrl = fileUrl?.startsWith("http") ? fileUrl : `${BACKEND_URL}${fileUrl}`;
   const isImage = fileType?.startsWith("image/");
   return (
-    <div className="mt-3 max-w-sm">
+    <div className="mt-2 max-w-sm">
       {isImage ? (
         <a href={fullUrl} target="_blank" rel="noopener noreferrer" className="block group relative overflow-hidden rounded-2xl border border-border/50 bg-muted/20 shadow-sm transition-all hover:shadow-md">
-          <img src={fullUrl} alt={fileName} className="max-h-80 w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
+          <img src={fullUrl} alt={fileName} className="max-h-80 w-full object-cover" />
         </a>
       ) : (
         <a
           href={fullUrl}
           download={fileName}
-          className="flex items-center gap-4 p-4 rounded-2xl border border-border/40 bg-muted/40 hover:bg-muted transition-all group shadow-sm hover:shadow-md"
+          className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-muted/40 hover:bg-muted transition-colors"
         >
-          <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-inner">
-            <FileText className="h-6 w-6" />
+          <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <FileText className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold truncate text-foreground">{fileName}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-black mt-1">
-              {fileSize ? (fileSize / (1024 * 1024)).toFixed(2) : "0"} MB • {fileType?.split("/")[1]?.toUpperCase() || "FILE"}
+            <p className="text-xs font-semibold truncate text-foreground">{fileName}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+              {fileSize ? (fileSize / (1024 * 1024)).toFixed(2) : "0"} MB
             </p>
           </div>
-          <div className="w-8 h-8 rounded-full flex items-center justify-center group-hover:bg-primary/10 transition-colors">
-            <Download className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
-          </div>
+          <Download className="h-4 w-4 text-muted-foreground shrink-0" />
         </a>
       )}
     </div>
@@ -119,7 +96,7 @@ function SystemEvent({ message }) {
     if (parts) {
       return (
         <>
-          <span className="font-bold">{parts[1]}</span>
+          <span className="font-medium">{parts[1]}</span>
           {parts[2]}
         </>
       );
@@ -128,11 +105,10 @@ function SystemEvent({ message }) {
   };
 
   return (
-    <div className="flex justify-center py-2 animate-in fade-in duration-700">
-      <div className="bg-muted/50 text-muted-foreground text-[10px] font-semibold px-5 py-2 rounded-full shadow-sm tracking-wide flex items-center gap-2.5 backdrop-blur-sm border border-border/20">
-        <Zap className="h-3 w-3 text-primary/60" />
-        <span className="leading-snug">{formatText(message.text)}</span>
-      </div>
+    <div className="flex justify-center py-1">
+      <span className="text-[10px] text-muted-foreground/60 leading-snug">
+        {formatText(message.text)}
+      </span>
     </div>
   );
 }
@@ -143,135 +119,78 @@ const isOnlyEmojis = (text) => {
   return stripped.length === 0;
 };
 
-function UserMessageBubble({ message, isOwn, user }) {
-  const emojiOnly = isOnlyEmojis(message.text);
-
+// Renders a contiguous block of messages from the same author. Avatar + name
+// appear once at the top; subsequent bubbles are tightly stacked.
+function MessageGroup({ messages, isOwn, user }) {
+  const first = messages[0];
+  const showHeader = !isOwn;
   return (
-    <div className={cn(
-      "group flex gap-4 px-8 py-1.5 transition-all",
-      isOwn ? "flex-row-reverse" : "flex-row"
-    )}>
-      <Avatar className={cn("h-10 w-10 border-2 border-background shadow-sm ring-1 ring-border flex-shrink-0 mt-0.5", isOwn && "hidden")}>
-        <AvatarImage src={`${BACKEND_URL}${message.avatar_url}`} />
-        <AvatarFallback className={cn("text-xs font-bold", getAvatarColor(message.sender_name))}>{message.sender_initials}</AvatarFallback>
-      </Avatar>
+    <div className={cn("group flex gap-3 px-4", isOwn ? "flex-row-reverse" : "flex-row")}>
+      {!isOwn && (
+        <Avatar className="h-8 w-8 shrink-0 mt-auto">
+          <AvatarImage src={`${BACKEND_URL}${first.avatar_url}`} />
+          <AvatarFallback className={cn("text-[10px] font-semibold text-white", getAvatarColor(first.sender_name))}>
+            {first.sender_initials}
+          </AvatarFallback>
+        </Avatar>
+      )}
 
-      <div className={cn("flex flex-col max-w-[75%]", isOwn ? "items-end" : "items-start")}>
-        <div className={cn("flex items-center gap-2 mb-1.5", isOwn ? "flex-row-reverse" : "flex-row")}>
-          {!isOwn && <span className="text-[11px] font-black text-foreground uppercase tracking-wider opacity-80">{message.sender_name}</span>}
-          <span className="text-[9px] font-bold text-muted-foreground/40 tracking-widest">{format(new Date(message.created_at), "h:mm aa")}</span>
-        </div>
-
-        {emojiOnly && !message.file_url ? (
-          <div className="text-5xl leading-none py-1">
-            {message.text}
-          </div>
-        ) : (
-          <div className={cn(
-            "px-5 py-3.5 rounded-3xl text-[13px] leading-relaxed shadow-sm font-medium transition-all",
-            isOwn
-              ? "msg-outgoing text-white rounded-tr-none shadow-primary/30"
-              : "bg-card text-card-foreground rounded-tl-none border border-border/30 hover:shadow-md"
-          )}>
-            {message.text}
-          </div>
+      <div className={cn("flex flex-col max-w-[75%] gap-0.5", isOwn ? "items-end" : "items-start")}>
+        {showHeader && (
+          <span className="text-[11px] font-semibold text-foreground/80 ml-1 mb-0.5">{first.sender_name}</span>
         )}
-
-        {message.file_url && (
-          <FileAttachment
-            fileUrl={message.file_url}
-            fileName={message.file_name}
-            fileSize={message.file_size}
-            fileType={message.file_type}
-          />
-        )}
+        {messages.map((msg, idx) => {
+          const emojiOnly = isOnlyEmojis(msg.text);
+          const isFirst = idx === 0;
+          const isLast = idx === messages.length - 1;
+          return (
+            <div key={msg.id} className={cn("flex flex-col", isOwn ? "items-end" : "items-start")}>
+              {emojiOnly && !msg.file_url ? (
+                <div className="text-4xl leading-none py-0.5">{msg.text}</div>
+              ) : (
+                <div
+                  className={cn(
+                    "px-4 py-2 text-[14px] leading-snug shadow-sm",
+                    isOwn
+                      ? "msg-outgoing text-white"
+                      : "bg-muted text-foreground",
+                    // Round corners — only the bubble adjacent to the avatar/edge
+                    // gets a flat corner; rest are fully rounded.
+                    isOwn
+                      ? cn(
+                          "rounded-2xl",
+                          isLast && "rounded-br-md"
+                        )
+                      : cn(
+                          "rounded-2xl",
+                          isLast && "rounded-bl-md"
+                        )
+                  )}
+                >
+                  {msg.text}
+                </div>
+              )}
+              {msg.file_url && (
+                <FileAttachment
+                  fileUrl={msg.file_url}
+                  fileName={msg.file_name}
+                  fileSize={msg.file_size}
+                  fileType={msg.file_type}
+                />
+              )}
+              {isLast && (
+                <span className={cn(
+                  "text-[10px] text-muted-foreground/60 mt-0.5",
+                  isOwn ? "mr-1" : "ml-1"
+                )}>
+                  {format(new Date(msg.created_at), "h:mm a")}
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
-  );
-}
-
-// Sidebar nav (icon-collapsible floating). Lives inside SidebarProvider.
-function ChatNavSidebar({ navigate, onNewChannel, onDiscover, userName }) {
-  const { toggleSidebar } = useSidebar();
-
-  return (
-    <Sidebar variant="floating" collapsible="icon">
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigate</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={toggleSidebar} tooltip="Toggle sidebar">
-                  <Menu />
-                  <span>Toggle</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => navigate("/")} tooltip="Dashboard">
-                  <LayoutDashboard />
-                  <span>Dashboard</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={onNewChannel} tooltip="New channel">
-                  <Plus />
-                  <span>New Channel</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={onDiscover} tooltip="Find channels">
-                  <Globe />
-                  <span>Find</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <div className="flex items-center justify-center px-2 py-1 group-data-[collapsible=icon]:px-0">
-              <ThemeToggle />
-            </div>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={() => navigate("/settings")} tooltip="Settings">
-              <Settings />
-              <span>Settings</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton tooltip={userName}>
-                  <User2 />
-                  <span>{userName}</span>
-                  <ChevronUp className="ml-auto" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                side="top"
-                className="w-[--radix-popper-anchor-width] min-w-[10rem]"
-              >
-                <DropdownMenuItem onClick={() => navigate("/settings")}>
-                  Account
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/notifications")}>
-                  Notifications
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/login")}>
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
-    </Sidebar>
   );
 }
 
@@ -290,14 +209,12 @@ export default function ChatPage() {
 
   const isDesktop = useMediaQuery("(min-width: 1024px)");
 
-  // Layout State
   const [inputText, setInputText] = useState("");
   const [pendingFile, setPendingFile] = useState(null);
   const [isE2EEnabled, setIsE2EEnabled] = useState(false);
   const [myKeyPair, setMyKeyPair] = useState(null);
   const [orgGifsEnabled, setOrgGifsEnabled] = useState(false);
 
-  // Dialogs
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showDiscovery, setShowDiscovery] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -311,36 +228,86 @@ export default function ChatPage() {
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Computed
-  const joinedChannels = useMemo(() => {
-    return channels.filter(ch => ch.is_member);
-  }, [channels]);
+  const joinedChannels = useMemo(() => channels.filter((ch) => ch.is_member), [channels]);
+
+  // Sort channels so a channel literally named "general" pins to the top.
+  const sortedChannels = useMemo(() => {
+    return [...joinedChannels].sort((a, b) => {
+      const aGen = a.name?.toLowerCase() === "general";
+      const bGen = b.name?.toLowerCase() === "general";
+      if (aGen && !bGen) return -1;
+      if (bGen && !aGen) return 1;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+  }, [joinedChannels]);
 
   const filteredChannels = useMemo(() => {
-    if (!chatListFilter.trim()) return joinedChannels;
+    if (!chatListFilter.trim()) return sortedChannels;
     const q = chatListFilter.toLowerCase();
-    return joinedChannels.filter(c => c.name?.toLowerCase().includes(q));
-  }, [joinedChannels, chatListFilter]);
+    return sortedChannels.filter((c) => c.name?.toLowerCase().includes(q));
+  }, [sortedChannels, chatListFilter]);
 
   const filteredDms = useMemo(() => {
     if (!chatListFilter.trim()) return dms;
     const q = chatListFilter.toLowerCase();
-    return dms.filter(d => d.name?.toLowerCase().includes(q) || d.username?.toLowerCase().includes(q));
+    return dms.filter(
+      (d) => d.name?.toLowerCase().includes(q) || d.username?.toLowerCase().includes(q)
+    );
   }, [dms, chatListFilter]);
 
-  const activeChannel = useMemo(() => {
-    return [...channels, ...dms].find(c => c.id === activeChannelId);
-  }, [channels, dms, activeChannelId]);
+  const activeChannel = useMemo(
+    () => [...channels, ...dms].find((c) => c.id === activeChannelId),
+    [channels, dms, activeChannelId]
+  );
 
-  const isActiveDM = useMemo(() => {
-    return dms.some(d => d.id === activeChannelId);
-  }, [dms, activeChannelId]);
+  const isActiveDM = useMemo(
+    () => dms.some((d) => d.id === activeChannelId),
+    [dms, activeChannelId]
+  );
 
-  const currentMessages = useMemo(() => {
-    return messages[activeChannelId] || [];
-  }, [messages, activeChannelId]);
+  const currentMessages = useMemo(
+    () => messages[activeChannelId] || [],
+    [messages, activeChannelId]
+  );
 
-  // Search Logic (Discovery)
+  // Group consecutive same-sender, same-day messages into blocks.
+  const messageBlocks = useMemo(() => {
+    const blocks = [];
+    let currentBlock = null;
+    let lastDay = null;
+
+    for (const msg of currentMessages) {
+      const day = format(new Date(msg.created_at), "yyyy-MM-dd");
+      if (day !== lastDay) {
+        if (currentBlock) blocks.push(currentBlock);
+        blocks.push({ kind: "day", date: msg.created_at });
+        currentBlock = null;
+        lastDay = day;
+      }
+      if (msg.type === "system") {
+        if (currentBlock) {
+          blocks.push(currentBlock);
+          currentBlock = null;
+        }
+        blocks.push({ kind: "system", message: msg });
+        continue;
+      }
+      if (
+        currentBlock &&
+        currentBlock.kind === "msgs" &&
+        currentBlock.senderId === msg.sender_id
+      ) {
+        currentBlock.messages.push(msg);
+      } else {
+        if (currentBlock) blocks.push(currentBlock);
+        currentBlock = { kind: "msgs", senderId: msg.sender_id, messages: [msg] };
+      }
+    }
+    if (currentBlock) blocks.push(currentBlock);
+    return blocks;
+  }, [currentMessages]);
+
+  // Discovery search
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (!searchQuery.trim()) {
@@ -360,7 +327,7 @@ export default function ChatPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Sync URL with active channel
+  // URL sync
   useEffect(() => {
     if (!urlChannelId) {
       setActiveChannelId(null);
@@ -376,7 +343,7 @@ export default function ChatPage() {
     }
   }, [activeChannelId, isActiveDM, loadMessages, markRead]);
 
-  // Init crypto and features
+  // Crypto + features init
   useEffect(() => {
     const init = async () => {
       try {
@@ -387,25 +354,26 @@ export default function ChatPage() {
           const keys = await crypto.generateKeyPair();
           setMyKeyPair(keys);
         }
-      } catch (err) { console.error("Chat init failed:", err); }
+      } catch (err) {
+        console.error("Chat init failed:", err);
+      }
     };
     init();
   }, [myKeyPair]);
 
-  // Scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [currentMessages]);
 
-  // Auto-expand textarea
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.style.height = "auto";
       const scrollHeight = inputRef.current.scrollHeight;
-      const maxHeight = 224;
-      inputRef.current.style.height = (scrollHeight > maxHeight ? maxHeight : scrollHeight) + "px";
+      const maxHeight = 160;
+      inputRef.current.style.height =
+        (scrollHeight > maxHeight ? maxHeight : scrollHeight) + "px";
       inputRef.current.style.overflowY = scrollHeight > maxHeight ? "auto" : "hidden";
     }
   }, [inputText]);
@@ -423,7 +391,10 @@ export default function ChatPage() {
     setTimeout(() => {
       if (inputRef.current) {
         inputRef.current.focus();
-        inputRef.current.setSelectionRange(start + emoji.length, start + emoji.length);
+        inputRef.current.setSelectionRange(
+          start + emoji.length,
+          start + emoji.length
+        );
       }
     }, 0);
   };
@@ -439,19 +410,34 @@ export default function ChatPage() {
         const keyRes = await chatApi.getChannelMembers(activeChannelId);
         const members = keyRes.data.members || [];
         const recipientKeys = {};
-        members.forEach(m => { if (m.public_key) recipientKeys[m.id] = m.public_key; });
+        members.forEach((m) => {
+          if (m.public_key) recipientKeys[m.id] = m.public_key;
+        });
         const myPubKey = await crypto.exportPublicKey(myKeyPair.publicKey);
         recipientKeys[user.id] = myPubKey;
-
         if (Object.keys(recipientKeys).length > 0) {
           const encrypted = await crypto.encryptMessage(text, recipientKeys);
-          payload = { text: encrypted.ciphertext, iv: encrypted.iv, encrypted_keys: encrypted.encryptedKeys, is_encrypted: true };
+          payload = {
+            text: encrypted.ciphertext,
+            iv: encrypted.iv,
+            encrypted_keys: encrypted.encryptedKeys,
+            is_encrypted: true,
+          };
         }
       }
-      await sendMessage(activeChannelId, payload.text, null, !isActiveDM, pendingFile, payload);
+      await sendMessage(
+        activeChannelId,
+        payload.text,
+        null,
+        !isActiveDM,
+        pendingFile,
+        payload
+      );
       setInputText("");
       setPendingFile(null);
-    } catch (err) { console.error("Send failed:", err); }
+    } catch (err) {
+      console.error("Send failed:", err);
+    }
   };
 
   const handleCreateChannel = async () => {
@@ -491,437 +477,568 @@ export default function ChatPage() {
       toast.error("Failed to leave channel");
     }
   };
+
   const onChannelClick = (id) => {
     navigate(`/chat/${id}`);
     setActiveChannelId(id);
     setShowDiscovery(false);
   };
 
-  const inputDisabled = !activeChannelId || (activeChannel && !activeChannel.is_member && !isActiveDM);
+  const inputDisabled =
+    !activeChannelId || (activeChannel && !activeChannel.is_member && !isActiveDM);
   const userName = user?.name || user?.email || "Account";
 
   return (
-    <SidebarProvider className="min-h-0 h-full" defaultOpen={isDesktop}>
-      <ChatNavSidebar
-        navigate={navigate}
-        onNewChannel={() => setShowCreateChannel(true)}
-        onDiscover={() => setShowDiscovery(true)}
-        userName={userName}
-      />
+    <div className="flex h-full w-full overflow-hidden bg-background">
+      {/* === LEFT ASIDE — fixed 280px === */}
+      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border bg-card/60">
+        {/* Top: title + quick actions */}
+        <div className="h-14 px-4 flex items-center justify-between border-b border-border/60 shrink-0">
+          <h2 className="text-base font-semibold tracking-tight">Messages</h2>
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setShowCreateChannel(true)}
+              title="New channel"
+            >
+              <SquarePen className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setShowDiscovery(true)}
+              title="Discover channels"
+            >
+              <Globe className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => navigate("/")}
+              title="Back to dashboard"
+            >
+              <LayoutDashboard className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
 
-      <SidebarInset className="min-h-0 h-full bg-background">
-        <ResizablePanelGroup direction="horizontal" className="h-full">
-          {/* LEFT: chat list */}
-          <ResizablePanel defaultSize={28} minSize={20} maxSize={45}>
-            <div className="flex flex-col h-full border-r border-border bg-card/40">
-              {/* List header */}
-              <div className="h-14 px-4 flex items-center justify-between border-b border-border/50 shrink-0">
-                <p className="text-sm font-bold tracking-tight">Chats</p>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setShowCreateChannel(true)}
-                    title="New channel"
-                  >
-                    <SquarePen className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setShowDiscovery(true)}
-                    title="Find channels"
-                  >
-                    <Globe className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
+        {/* Search */}
+        <div className="px-3 py-2.5 shrink-0">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Search"
+              value={chatListFilter}
+              onChange={(e) => setChatListFilter(e.target.value)}
+              className="pl-8 h-8 text-xs rounded-lg bg-muted/40 border-transparent focus-visible:bg-background"
+            />
+          </div>
+        </div>
 
-              {/* Search */}
-              <div className="relative px-3 py-3 shrink-0">
-                <Search className="absolute left-6 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search chats"
-                  value={chatListFilter}
-                  onChange={(e) => setChatListFilter(e.target.value)}
-                  className="pl-9 h-9 rounded-lg"
-                />
-              </div>
+        {/* Tabs: Chats / Groups */}
+        <Tabs defaultValue="groups" className="flex-1 flex flex-col min-h-0">
+          <TabsList className="mx-3 mb-1 grid grid-cols-2 rounded-lg bg-muted/40 p-0.5 h-8 shrink-0">
+            <TabsTrigger
+              value="chats"
+              className="rounded-md text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            >
+              Chats
+            </TabsTrigger>
+            <TabsTrigger
+              value="groups"
+              className="rounded-md text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            >
+              Groups
+            </TabsTrigger>
+          </TabsList>
 
-              {/* Tabs: Chats (DMs) / Groups (channels) */}
-              <Tabs defaultValue="chats" className="flex-1 flex flex-col min-h-0">
-                <TabsList className="mx-3 mb-1 grid grid-cols-2 rounded-full bg-muted/60 p-1 h-9 shrink-0">
-                  <TabsTrigger value="chats" className="rounded-full text-xs gap-1.5 data-[state=active]:shadow-sm">
-                    <MIcon name="chat" size={16} /> Chats
-                  </TabsTrigger>
-                  <TabsTrigger value="groups" className="rounded-full text-xs gap-1.5 data-[state=active]:shadow-sm">
-                    <MIcon name="group" size={16} filled /> Groups
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="chats" className="flex-1 mt-0 min-h-0 overflow-hidden">
-                  <ScrollArea className="h-full">
-                    <div className="px-2 pb-4 space-y-1 pt-2">
-                      {filteredDms.length === 0 ? (
-                        <div className="px-3 py-6 text-[11px] text-muted-foreground/60 italic text-center">No direct messages</div>
-                      ) : filteredDms.map(dm => (
-                        <button
-                          key={dm.id}
-                          onClick={() => onChannelClick(dm.id)}
-                          className={cn(
-                            "w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left",
-                            activeChannelId === dm.id
-                              ? "bg-accent text-accent-foreground shadow-sm"
-                              : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                          )}
-                        >
-                          <div className="relative shrink-0">
-                            <Avatar className="h-10 w-10 border border-border">
-                              <AvatarImage src={`${BACKEND_URL}${dm.avatar_url}`} />
-                              <AvatarFallback className={cn("text-xs font-bold", getAvatarColor(dm.name))}>
-                                {dm.name?.charAt(0)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-card flex items-center justify-center">
-                              <div className={cn("w-2 h-2 rounded-full", dm.is_online ? "bg-green-500" : "bg-muted-foreground/30")} />
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold truncate leading-tight">{dm.name}</p>
-                            <p className="text-[11px] opacity-60 truncate mt-0.5">@{dm.username}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </TabsContent>
-
-                <TabsContent value="groups" className="flex-1 mt-0 min-h-0 overflow-hidden">
-                  <ScrollArea className="h-full">
-                    <div className="px-2 pb-4 space-y-1 pt-2">
-                      {filteredChannels.length === 0 ? (
-                        <div className="px-3 py-6 text-[11px] text-muted-foreground/60 italic text-center">No groups</div>
-                      ) : filteredChannels.map(ch => (
-                        <button
-                          key={ch.id}
-                          onClick={() => onChannelClick(ch.id)}
-                          className={cn(
-                            "w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left",
-                            activeChannelId === ch.id
-                              ? "bg-accent text-accent-foreground shadow-sm"
-                              : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                          )}
-                        >
-                          <div className={cn(
-                            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 channel-avatar text-base",
-                            activeChannelId === ch.id && "ring-2 ring-primary ring-offset-2 ring-offset-background"
-                          )}>
-                            {ch.type === "private"
-                              ? <Lock className="h-4 w-4" />
-                              : <span>{ch.name?.charAt(0)?.toUpperCase() || "#"}</span>}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold truncate leading-tight">{ch.name}</p>
-                            <p className="text-[11px] opacity-60 truncate mt-0.5">{ch.last_message_preview || "No messages yet"}</p>
-                          </div>
-                          {unreadCounts[ch.id] > 0 && (
-                            <Badge className="bg-primary text-primary-foreground text-[10px] h-5 px-1.5 min-w-[20px] justify-center rounded-full">
-                              {unreadCounts[ch.id]}
-                            </Badge>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </TabsContent>
-              </Tabs>
-            </div>
-          </ResizablePanel>
-
-          <ResizableHandle />
-
-          {/* RIGHT: chat window */}
-          <ResizablePanel defaultSize={72} minSize={40}>
-            <div className="flex flex-col h-full bg-background">
-              {/* Header */}
-              <header className="h-14 border-b border-border px-4 flex items-center gap-3 shrink-0 bg-card/80 backdrop-blur-2xl sticky top-0 z-20">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                  {isActiveDM ? (
-                    <UserCircle className="h-5 w-5 text-primary" />
-                  ) : (
-                    <Hash className="h-5 w-5 text-primary" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-bold truncate flex items-center gap-1.5 tracking-tight">
-                    {activeChannel?.name || "Select a conversation"}
-                    {activeChannel?.type === "private" && <Lock className="h-3 w-3 text-muted-foreground/60" />}
-                  </h3>
-                  <p className="text-[11px] text-muted-foreground truncate">
-                    {isActiveDM ? "Direct message" : activeChannel?.description || (activeChannel ? "Channel" : "")}
-                  </p>
-                </div>
-                {activeChannel && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem disabled>
-                        <Info className="h-4 w-4 mr-2" />
-                        {activeChannel.members?.length || 0} members
-                      </DropdownMenuItem>
-                      {!isActiveDM && (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => muteChannel(activeChannelId, !activeChannel.is_muted)}>
-                            <Bell className="h-4 w-4 mr-2" />
-                            {activeChannel.is_muted ? "Unmute" : "Mute"}
-                          </DropdownMenuItem>
-                          {activeChannel.is_member ? (
-                            <DropdownMenuItem
-                              onClick={() => handleLeaveChannel(activeChannelId)}
-                              className="text-rose-500 focus:text-rose-600"
-                            >
-                              <LogOut className="h-4 w-4 mr-2" />
-                              Leave channel
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem onClick={() => handleJoinChannel(activeChannelId)}>
-                              <LogIn className="h-4 w-4 mr-2" />
-                              Join channel
-                            </DropdownMenuItem>
-                          )}
-                        </>
+          {/* Direct messages */}
+          <TabsContent value="chats" className="flex-1 mt-0 min-h-0 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="px-2 pb-3 pt-1 space-y-0.5">
+                {filteredDms.length === 0 ? (
+                  <div className="px-3 py-8 text-center text-[11px] text-muted-foreground/60">
+                    No direct messages
+                  </div>
+                ) : (
+                  filteredDms.map((dm) => (
+                    <button
+                      key={dm.id}
+                      onClick={() => onChannelClick(dm.id)}
+                      className={cn(
+                        "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors",
+                        activeChannelId === dm.id
+                          ? "bg-primary/10 text-foreground"
+                          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
                       )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </header>
-
-              {/* Messages / Discovery / Empty */}
-              <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-smooth custom-scrollbar bg-background">
-                <div className="max-w-4xl mx-auto py-6">
-                  {!activeChannelId && !showDiscovery ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center p-12 mt-20 animate-in zoom-in-95 duration-500">
-                      <div className="w-24 h-24 rounded-full bg-primary/5 flex items-center justify-center mb-6 shadow-inner ring-1 ring-primary/10">
-                        <MessageSquare className="h-10 w-10 text-primary/40" />
-                      </div>
-                      <h3 className="text-2xl font-black mb-3 tracking-tight">ShiftMaster Connect</h3>
-                      <p className="text-muted-foreground max-w-sm text-sm leading-relaxed font-medium opacity-80 mb-8">
-                        Select a team channel or colleague to start a professional conversation.
-                      </p>
-                      <div className="flex items-center gap-4">
-                        <Button onClick={() => setShowCreateChannel(true)} className="rounded-xl h-11 px-6 font-bold shadow-md shadow-primary/20">
-                          <Plus className="h-4 w-4 mr-2" /> Start New Channel
-                        </Button>
-                        <Button variant="outline" onClick={() => setShowDiscovery(true)} className="rounded-xl h-11 px-6 font-bold border-dashed hover:bg-muted/50">
-                          <Search className="h-4 w-4 mr-2" /> Find Channels
-                        </Button>
-                      </div>
-                    </div>
-                  ) : showDiscovery ? (
-                    <div className="px-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                      <div className="max-w-2xl mx-auto py-10">
-                        <div className="flex items-center justify-between mb-8">
-                          <div>
-                            <h2 className="text-2xl font-black tracking-tight">Discover Channels</h2>
-                            <p className="text-sm text-muted-foreground font-medium mt-1">Explore public spaces in your organization</p>
-                          </div>
-                          <Button variant="ghost" onClick={() => setShowDiscovery(false)} className="rounded-xl h-10 px-4">Back to Chat</Button>
-                        </div>
-
-                        <div className="relative mb-10 group">
-                          <Search className="absolute left-4 top-3.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                          <Input
-                            placeholder="Search by channel name or topic..."
-                            className="pl-12 h-12 bg-input border-border/50 focus-visible:ring-primary/20 rounded-2xl text-sm shadow-sm"
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                          />
-                        </div>
-
-                        {searching ? (
-                          <div className="flex justify-center py-20">
-                            <Loader2 className="h-8 w-8 text-primary/40 animate-spin" />
-                          </div>
-                        ) : searchQuery && searchResults.length === 0 ? (
-                          <div className="text-center py-20 bg-muted/20 rounded-3xl border-2 border-dashed border-border/50">
-                            <p className="text-muted-foreground font-bold">No channels found matching "{searchQuery}"</p>
-                          </div>
-                        ) : searchResults.length > 0 ? (
-                          <div className="grid gap-4">
-                            {searchResults.map(ch => (
-                              <div key={ch.id} className="p-6 bg-card rounded-3xl border border-border/50 shadow-sm flex items-center justify-between group hover:border-primary/20 transition-all hover:shadow-md">
-                                <div className="flex items-center gap-4 min-w-0">
-                                  <div className="w-12 h-12 rounded-2xl bg-primary/5 text-primary flex items-center justify-center shrink-0">
-                                    <Hash className="h-6 w-6" />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <h4 className="font-bold text-base truncate">{ch.name}</h4>
-                                    <p className="text-xs text-muted-foreground truncate font-medium">{ch.description || "Public team channel"}</p>
-                                  </div>
-                                </div>
-                                {ch.is_member ? (
-                                  <Button variant="ghost" disabled className="rounded-xl h-10 px-6 font-bold text-xs opacity-50">Joined</Button>
-                                ) : (
-                                  <Button onClick={() => handleJoinChannel(ch.id)} className="rounded-xl h-10 px-6 font-bold text-xs shadow-lg shadow-primary/20">Join Channel</Button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-2 gap-6 opacity-60">
-                            <div className="p-8 rounded-3xl bg-muted/30 border-2 border-dashed border-border/40 flex flex-col items-center text-center gap-3">
-                              <Zap className="h-8 w-8 text-muted-foreground" />
-                              <p className="text-[10px] font-black uppercase tracking-widest">Type to search</p>
-                            </div>
-                            <div className="p-8 rounded-3xl bg-muted/30 border-2 border-dashed border-border/40 flex flex-col items-center text-center gap-3">
-                              <Globe className="h-8 w-8 text-muted-foreground" />
-                              <p className="text-[10px] font-black uppercase tracking-widest">Explore Organization</p>
-                            </div>
-                          </div>
+                    >
+                      <div className="relative shrink-0">
+                        <Avatar className="h-9 w-9">
+                          <AvatarImage src={`${BACKEND_URL}${dm.avatar_url}`} />
+                          <AvatarFallback
+                            className={cn("text-[11px] font-semibold text-white", getAvatarColor(dm.name))}
+                          >
+                            {dm.name?.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        {dm.is_online && (
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-card" />
                         )}
                       </div>
-                    </div>
-                  ) : !activeChannel?.is_member && !isActiveDM ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center p-12 mt-20 animate-in zoom-in-95 duration-500">
-                      <div className="w-28 h-28 rounded-[40px] bg-primary/5 flex items-center justify-center mb-8 shadow-inner ring-1 ring-primary/10">
-                        <LogIn className="h-12 w-12 text-primary/40" />
-                      </div>
-                      <h3 className="text-3xl font-black mb-3 tracking-tight">Join #{activeChannel?.name}</h3>
-                      <p className="text-muted-foreground max-w-sm text-base mb-8 font-medium leading-relaxed opacity-80">
-                        This is a public channel. Join the conversation to participate and view historical messages.
-                      </p>
-                      <Button onClick={() => handleJoinChannel(activeChannelId)} className="rounded-2xl h-14 px-12 font-bold text-base shadow-2xl shadow-primary/30 active:scale-95 transition-all">
-                        Join Workspace Channel
-                      </Button>
-                    </div>
-                  ) : currentMessages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center p-20 mt-10">
-                      <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-6">
-                        <Clock className="h-8 w-8 text-muted-foreground/20" />
-                      </div>
-                      <p className="text-sm font-bold text-muted-foreground/50 uppercase tracking-[0.2em]">Start of conversation</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-1 pb-4">
-                      {currentMessages.map((msg, idx) => {
-                        const prevMsg = currentMessages[idx - 1];
-                        const showSep = !prevMsg || !isSameDay(new Date(prevMsg.created_at), new Date(msg.created_at));
-                        const isOwn = msg.sender_id === user.id;
-
-                        return (
-                          <div key={msg.id} className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                            {showSep && <DaySeparator date={msg.created_at} />}
-                            {msg.type === 'system'
-                              ? <SystemEvent message={msg} />
-                              : <UserMessageBubble message={msg} isOwn={isOwn} user={user} />
-                            }
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Input Bar (composer) */}
-              <div className={cn(
-                "p-3 border-t border-border shrink-0 bg-card/80 backdrop-blur-xl",
-                inputDisabled && "opacity-60"
-              )}>
-                <div className="max-w-4xl mx-auto space-y-2">
-                  <div className="flex items-end gap-2">
-                    {/* + prefix: file attach */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-10 w-10 rounded-full text-muted-foreground hover:bg-muted shrink-0 mb-0.5"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={inputDisabled}
-                      title="Attach file"
-                    >
-                      <MIcon name="add_circle" size={22} />
-                    </Button>
-                    <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setPendingFile(e.target.files[0])} />
-
-                    {/* Pill textarea + emoji */}
-                    <div className="flex-1 flex items-end bg-muted/60 rounded-3xl shadow-inner min-h-[44px] focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-                      <Textarea
-                        ref={inputRef}
-                        value={inputText}
-                        onChange={(e) => setInputText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSend();
-                          }
-                        }}
-                        placeholder={activeChannel ? `Message #${activeChannel.name}` : "Select a channel to start chatting..."}
-                        disabled={inputDisabled}
-                        rows={1}
-                        className="flex-1 min-h-[44px] max-h-[200px] bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm py-3 px-4 resize-none custom-scrollbar disabled:cursor-not-allowed leading-tight"
-                      />
-                      <div className="pb-1 pr-1.5 shrink-0">
-                        <MediaMenu
-                          onEmojiSelect={handleEmojiSelect}
-                          onGifSelect={(gif) => { /* handled in prev logic */ }}
-                          gifsEnabled={orgGifsEnabled}
-                          disabled={inputDisabled}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Send (when content) or Mic (visual placeholder) */}
-                    {(inputText.trim() || pendingFile) ? (
-                      <Button
-                        size="icon"
-                        onClick={handleSend}
-                        disabled={inputDisabled}
-                        className="h-10 w-10 rounded-full shadow-md shadow-primary/20 shrink-0 mb-0.5"
-                      >
-                        <MIcon name="send" size={20} filled />
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-10 w-10 rounded-full text-muted-foreground hover:bg-muted shrink-0 mb-0.5"
-                        disabled
-                        title="Voice messages coming soon"
-                      >
-                        <MIcon name="mic" size={22} />
-                      </Button>
-                    )}
-                  </div>
-
-                  {pendingFile && (
-                    <div className="p-3 bg-background/60 rounded-2xl border border-border flex items-center gap-3 animate-in slide-in-from-bottom-2">
-                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                        <FileText className="h-5 w-5 text-primary" />
-                      </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold truncate">{pendingFile.name}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase font-medium">{(pendingFile.size / 1024).toFixed(1)} KB</p>
+                        <p className="text-[13px] font-medium truncate leading-tight text-foreground">
+                          {dm.name}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground/70 truncate mt-0.5">
+                          @{dm.username}
+                        </p>
                       </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setPendingFile(null)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          {/* Channels */}
+          <TabsContent value="groups" className="flex-1 mt-0 min-h-0 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="px-2 pb-3 pt-1 space-y-0.5">
+                {filteredChannels.length === 0 ? (
+                  <div className="px-3 py-8 text-center text-[11px] text-muted-foreground/60">
+                    No groups
+                  </div>
+                ) : (
+                  filteredChannels.map((ch) => {
+                    const isGeneral = ch.name?.toLowerCase() === "general";
+                    return (
+                      <button
+                        key={ch.id}
+                        onClick={() => onChannelClick(ch.id)}
+                        className={cn(
+                          "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors",
+                          activeChannelId === ch.id
+                            ? "bg-primary/10 text-foreground"
+                            : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                        )}
+                      >
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 channel-avatar text-sm">
+                          {ch.type === "private" ? (
+                            <Lock className="h-4 w-4" />
+                          ) : (
+                            <span>{ch.name?.charAt(0)?.toUpperCase() || "#"}</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[13px] font-medium truncate leading-tight text-foreground">
+                              {ch.name}
+                            </p>
+                            {isGeneral && (
+                              <Badge
+                                variant="outline"
+                                className="h-4 px-1 text-[8px] font-bold uppercase tracking-wide border-primary/40 text-primary/80"
+                              >
+                                Pinned
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground/70 truncate mt-0.5">
+                            {ch.last_message_preview || "No messages yet"}
+                          </p>
+                        </div>
+                        {unreadCounts[ch.id] > 0 && (
+                          <Badge className="bg-primary text-primary-foreground text-[10px] h-4 px-1.5 min-w-[18px] justify-center rounded-full">
+                            {unreadCounts[ch.id]}
+                          </Badge>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+
+        {/* Footer */}
+        <div className="border-t border-border/60 px-2 py-2 shrink-0 flex items-center gap-1">
+          <ThemeToggle />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            onClick={() => navigate("/settings")}
+            title="Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="ml-auto h-9 px-2 gap-2 text-xs font-medium">
+                <Avatar className="h-6 w-6">
+                  <AvatarFallback
+                    className={cn("text-[10px] text-white", getAvatarColor(userName))}
+                  >
+                    {userName?.charAt(0)?.toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="truncate max-w-[110px]">{userName}</span>
+                <ChevronUp className="h-3 w-3 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" className="w-44">
+              <DropdownMenuItem onClick={() => navigate("/settings")}>
+                <User2 className="h-4 w-4 mr-2" /> Account
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/notifications")}>
+                <Bell className="h-4 w-4 mr-2" /> Notifications
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate("/login")}>
+                <LogOut className="h-4 w-4 mr-2" /> Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </aside>
+
+      {/* === MAIN — chat surface === */}
+      <main className="flex-1 flex flex-col min-w-0 bg-background">
+        {/* Header */}
+        <header className="h-14 border-b border-border px-5 flex items-center gap-3 shrink-0 bg-card/40 backdrop-blur-sm">
+          {activeChannel ? (
+            <>
+              {isActiveDM ? (
+                <Avatar className="h-9 w-9">
+                  <AvatarImage src={`${BACKEND_URL}${activeChannel.avatar_url}`} />
+                  <AvatarFallback className={cn("text-[11px] font-semibold text-white", getAvatarColor(activeChannel.name))}>
+                    {activeChannel.name?.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+              ) : (
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 channel-avatar text-sm">
+                  {activeChannel.type === "private" ? (
+                    <Lock className="h-4 w-4" />
+                  ) : (
+                    <span>{activeChannel.name?.charAt(0)?.toUpperCase()}</span>
                   )}
                 </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold truncate flex items-center gap-1.5 leading-tight">
+                  {activeChannel.name}
+                  {activeChannel.type === "private" && (
+                    <Lock className="h-3 w-3 text-muted-foreground/60" />
+                  )}
+                </h3>
+                <p className="text-[11px] text-muted-foreground/70 truncate">
+                  {isActiveDM
+                    ? `@${activeChannel.username || activeChannel.name}`
+                    : activeChannel.description || `${activeChannel.members?.length || 0} members`}
+                </p>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem disabled>
+                    <Info className="h-4 w-4 mr-2" />
+                    {activeChannel.members?.length || 0} members
+                  </DropdownMenuItem>
+                  {!isActiveDM && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => muteChannel(activeChannelId, !activeChannel.is_muted)}
+                      >
+                        <Bell className="h-4 w-4 mr-2" />
+                        {activeChannel.is_muted ? "Unmute" : "Mute"}
+                      </DropdownMenuItem>
+                      {activeChannel.is_member ? (
+                        <DropdownMenuItem
+                          onClick={() => handleLeaveChannel(activeChannelId)}
+                          className="text-rose-500 focus:text-rose-600"
+                        >
+                          <LogOut className="h-4 w-4 mr-2" />
+                          Leave channel
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem
+                          onClick={() => handleJoinChannel(activeChannelId)}
+                        >
+                          <LogIn className="h-4 w-4 mr-2" />
+                          Join channel
+                        </DropdownMenuItem>
+                      )}
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          ) : (
+            <span className="text-sm text-muted-foreground/70">Select a conversation</span>
+          )}
+        </header>
+
+        {/* Body — discovery / empty / join / messages */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar">
+          {!activeChannelId && !showDiscovery ? (
+            <div className="h-full flex flex-col items-center justify-center text-center p-12">
+              <div className="w-20 h-20 rounded-full bg-primary/5 flex items-center justify-center mb-5 ring-1 ring-primary/10">
+                <MessageSquare className="h-9 w-9 text-primary/50" />
+              </div>
+              <h3 className="text-lg font-semibold mb-1.5 tracking-tight">Pick a conversation</h3>
+              <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mb-6">
+                Choose a group or direct message from the left to get started.
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => setShowCreateChannel(true)}
+                  className="rounded-lg h-9 px-4 text-xs font-semibold"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1.5" /> New Channel
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDiscovery(true)}
+                  className="rounded-lg h-9 px-4 text-xs font-semibold"
+                >
+                  <Search className="h-3.5 w-3.5 mr-1.5" /> Discover
+                </Button>
               </div>
             </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      </SidebarInset>
+          ) : showDiscovery ? (
+            <div className="max-w-2xl mx-auto w-full p-8">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-bold tracking-tight">Discover Channels</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Public spaces in your organization
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowDiscovery(false)}
+                  className="rounded-lg h-9 px-3 text-xs"
+                >
+                  Back
+                </Button>
+              </div>
+              <div className="relative mb-6">
+                <Search className="absolute left-3.5 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name or topic"
+                  className="pl-10 h-10 rounded-xl"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              {searching ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-6 w-6 text-primary/50 animate-spin" />
+                </div>
+              ) : searchQuery && searchResults.length === 0 ? (
+                <div className="text-center py-12 bg-muted/20 rounded-xl border border-dashed border-border">
+                  <p className="text-sm text-muted-foreground">
+                    No channels found matching "{searchQuery}"
+                  </p>
+                </div>
+              ) : searchResults.length > 0 ? (
+                <div className="space-y-2">
+                  {searchResults.map((ch) => (
+                    <div
+                      key={ch.id}
+                      className="p-4 bg-card rounded-xl border border-border flex items-center justify-between hover:border-primary/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-lg channel-avatar flex items-center justify-center shrink-0 text-sm">
+                          <span>{ch.name?.charAt(0)?.toUpperCase()}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-semibold text-sm truncate">{ch.name}</h4>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {ch.description || "Public channel"}
+                          </p>
+                        </div>
+                      </div>
+                      {ch.is_member ? (
+                        <Button
+                          variant="ghost"
+                          disabled
+                          className="rounded-lg h-9 px-4 text-xs opacity-60"
+                        >
+                          Joined
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => handleJoinChannel(ch.id)}
+                          className="rounded-lg h-9 px-4 text-xs"
+                        >
+                          Join
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 bg-muted/20 rounded-xl border border-dashed border-border">
+                  <Globe className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                    Type to search
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : !activeChannel?.is_member && !isActiveDM ? (
+            <div className="h-full flex flex-col items-center justify-center text-center p-12">
+              <div className="w-20 h-20 rounded-2xl bg-primary/5 flex items-center justify-center mb-5 ring-1 ring-primary/10">
+                <LogIn className="h-9 w-9 text-primary/50" />
+              </div>
+              <h3 className="text-xl font-semibold mb-1.5 tracking-tight">
+                Join #{activeChannel?.name}
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-sm mb-6">
+                Public channel — join to participate and see history.
+              </p>
+              <Button
+                onClick={() => handleJoinChannel(activeChannelId)}
+                className="rounded-lg h-10 px-6 text-sm font-semibold"
+              >
+                Join channel
+              </Button>
+            </div>
+          ) : currentMessages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center p-12">
+              <Clock className="h-7 w-7 text-muted-foreground/30 mb-3" />
+              <p className="text-xs text-muted-foreground/70 uppercase tracking-wider">
+                Start of conversation
+              </p>
+            </div>
+          ) : (
+            <div className="max-w-3xl mx-auto py-4 space-y-3">
+              {messageBlocks.map((block, idx) => {
+                if (block.kind === "day") {
+                  return <DaySeparator key={`day-${idx}`} date={block.date} />;
+                }
+                if (block.kind === "system") {
+                  return <SystemEvent key={`sys-${block.message.id}`} message={block.message} />;
+                }
+                const isOwn = block.senderId === user.id;
+                return (
+                  <MessageGroup
+                    key={`grp-${block.messages[0].id}`}
+                    messages={block.messages}
+                    isOwn={isOwn}
+                    user={user}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-      {/* Dialogs */}
+        {/* Composer */}
+        {activeChannel && (
+          <div
+            className={cn(
+              "border-t border-border bg-background shrink-0",
+              inputDisabled && "opacity-60"
+            )}
+          >
+            <div className="max-w-3xl mx-auto px-4 py-3">
+              <div className="flex items-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-full text-muted-foreground hover:bg-muted shrink-0"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={inputDisabled}
+                  title="Attach file"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={(e) => setPendingFile(e.target.files[0])}
+                />
+
+                <div className="flex-1 flex items-end bg-muted/50 rounded-2xl min-h-[40px] focus-within:bg-muted/70 transition-colors">
+                  <Textarea
+                    ref={inputRef}
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    placeholder={
+                      activeChannel
+                        ? `Message ${isActiveDM ? activeChannel.name : "#" + activeChannel.name}`
+                        : "Select a channel"
+                    }
+                    disabled={inputDisabled}
+                    rows={1}
+                    className="flex-1 min-h-[40px] max-h-[160px] bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm py-2.5 px-4 resize-none custom-scrollbar"
+                  />
+                  <div className="pb-1 pr-1.5 shrink-0">
+                    <MediaMenu
+                      onEmojiSelect={handleEmojiSelect}
+                      onGifSelect={() => {}}
+                      gifsEnabled={orgGifsEnabled}
+                      disabled={inputDisabled}
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  size="icon"
+                  onClick={handleSend}
+                  disabled={inputDisabled || (!inputText.trim() && !pendingFile)}
+                  className="h-9 w-9 rounded-full shadow-sm shrink-0"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {pendingFile && (
+                <div className="mt-2 p-2.5 bg-muted/40 rounded-xl border border-border flex items-center gap-3 animate-in slide-in-from-bottom-2">
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <FileText className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{pendingFile.name}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {(pendingFile.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setPendingFile(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Create Channel dialog */}
       <Dialog open={showCreateChannel} onOpenChange={setShowCreateChannel}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -930,79 +1047,91 @@ export default function ChatPage() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-6 py-6 text-sm font-medium">
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Name</Label>
+          <div className="space-y-5 py-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                Name
+              </Label>
               <Input
                 placeholder="e.g. engineering-team"
                 value={createForm.name}
-                onChange={e => setForm({ ...createForm, name: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
-                className="rounded-xl h-11"
+                onChange={(e) =>
+                  setForm({
+                    ...createForm,
+                    name: e.target.value.toLowerCase().replace(/\s+/g, "-"),
+                  })
+                }
+                className="rounded-lg h-10"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                Description (optional)
+              </Label>
+              <Textarea
+                placeholder="What's this channel about?"
+                value={createForm.description}
+                onChange={(e) =>
+                  setForm({ ...createForm, description: e.target.value })
+                }
+                className="rounded-lg min-h-[80px] resize-none"
               />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Description (Optional)</Label>
-              <Textarea
-                placeholder="What's this channel about?"
-                value={createForm.description}
-                onChange={e => setForm({ ...createForm, description: e.target.value })}
-                className="rounded-xl min-h-[100px] resize-none"
-              />
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Channel Type</Label>
-              <div className="grid grid-cols-2 gap-4">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                Type
+              </Label>
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => setForm({ ...createForm, type: "public" })}
                   className={cn(
-                    "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left",
-                    createForm.type === "public" ? "border-primary bg-primary/5" : "border-border hover:border-border/80 bg-background"
+                    "flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-colors text-left",
+                    createForm.type === "public"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-border/80 bg-background"
                   )}
                 >
-                  <div className={cn("p-2 rounded-lg", createForm.type === "public" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground")}>
-                    <Globe className="h-5 w-5" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-bold">Public</p>
-                    <p className="text-[10px] opacity-60 font-medium">Anyone in org can join</p>
-                  </div>
+                  <Globe className="h-4 w-4 text-primary" />
+                  <p className="text-xs font-semibold">Public</p>
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setForm({ ...createForm, type: "private" })}
                   className={cn(
-                    "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left",
-                    createForm.type === "private" ? "border-primary bg-primary/5" : "border-border hover:border-border/80 bg-background"
+                    "flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-colors text-left",
+                    createForm.type === "private"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-border/80 bg-background"
                   )}
                 >
-                  <div className={cn("p-2 rounded-lg", createForm.type === "private" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground")}>
-                    <ShieldCheck className="h-5 w-5" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-bold">Private</p>
-                    <p className="text-[10px] opacity-60 font-medium">Invite only access</p>
-                  </div>
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  <p className="text-xs font-semibold">Private</p>
                 </button>
               </div>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateChannel(false)} className="rounded-xl h-11">Cancel</Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowCreateChannel(false)}
+              className="rounded-lg h-10"
+            >
+              Cancel
+            </Button>
             <Button
               onClick={handleCreateChannel}
               disabled={creating || !createForm.name.trim()}
-              className="rounded-xl h-11 px-8"
+              className="rounded-lg h-10 px-6"
             >
-              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Channel"}
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </SidebarProvider>
+    </div>
   );
 }
