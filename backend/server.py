@@ -37,7 +37,13 @@ from routes.tasks import router as tasks_router
 from routes.announcements import router as announcements_router
 from tasks.purging import run_purging_task
 
-app = FastAPI(title="ShiftRoster API", version="2.0.0")
+app = FastAPI(
+    title="ShiftRoster API",
+    version="2.0.0",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 # CORS - allow credentials for HTTP-only cookies
 app.add_middleware(
