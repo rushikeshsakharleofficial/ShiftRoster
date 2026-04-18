@@ -221,10 +221,31 @@ export default function ChatPage() {
   const isDesktop = useMediaQuery("(min-width: 1024px)");
 
   const [inputText, setInputText] = useState("");
-  const [pendingFile, setPendingFile] = useState(null);
   const [isE2EEnabled, setIsE2EEnabled] = useState(false);
   const [myKeyPair, setMyKeyPair] = useState(null);
   const [orgGifsEnabled, setOrgGifsEnabled] = useState(false);
+
+  const [pendingFiles, setPendingFiles] = useState([]);
+
+  const handleFileSelect = (e) => {
+    const MAX_FILES = 10;
+    const MAX_SIZE = 50 * 1024 * 1024;
+    const selected = Array.from(e.target.files || []);
+    const valid = [];
+    for (const f of selected) {
+      if (f.size > MAX_SIZE) { toast.error(`${f.name} exceeds 50 MB`); continue; }
+      valid.push(f);
+    }
+    setPendingFiles((prev) => {
+      const combined = [...prev, ...valid];
+      if (combined.length > MAX_FILES) {
+        toast.warning(`Max ${MAX_FILES} files allowed`);
+        return combined.slice(0, MAX_FILES);
+      }
+      return combined;
+    });
+    e.target.value = "";
+  };
 
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showDiscovery, setShowDiscovery] = useState(false);
@@ -417,20 +438,24 @@ export default function ChatPage() {
 
   const handleSend = async () => {
     const text = inputText.trim();
-    if (!text && !pendingFile) return;
+    if (!text && pendingFiles.length === 0) return;
     if (!activeChannelId) return;
 
     try {
-      // Upload file first if attached
-      let uploadedFile = null;
-      if (pendingFile) {
-        const formData = new FormData();
-        formData.append("file", pendingFile);
-        const uploadRes = await chatApi.uploadFile(formData);
-        uploadedFile = uploadRes.data; // { url, file_name, file_size, file_type }
+      // Upload all files in parallel
+      let uploadedFiles = [];
+      if (pendingFiles.length > 0) {
+        uploadedFiles = await Promise.all(
+          pendingFiles.map(async (file) => {
+            const fd = new FormData();
+            fd.append("file", file);
+            const res = await chatApi.uploadFile(fd);
+            return res.data; // { url, file_name, file_size, file_type }
+          })
+        );
       }
 
-      let payload = { text, is_encrypted: false };
+      let basePayload = { text, is_encrypted: false };
       if (isE2EEnabled && myKeyPair) {
         const keyRes = await chatApi.getChannelMembers(activeChannelId);
         const members = keyRes.data.members || [];
@@ -442,26 +467,26 @@ export default function ChatPage() {
         recipientKeys[user.id] = myPubKey;
         if (Object.keys(recipientKeys).length > 0) {
           const encrypted = await crypto.encryptMessage(text, recipientKeys);
-          payload = {
-            text: encrypted.ciphertext,
-            iv: encrypted.iv,
-            encrypted_keys: encrypted.encryptedKeys,
-            is_encrypted: true,
-          };
+          basePayload = { text: encrypted.ciphertext, iv: encrypted.iv, encrypted_keys: encrypted.encryptedKeys, is_encrypted: true };
         }
       }
-      await sendMessage(
-        activeChannelId,
-        payload.text,
-        null,
-        !isActiveDM,
-        uploadedFile,
-        payload
-      );
+
+      if (uploadedFiles.length === 0) {
+        // text-only message
+        await sendMessage(activeChannelId, basePayload.text, null, !isActiveDM, null, basePayload);
+      } else {
+        // one message per file; text goes on first message only
+        for (let i = 0; i < uploadedFiles.length; i++) {
+          const msgText = i === 0 ? basePayload.text : "";
+          await sendMessage(activeChannelId, msgText, null, !isActiveDM, uploadedFiles[i], { ...basePayload, text: msgText });
+        }
+      }
+
       setInputText("");
-      setPendingFile(null);
+      setPendingFiles([]);
     } catch (err) {
       console.error("Send failed:", err);
+      toast.error("Failed to send — check file size or connection");
     }
   };
 
@@ -1034,7 +1059,8 @@ export default function ChatPage() {
                   type="file"
                   ref={fileInputRef}
                   className="hidden"
-                  onChange={(e) => setPendingFile(e.target.files[0])}
+                  multiple
+                  onChange={handleFileSelect}
                 />
 
                 <div className="flex-1 flex items-end bg-muted/50 rounded-2xl min-h-[40px] focus-within:bg-muted/70 transition-colors">
@@ -1070,32 +1096,41 @@ export default function ChatPage() {
                 <Button
                   size="icon"
                   onClick={handleSend}
-                  disabled={inputDisabled || (!inputText.trim() && !pendingFile)}
+                  disabled={inputDisabled || (!inputText.trim() && pendingFiles.length === 0)}
                   className="h-9 w-9 rounded-full shadow-sm shrink-0"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
 
-              {pendingFile && (
-                <div className="mt-2 p-2.5 bg-muted/40 rounded-xl border border-border flex items-center gap-3 animate-in slide-in-from-bottom-2">
-                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <FileText className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{pendingFile.name}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {(pendingFile.size / 1024).toFixed(1)} KB
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => setPendingFile(null)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+              {pendingFiles.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2 animate-in slide-in-from-bottom-2">
+                  {pendingFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center gap-2 px-2.5 py-2 bg-muted/40 rounded-xl border border-border max-w-[200px]">
+                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <FileText className="h-3.5 w-3.5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-medium truncate">{file.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {file.size >= 1024 * 1024
+                            ? (file.size / (1024 * 1024)).toFixed(1) + " MB"
+                            : (file.size / 1024).toFixed(0) + " KB"}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0"
+                        onClick={() => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  <p className="w-full text-[10px] text-muted-foreground/60 mt-0.5">
+                    {pendingFiles.length}/10 files · max 50 MB each
+                  </p>
                 </div>
               )}
             </div>
