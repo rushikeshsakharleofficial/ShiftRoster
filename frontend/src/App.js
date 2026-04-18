@@ -22,6 +22,7 @@ import SettingsPage from "@/pages/SettingsPage";
 import StickyNotesPage from "@/pages/StickyNotesPage";
 import ShiftTemplatesPage from "@/pages/ShiftTemplatesPage";
 import HandoverPage from "@/pages/HandoverPage";
+import TasksPage from "@/pages/TasksPage";
 import ChatPage from "@/pages/ChatPage";
 import ChatLayout from "@/components/layout/ChatLayout";
 import { ChatProvider } from "@/contexts/ChatContext";
@@ -107,6 +108,7 @@ export default function App() {
             <Route path="/sticky-notes" element={<StickyNotesPage />} />
             <Route path="/shift-templates" element={<ShiftTemplatesPage />} />
             <Route path="/handovers" element={<HandoverPage />} />
+            <Route path="/tasks" element={<TasksPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/audit-log" element={<AuditLogPage />} />

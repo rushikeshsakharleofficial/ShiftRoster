@@ -243,10 +243,12 @@ export const handoversApi = {
 export const tasksApi = {
   list: (params) => api.get("/tasks", { params }),
   create: (data) => api.post("/tasks", data),
+  getTask: (id) => api.get(`/tasks/${id}`),
   update: (id, data) => api.put(`/tasks/${id}`, data),
   transfer: (id, data) => api.post(`/tasks/${id}/transfer`, data),
   complete: (id) => api.post(`/tasks/${id}/complete`),
   getPendingCount: () => api.get("/tasks/pending-count"),
+  addNote: (id, data) => api.post(`/tasks/${id}/notes`, data),
 };
 
 // Chat
