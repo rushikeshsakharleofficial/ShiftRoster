@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useChat } from "@/contexts/ChatContext";
-import { chatApi, orgApi } from "@/lib/api";
+import { chatApi, orgApi, usersApi } from "@/lib/api";
 import { getAvatarColor, cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import {
   Hash, Lock, MessageSquare, Plus, Search, Users,
   Send, X, MoreHorizontal,
-  LogOut, Info,
+  LogOut, Info, UserPlus,
   UserCircle, Bell, Clock,
   LayoutDashboard, Globe, ShieldCheck,
   FileText, Download, Zap, LogIn, Loader2, Paperclip,
@@ -235,6 +235,11 @@ export default function ChatPage() {
   const [createForm, setForm] = useState({ name: "", description: "", type: "public" });
   const [chatListFilter, setChatListFilter] = useState("");
 
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberResults, setMemberResults] = useState([]);
+  const [addingMember, setAddingMember] = useState(false);
+
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -416,6 +421,15 @@ export default function ChatPage() {
     if (!activeChannelId) return;
 
     try {
+      // Upload file first if attached
+      let uploadedFile = null;
+      if (pendingFile) {
+        const formData = new FormData();
+        formData.append("file", pendingFile);
+        const uploadRes = await chatApi.uploadFile(formData);
+        uploadedFile = uploadRes.data; // { url, file_name, file_size, file_type }
+      }
+
       let payload = { text, is_encrypted: false };
       if (isE2EEnabled && myKeyPair) {
         const keyRes = await chatApi.getChannelMembers(activeChannelId);
@@ -441,7 +455,7 @@ export default function ChatPage() {
         payload.text,
         null,
         !isActiveDM,
-        pendingFile,
+        uploadedFile,
         payload
       );
       setInputText("");
@@ -486,6 +500,34 @@ export default function ChatPage() {
       if (activeChannelId === id) navigate("/chat");
     } catch (err) {
       toast.error("Failed to leave channel");
+    }
+  };
+
+  // Add member search
+  useEffect(() => {
+    if (!showAddMember) { setMemberResults([]); setMemberSearch(""); return; }
+    if (!memberSearch.trim()) { setMemberResults([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await chatApi.listUsers({ search: memberSearch, limit: 20 });
+        const existing = new Set((activeChannel?.members || []).map(String));
+        setMemberResults((data.users || []).filter((u) => !existing.has(u.id)));
+      } catch {}
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [memberSearch, showAddMember, activeChannel]);
+
+  const handleAddMember = async (userId) => {
+    setAddingMember(true);
+    try {
+      await chatApi.inviteToChannel(activeChannelId, { user_id: userId });
+      toast.success("Member added");
+      loadChannels();
+      setMemberResults((prev) => prev.filter((u) => u.id !== userId));
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to add member");
+    } finally {
+      setAddingMember(false);
     }
   };
 
@@ -769,6 +811,10 @@ export default function ChatPage() {
                   {!isActiveDM && (
                     <>
                       <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => setShowAddMember(true)}>
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Add member
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => muteChannel(activeChannelId, !activeChannel.is_muted)}
                       >
@@ -1149,6 +1195,61 @@ export default function ChatPage() {
               {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Member dialog */}
+      <Dialog open={showAddMember} onOpenChange={setShowAddMember}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-primary" /> Add Member
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or username..."
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                className="pl-9 h-9 rounded-lg"
+                autoFocus
+              />
+            </div>
+            <ScrollArea className="h-[260px]">
+              {memberResults.length === 0 ? (
+                <div className="py-10 text-center text-xs text-muted-foreground">
+                  {memberSearch.trim() ? "No users found" : "Type to search users"}
+                </div>
+              ) : (
+                <div className="space-y-1 pr-2">
+                  {memberResults.map((u) => (
+                    <div key={u.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/50">
+                      <Avatar className="h-8 w-8 shrink-0">
+                        <AvatarImage src={`${BACKEND_URL}${u.avatar_url}`} />
+                        <AvatarFallback className={cn("text-[10px] font-semibold text-white", getAvatarColor(u.full_name || u.username))}>
+                          {(u.full_name || u.username || "?").charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{u.full_name || u.username}</p>
+                        <p className="text-xs text-muted-foreground truncate">@{u.username}</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="h-7 px-3 text-xs rounded-lg shrink-0"
+                        disabled={addingMember}
+                        onClick={() => handleAddMember(u.id)}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
