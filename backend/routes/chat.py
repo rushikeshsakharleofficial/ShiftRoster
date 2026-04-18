@@ -134,6 +134,37 @@ def _parse_timer(timer_str: str) -> Optional[timedelta]:
 
 # ── Channel Endpoints ──
 
+@router.get("/channels/search")
+async def search_channels(request: Request, q: str = Query("")):
+    user = await get_current_user(request)
+    org_id = user["org_id"]
+    user_id = user["id"]
+
+    if not q:
+        return {"channels": []}
+
+    # Search public channels by name or description
+    query = {
+        "org_id": org_id,
+        "type": "public",
+        "deleted_at": {"$exists": False},
+        "$or": [
+            {"name": {"$regex": q, "$options": "i"}},
+            {"description": {"$regex": q, "$options": "i"}},
+        ]
+    }
+    
+    results = await db.chat_channels.find(query).sort("name", 1).to_list(50)
+    
+    channels = []
+    for ch in results:
+        ch_data = _serialize_channel(ch)
+        ch_data["is_member"] = user_id in [str(m) for m in ch.get("members", [])]
+        channels.append(ch_data)
+        
+    return {"channels": channels}
+
+
 @router.get("/channels")
 async def list_channels(request: Request):
     user = await get_current_user(request)
@@ -342,6 +373,16 @@ async def leave_channel(channel_id: str, request: Request):
         {"_id": ObjectId(channel_id)},
         {"$pull": {"members": user_id}, "$set": {"updated_at": now}},
     )
+
+    # Check if last member left a private channel
+    if ch["type"] == "private":
+        updated_ch = await db.chat_channels.find_one({"_id": ObjectId(channel_id)})
+        if updated_ch and not updated_ch.get("members"):
+            await db.chat_channels.update_one(
+                {"_id": ObjectId(channel_id)},
+                {"$set": {"deleted_at": now}}
+            )
+            return {"message": "Left and channel closed (no more members)"}
 
     await db.chat_messages.insert_one({
         "org_id": org_id,
