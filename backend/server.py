@@ -37,6 +37,7 @@ from routes.tasks import router as tasks_router
 from routes.announcements import router as announcements_router
 from routes.iam import router as iam_router
 from tasks.purging import run_purging_task
+from tasks.due_date_reminders import run_due_date_reminders
 
 app = FastAPI(
     title="ShiftRoster API",
@@ -353,6 +354,7 @@ async def startup():
     await db.sticky_notes.create_index([("org_id", 1), ("note_date", 1)])
     await db.sticky_notes.create_index([("user_id", 1)])
     await db.tasks.create_index([("org_id", 1), ("assigned_to", 1), ("status", 1)])
+    await db.tasks.create_index([("status", 1), ("due_date", 1)])
     await db.handovers.create_index([("org_id", 1), ("created_at", -1)])
 
     # IAM indexes
@@ -391,6 +393,7 @@ async def startup():
 
     # Start background tasks
     asyncio.create_task(run_purging_task())
+    asyncio.create_task(run_due_date_reminders())
 
     logger.info("ShiftRoster API started successfully")
 
