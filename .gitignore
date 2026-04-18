@@ -97,3 +97,34 @@ frontend/node_modules/.cache/default-development/2.pack
 # Claude memory files (local only)
 memory/
 .claude/projects/
+
+# Local-only plans (not for repo)
+docs/plans/cicd-self-hosted-runner.md
+
+# Git config (user-specific, never commit)
+.gitconfig
+
+# Vector search (local tool, binary DB)
+vectors.db
+config.json
+
+# Logs
+logs/
+*.log
+
+# Test artifacts
+test_failure.png
+test_result.md
+test_reports/*.json
+test_reports/*.md
+
+# Build artifacts
+build_log.txt
+
+# AI / IDE tool configs (local only)
+.emergent/
+.gemini/
+.kiro/
+.opencode.json
+.windsurfrules
+.cursorrules
