@@ -455,9 +455,9 @@ export default function AppLayout() {
                   data-testid="header-notifications-btn"
                 >
                   <Bell className="h-4 w-4" />
-                  {unreadCount > 0 && (
+                  {(unreadCount + chatUnread) > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center">
-                      {unreadCount > 9 ? "9+" : unreadCount}
+                      {(unreadCount + chatUnread) > 9 ? "9+" : (unreadCount + chatUnread)}
                     </span>
                   )}
                 </Button>
@@ -466,7 +466,7 @@ export default function AppLayout() {
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                   <div>
                     <p className="text-sm font-semibold">Notifications</p>
-                    <p className="text-xs text-muted-foreground">{unreadCount} unread</p>
+                    <p className="text-xs text-muted-foreground">{unreadCount + chatUnread} unread</p>
                   </div>
                   {unreadCount > 0 && (
                     <Button variant="ghost" size="sm" className="text-xs h-7" onClick={handleMarkAllRead}>
@@ -474,13 +474,30 @@ export default function AppLayout() {
                     </Button>
                   )}
                 </div>
+                {chatUnread > 0 && (
+                  <div
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer border-b border-border/50 bg-primary/[0.03] transition-colors"
+                    onClick={() => navigate("/chat")}
+                  >
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        {chatUnread} unread chat message{chatUnread > 1 ? "s" : ""}
+                        <div className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Tap to open Messages</p>
+                    </div>
+                  </div>
+                )}
                 <div className="max-h-[350px] overflow-y-auto">
-                  {notifications.length === 0 ? (
+                  {notifications.length === 0 && chatUnread === 0 ? (
                     <div className="p-8 text-center text-muted-foreground">
                       <Bell className="h-8 w-8 mx-auto mb-2 opacity-20" />
                       <p className="text-xs">No new notifications</p>
                     </div>
-                  ) : (
+                  ) : notifications.length === 0 ? null : (
                     notifications.map((n) => (
                       <div
                         key={n.id}

@@ -486,7 +486,7 @@ export default function ChatPage() {
 
   const inputDisabled =
     !activeChannelId || (activeChannel && !activeChannel.is_member && !isActiveDM);
-  const userName = user?.name || user?.email || "Account";
+  const userName = user?.full_name || user?.email || "Account";
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
@@ -666,20 +666,22 @@ export default function ChatPage() {
         </Tabs>
 
         {/* Footer */}
-        <div className="border-t border-border/60 px-2 py-2 shrink-0 flex items-center gap-1">
-          <ThemeToggle />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            onClick={() => navigate("/settings")}
-            title="Settings"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
+        <div className="border-t border-border/60 px-2 py-2 shrink-0 flex flex-col gap-1">
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => navigate("/settings")}
+              title="Settings"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="ml-auto h-9 px-2 gap-2 text-xs font-medium">
+              <Button variant="ghost" className="w-full h-9 px-2 gap-2 text-xs font-medium justify-start">
                 <Avatar className="h-6 w-6">
                   <AvatarFallback
                     className={cn("text-[10px] text-white", getAvatarColor(userName))}
@@ -687,8 +689,8 @@ export default function ChatPage() {
                     {userName?.charAt(0)?.toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <span className="truncate max-w-[110px]">{userName}</span>
-                <ChevronUp className="h-3 w-3 opacity-60" />
+                <span className="truncate max-w-[140px]">{userName}</span>
+                <ChevronUp className="h-3 w-3 opacity-60 ml-auto" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="top" className="w-44">
