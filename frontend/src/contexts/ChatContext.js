@@ -276,13 +276,22 @@ export function ChatProvider({ children }) {
           setMessages((prev) => ({ ...prev, [channel_id]: updated }));
           
           // Update userCache if we have sender info
-          if (message.sender_username && message.sender_name) {
-            updateCache([{
-              username: message.sender_username,
-              full_name: message.sender_name,
-              avatar_url: message.avatar_url || "",
-              initials: message.sender_initials || "",
-            }]);
+          if (message.sender_id && message.sender_name) {
+            setUserCache((prev) => ({
+              ...prev,
+              [message.sender_id]: {
+                full_name: message.sender_name,
+                avatar_url: message.sender_avatar || "",
+                initials: message.sender_initials || "",
+              },
+              ...(message.sender_username ? {
+                [message.sender_username]: {
+                  full_name: message.sender_name,
+                  avatar_url: message.sender_avatar || "",
+                  initials: message.sender_initials || "",
+                }
+              } : {}),
+            }));
           }
         }
 

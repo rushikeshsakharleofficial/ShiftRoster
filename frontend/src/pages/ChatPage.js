@@ -123,11 +123,10 @@ const isOnlyEmojis = (text) => {
 // appear once at the top; subsequent bubbles are tightly stacked.
 function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete }) {
   const first = messages[0];
-  const cached = userCache?.[first.sender_id];
+  const cached = userCache?.[first.sender_username] || userCache?.[first.sender_id];
   const displayName =
     first.sender_name?.trim() ||
     cached?.full_name?.trim() ||
-    cached?.username?.trim() ||
     first.sender_username?.trim() ||
     "Unknown";
 
@@ -194,7 +193,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
               ) : (
                 <>
                   <div className={cn("flex items-center gap-1.5 group/msg", isOwn ? "flex-row-reverse" : "flex-row")}>
-                    {emojiOnly && !msg.file_url ? (
+                    {msg.text && (emojiOnly && !msg.file_url ? (
                       <div className="text-4xl leading-none py-0.5">{msg.text}</div>
                     ) : (
                       <div
@@ -209,7 +208,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                         {msg.text}
                         {msg.edited && <span className="text-[10px] opacity-60 ml-1">(edited)</span>}
                       </div>
-                    )}
+                    ))}
                     {isOwn && (
                       <div className="flex gap-0.5 items-center opacity-0 group-hover/msg:opacity-100 transition-opacity">
                         <button
