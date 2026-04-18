@@ -125,7 +125,7 @@ function UserMessageBubble({ message, isOwn, user }) {
       "group flex gap-4 px-8 py-1.5 transition-all",
       isOwn ? "flex-row-reverse" : "flex-row"
     )}>
-      <Avatar className={cn("h-10 w-10 border-2 border-white shadow-sm ring-1 ring-black/5 flex-shrink-0 mt-0.5", isOwn && "hidden")}>
+      <Avatar className={cn("h-10 w-10 border-2 border-background shadow-sm ring-1 ring-black/5 flex-shrink-0 mt-0.5", isOwn && "hidden")}>
         <AvatarImage src={`${BACKEND_URL}${message.avatar_url}`} />
         <AvatarFallback className={cn("text-xs font-bold", getAvatarColor(message.sender_name))}>{message.sender_initials}</AvatarFallback>
       </Avatar>
@@ -446,7 +446,7 @@ return (
                   <p className="text-[10px] opacity-60 truncate mt-0.5 font-medium">{ch.last_message_preview || "No messages yet"}</p>
                 </div>
                 {unreadCounts[ch.id] > 0 && (
-                  <Badge className="ml-auto bg-primary text-white text-[9px] h-4.5 px-1.5 min-w-[18px] justify-center rounded-full border-2 border-white shadow-sm">{unreadCounts[ch.id]}</Badge>
+                  <Badge className="ml-auto bg-primary text-white text-[9px] h-4.5 px-1.5 min-w-[18px] justify-center rounded-full border-2 border-background shadow-sm">{unreadCounts[ch.id]}</Badge>
                 )}
               </button>
             ))}
@@ -467,7 +467,7 @@ return (
                 )}
               >
                 <div className="relative">
-                  <Avatar className="h-9 w-9 border-2 border-white shadow-sm ring-1 ring-black/5">
+                  <Avatar className="h-9 w-9 border-2 border-background shadow-sm ring-1 ring-black/5">
                     <AvatarImage src={`${BACKEND_URL}${dm.avatar_url}`} />
                     <AvatarFallback className={cn("text-[10px] font-bold", getAvatarColor(dm.name))}>{dm.name?.charAt(0)}</AvatarFallback>
                   </Avatar>

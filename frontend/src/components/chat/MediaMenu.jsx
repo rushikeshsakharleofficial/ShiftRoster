@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
 import axios from "axios";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -95,10 +96,7 @@ export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEn
   const renderEmojiPicker = () => (
     <div className="emoji-picker-container h-full max-h-[400px]">
       <Picker
-        data={async () => {
-          const response = await import('@emoji-mart/data');
-          return response.default;
-        }}
+        data={data}
         onEmojiSelect={handleEmojiClick}
         theme="auto"
         set="native"
