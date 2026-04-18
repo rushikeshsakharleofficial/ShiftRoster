@@ -148,7 +148,7 @@ export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEn
       >
         {gifsEnabled ? (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full overflow-hidden">
-            <div className="px-3 pt-3 flex items-center justify-between border-b border-border bg-card">
+            <div className="px-3 py-2 flex items-center justify-between border-b border-border bg-card">
               <TabsList className="grid grid-cols-2 w-32 h-8">
                 <TabsTrigger value="emojis" className="text-xs">
                   <Smile className="h-3 w-3 mr-1.5" /> Emojis
@@ -159,7 +159,7 @@ export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEn
               </TabsList>
             </div>
 
-            <TabsContent value="emojis" className="m-0 border-none outline-none overflow-hidden">
+            <TabsContent value="emojis" className="m-0 border-none outline-none overflow-hidden" style={{ marginTop: 0 }}>
               {renderEmojiPicker()}
             </TabsContent>
 
