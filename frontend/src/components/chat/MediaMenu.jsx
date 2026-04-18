@@ -11,12 +11,27 @@ import { Smile, Image as ImageIcon, Search, Loader2 } from "lucide-react";
 
 const GIPHY_API_KEY = import.meta.env.REACT_APP_GIPHY_API_KEY;
 
+function useAppTheme() {
+  const [isDark, setIsDark] = useState(() =>
+    document.documentElement.classList.contains("dark")
+  );
+  useEffect(() => {
+    const obs = new MutationObserver(() =>
+      setIsDark(document.documentElement.classList.contains("dark"))
+    );
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+  return isDark ? "dark" : "light";
+}
+
 export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEnabled = true }) {
   const [activeTab, setActiveTab] = useState("emojis");
   const [gifSearch, setGifSearch] = useState("");
   const [gifs, setGifs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const pickerTheme = useAppTheme();
 
   useEffect(() => {
     if (!gifsEnabled && activeTab === "gifs") {
@@ -94,11 +109,11 @@ export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEn
   };
 
   const renderEmojiPicker = () => (
-    <div className="emoji-picker-container h-full max-h-[400px]">
+    <div style={{ width: "100%", overflow: "hidden" }}>
       <Picker
         data={data}
         onEmojiSelect={handleEmojiClick}
-        theme="auto"
+        theme={pickerTheme}
         set="native"
         skinTonePosition="search"
         previewPosition="none"
@@ -124,7 +139,7 @@ export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEn
           <Smile className="h-4.5 w-4.5" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[350px] p-0 border-border shadow-xl" align="start" side="top">
+      <PopoverContent className="w-[352px] p-0 border-border shadow-xl overflow-hidden" align="start" side="top">
         {gifsEnabled ? (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="px-3 pt-3 flex items-center justify-between border-b border-border bg-muted/20">

@@ -91,6 +91,9 @@ credentials.json
 *.key
 .credentials
 frontend/node_modules/.cache/default-development/2.pack
-# Added by code-review-graph
+# Code review graph data
 .code-review-graph/
+
+# Claude memory files (local only)
 memory/
+.claude/projects/
