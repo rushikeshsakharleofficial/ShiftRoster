@@ -94,9 +94,9 @@ frontend/node_modules/.cache/default-development/2.pack
 # Code review graph data
 .code-review-graph/
 
-# Claude memory files (local only)
+# Claude (local only)
 memory/
-.claude/projects/
+.claude/
 
 # Local-only plans (not for repo)
 docs/plans/cicd-self-hosted-runner.md
