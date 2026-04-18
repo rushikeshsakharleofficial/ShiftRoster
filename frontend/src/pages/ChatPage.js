@@ -27,7 +27,7 @@ import {
   Search as SearchIcon, UserCircle, Bell, Clock,
   LayoutDashboard, Globe, ShieldCheck,
   FileText, Download, Zap, LogIn, Loader2, Paperclip,
-  Menu, MessageCircle, ChevronUp, User2, Settings, SquarePen,
+  Menu, ChevronUp, User2, Settings, SquarePen,
 } from "lucide-react";
 import MediaMenu from "@/components/chat/MediaMenu";
 import ThemeToggle from "@/components/layout/ThemeToggle";
