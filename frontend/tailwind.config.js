@@ -95,8 +95,9 @@ module.exports = {
   			'secondary-fixed-dim': '#adc6ff',
   			'on-secondary-fixed': '#001a41',
   			'on-secondary-fixed-variant': '#26467d',
-  			// Tertiary (warm orange in MD3 reference) — kept as literal to
-  			// avoid polluting the shadcn palette
+  			// Tertiary (warm orange in MD3 reference) — kept as literal hex
+  			// to avoid polluting the shadcn palette. Note: these tokens do
+  			// NOT theme — same value in light and AMOLED.
   			tertiary: '#9e3d00',
   			'on-tertiary': '#ffffff',
   			'tertiary-container': '#c64f00',

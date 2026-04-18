@@ -21,16 +21,16 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
-  Hash, Lock, MessageSquare, Plus, Search, Users,
+  Hash, Lock, MessageSquare, Plus, Search,
   Send, X, MoreHorizontal,
   LogOut, Info,
   Search as SearchIcon, UserCircle, Bell, Clock,
   LayoutDashboard, Globe, ShieldCheck,
   FileText, Download, Zap, LogIn, Loader2, Paperclip,
   Menu, ChevronUp, User2, Settings, SquarePen,
-  Mic, PlusCircle,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { MIcon } from "@/components/ui/material-icon";
 import MediaMenu from "@/components/chat/MediaMenu";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import * as crypto from "@/lib/crypto";
@@ -554,10 +554,10 @@ export default function ChatPage() {
               <Tabs defaultValue="chats" className="flex-1 flex flex-col min-h-0">
                 <TabsList className="mx-3 mb-1 grid grid-cols-2 rounded-full bg-muted/60 p-1 h-9 shrink-0">
                   <TabsTrigger value="chats" className="rounded-full text-xs gap-1.5 data-[state=active]:shadow-sm">
-                    <MessageSquare className="h-3.5 w-3.5" /> Chats
+                    <MIcon name="chat" size={16} /> Chats
                   </TabsTrigger>
                   <TabsTrigger value="groups" className="rounded-full text-xs gap-1.5 data-[state=active]:shadow-sm">
-                    <Users className="h-3.5 w-3.5" /> Groups
+                    <MIcon name="group" size={16} filled /> Groups
                   </TabsTrigger>
                 </TabsList>
 
@@ -846,7 +846,7 @@ export default function ChatPage() {
                       disabled={inputDisabled}
                       title="Attach file"
                     >
-                      <PlusCircle className="h-5 w-5" />
+                      <MIcon name="add_circle" size={22} />
                     </Button>
                     <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setPendingFile(e.target.files[0])} />
 
@@ -885,7 +885,7 @@ export default function ChatPage() {
                         disabled={inputDisabled}
                         className="h-10 w-10 rounded-full shadow-md shadow-primary/20 shrink-0 mb-0.5"
                       >
-                        <Send className="h-4 w-4" />
+                        <MIcon name="send" size={20} filled />
                       </Button>
                     ) : (
                       <Button
@@ -895,7 +895,7 @@ export default function ChatPage() {
                         disabled
                         title="Voice messages coming soon"
                       >
-                        <Mic className="h-5 w-5" />
+                        <MIcon name="mic" size={22} />
                       </Button>
                     )}
                   </div>
