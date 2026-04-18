@@ -311,12 +311,12 @@ function GroupRow({ group, isAdmin, onEdit, onDelete, onAssign }) {
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onAssign(group)} title="Assign to users">
             <Users className="h-3.5 w-3.5" />
           </Button>
-          {!group.is_global && (
+          {!["Read Only", "Full Access"].includes(group.name) && (
             <>
               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(group)}>
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
-              {isAdmin && (
+              {isAdmin && !group.is_global && (
                 <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(group)}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>

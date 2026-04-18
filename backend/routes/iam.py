@@ -136,11 +136,13 @@ async def update_group(group_id: str, data: UpdateGroupRequest, request: Request
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
+    LOCKED_NAMES = {"Read Only", "Full Access"}
+
     group = await _get_group_or_404(group_id, current.get("org_id"))
 
-    if group.get("is_global"):
-        raise HTTPException(status_code=403, detail="Cannot modify built-in global templates")
-    if group.get("org_id") != current.get("org_id"):
+    if group.get("is_global") and group.get("name") in LOCKED_NAMES:
+        raise HTTPException(status_code=403, detail=f"'{group['name']}' is locked and cannot be modified")
+    if not group.get("is_global") and group.get("org_id") != current.get("org_id"):
         raise HTTPException(status_code=403, detail="Not your organization's group")
 
     updates: dict = {"updated_at": datetime.now(timezone.utc)}
