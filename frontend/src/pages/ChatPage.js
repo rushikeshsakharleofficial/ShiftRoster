@@ -520,14 +520,22 @@ return (
         <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-smooth custom-scrollbar bg-[#fcfcfd]">
           <div className="max-w-4xl mx-auto py-10">
             {!activeChannelId && !showDiscovery ? (
-              <div className="h-full flex flex-col items-center justify-center text-center p-12 mt-20">
-                <div className="w-24 h-24 rounded-[32px] bg-primary/5 flex items-center justify-center mb-8 animate-pulse">
-                  <MessageSquare className="h-12 w-12 text-primary/40" />
+              <div className="h-full flex flex-col items-center justify-center text-center p-12 mt-20 animate-in zoom-in-95 duration-500">
+                <div className="w-24 h-24 rounded-full bg-primary/5 flex items-center justify-center mb-6 shadow-inner ring-1 ring-primary/10">
+                  <MessageSquare className="h-10 w-10 text-primary/40" />
                 </div>
                 <h3 className="text-2xl font-black mb-3 tracking-tight">ShiftMaster Connect</h3>
-                <p className="text-muted-foreground max-w-sm text-sm leading-relaxed font-medium opacity-80">
+                <p className="text-muted-foreground max-w-sm text-sm leading-relaxed font-medium opacity-80 mb-8">
                   Select a team channel or colleague to start a professional conversation.
                 </p>
+                <div className="flex items-center gap-4">
+                  <Button onClick={() => setShowCreateChannel(true)} className="rounded-2xl h-12 px-6 font-bold shadow-md shadow-primary/20">
+                    <Plus className="h-4 w-4 mr-2" /> Start New Channel
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowDiscovery(true)} className="rounded-2xl h-12 px-6 font-bold border-dashed hover:bg-muted/50">
+                    <Search className="h-4 w-4 mr-2" /> Find Channels
+                  </Button>
+                </div>
               </div>
             ) : showDiscovery ? (
               <div className="px-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -640,10 +648,21 @@ return (
           <div className="max-w-4xl mx-auto relative">
             <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-t from-background to-transparent pointer-events-none" />
             
-            <div className="relative bg-muted/30 rounded-2xl border border-border/50 focus-within:border-primary/30 focus-within:ring-4 focus-within:ring-primary/5 transition-all p-1.5 shadow-sm">
+            <div className={cn(
+              "relative rounded-2xl border transition-all p-1.5 shadow-sm",
+              (!activeChannelId || (activeChannel && !activeChannel.is_member && !isActiveDM))
+                ? "bg-muted/20 border-border/30 opacity-60"
+                : "bg-muted/30 border-border/50 focus-within:border-primary/30 focus-within:ring-4 focus-within:ring-primary/5"
+            )}>
               <div className="flex items-end gap-1.5">
                 <div className="flex gap-0.5 pb-1">
-                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-muted-foreground hover:bg-muted/80" onClick={() => fileInputRef.current?.click()}>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-9 w-9 rounded-xl text-muted-foreground hover:bg-muted/80" 
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={!activeChannelId || (activeChannel && !activeChannel.is_member && !isActiveDM)}
+                  >
                     <Paperclip className="h-4.5 w-4.5" />
                   </Button>
                   <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setPendingFile(e.target.files[0])} />
@@ -652,6 +671,7 @@ return (
                     onEmojiSelect={handleEmojiSelect}
                     onGifSelect={(gif) => { /* already handled in prev logic */ }}
                     gifsEnabled={orgGifsEnabled}
+                    disabled={!activeChannelId || (activeChannel && !activeChannel.is_member && !isActiveDM)}
                   />
                 </div>
 
@@ -665,9 +685,9 @@ return (
                       handleSend();
                     }
                   }}
-                  placeholder={activeChannel ? `Message #${activeChannel.name}` : "Select a channel"}
+                  placeholder={activeChannel ? `Message #${activeChannel.name}` : "Select a channel to start chatting..."}
                   disabled={!activeChannelId || (activeChannel && !activeChannel.is_member && !isActiveDM)}
-                  className="flex-1 min-h-[44px] max-h-[200px] bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm py-3 px-2 resize-none custom-scrollbar"
+                  className="flex-1 min-h-[44px] max-h-[200px] bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm py-3 px-2 resize-none custom-scrollbar disabled:cursor-not-allowed"
                 />
 
                 <div className="pb-1 pr-1">
