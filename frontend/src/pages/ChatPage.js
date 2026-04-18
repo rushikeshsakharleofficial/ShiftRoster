@@ -168,7 +168,7 @@ function UserMessageBubble({ message, isOwn, user }) {
           <div className={cn(
             "px-5 py-3.5 rounded-3xl text-[13px] leading-relaxed shadow-sm font-medium transition-all",
             isOwn
-              ? "bg-primary text-white rounded-tr-none shadow-primary/20"
+              ? "msg-outgoing text-white rounded-tr-none shadow-primary/30"
               : "bg-card text-card-foreground rounded-tl-none border border-border/30 hover:shadow-md"
           )}>
             {message.text}
@@ -571,10 +571,12 @@ export default function ChatPage() {
                         )}
                       >
                         <div className={cn(
-                          "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
-                          activeChannelId === ch.id ? "bg-primary text-primary-foreground" : "bg-muted"
+                          "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 channel-avatar text-sm",
+                          activeChannelId === ch.id && "ring-2 ring-primary ring-offset-2 ring-offset-background"
                         )}>
-                          {ch.type === "private" ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />}
+                          {ch.type === "private"
+                            ? <Lock className="h-4 w-4" />
+                            : <span>{ch.name?.charAt(0)?.toUpperCase() || "#"}</span>}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold truncate leading-tight">{ch.name}</p>
@@ -637,7 +639,7 @@ export default function ChatPage() {
           <ResizablePanel defaultSize={72} minSize={40}>
             <div className="flex flex-col h-full bg-background">
               {/* Header */}
-              <header className="h-14 border-b border-border px-4 flex items-center gap-3 shrink-0 bg-card/30">
+              <header className="h-14 border-b border-border px-4 flex items-center gap-3 shrink-0 bg-card/80 backdrop-blur-2xl sticky top-0 z-20">
                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                   {isActiveDM ? (
                     <UserCircle className="h-5 w-5 text-primary" />
@@ -822,7 +824,7 @@ export default function ChatPage() {
               </div>
 
               {/* Input Bar */}
-              <div className="p-3 border-t border-border shrink-0 bg-card/30">
+              <div className="p-3 border-t border-border shrink-0 bg-card/80 backdrop-blur-xl">
                 <div className="max-w-4xl mx-auto">
                   <div className={cn(
                     "relative rounded-xl border transition-all p-1.5 shadow-sm",
