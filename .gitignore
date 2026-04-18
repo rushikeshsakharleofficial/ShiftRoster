@@ -133,3 +133,6 @@ tests/
 .opencode.json
 .windsurfrules
 .cursorrules
+.mcp.json
+AGENTS.md
+GEMINI.md
