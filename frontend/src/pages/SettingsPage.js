@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { orgApi, authApi, usersApi, formatApiError } from "@/lib/api";
+import AccessRuleBook from "@/components/AccessRuleBook";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1077,6 +1078,11 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Access Rule Book (Admin + Manager) */}
+      {["admin", "manager"].includes(user?.system_role) && (
+        <AccessRuleBook />
       )}
 
       {/* MFA Mandate (Admin only) */}

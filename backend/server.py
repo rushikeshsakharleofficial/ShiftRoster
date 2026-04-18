@@ -35,6 +35,7 @@ from routes.chat import router as chat_router
 from routes.handovers import router as handovers_router
 from routes.tasks import router as tasks_router
 from routes.announcements import router as announcements_router
+from routes.iam import router as iam_router
 from tasks.purging import run_purging_task
 
 app = FastAPI(
@@ -74,6 +75,8 @@ app.include_router(sticky_notes_router)
 app.include_router(chat_router)
 app.include_router(handovers_router)
 app.include_router(tasks_router)
+app.include_router(announcements_router)
+app.include_router(iam_router)
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -351,6 +354,28 @@ async def startup():
     await db.sticky_notes.create_index([("user_id", 1)])
     await db.tasks.create_index([("org_id", 1), ("assigned_to", 1), ("status", 1)])
     await db.handovers.create_index([("org_id", 1), ("created_at", -1)])
+
+    # IAM indexes
+    await db.iam_groups.create_index([("org_id", 1), ("name", 1)])
+    await db.iam_groups.create_index("is_global")
+
+    # Seed global IAM templates (idempotent — skip if name already exists)
+    from iam_constants import GLOBAL_TEMPLATES
+    from datetime import datetime, timezone as tz
+    for tmpl in GLOBAL_TEMPLATES:
+        exists = await db.iam_groups.find_one({"name": tmpl["name"], "is_global": True})
+        if not exists:
+            await db.iam_groups.insert_one({
+                "org_id": None,
+                "name": tmpl["name"],
+                "description": tmpl["description"],
+                "permissions": tmpl["permissions"],
+                "is_template": True,
+                "is_global": True,
+                "created_by": None,
+                "created_at": datetime.now(tz.utc),
+                "updated_at": datetime.now(tz.utc),
+            })
 
     # Chat indexes
     await db.chat_channels.create_index([("org_id", 1), ("type", 1)])

@@ -288,4 +288,15 @@ export const chatApi = {
   }),
 };
 
+// IAM / Access Rule Book
+export const iamApi = {
+  listGroups: () => api.get("/iam/groups"),
+  createGroup: (data) => api.post("/iam/groups", data),
+  updateGroup: (id, data) => api.put(`/iam/groups/${id}`, data),
+  deleteGroup: (id) => api.delete(`/iam/groups/${id}`),
+  getUserGroups: (userId) => api.get(`/iam/users/${userId}/groups`),
+  assignGroups: (userId, groupIds) => api.put(`/iam/users/${userId}/groups`, { group_ids: groupIds }),
+  myPermissions: () => api.get("/iam/me/permissions"),
+};
+
 export default api;

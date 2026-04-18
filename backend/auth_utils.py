@@ -242,3 +242,58 @@ def generate_setup_token():
 def hash_setup_token(token: str) -> str:
     import hashlib
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+# ── IAM Permission Helpers ──
+
+async def has_permission(user_doc: dict, resource: str, action: str, db) -> bool:
+    """Return True if user has (resource, action) via system_role or IAM groups."""
+    if user_doc.get("system_role") == "admin":
+        return True
+    group_ids = user_doc.get("iam_group_ids", [])
+    if not group_ids:
+        return False
+    try:
+        oid_list = [ObjectId(gid) for gid in group_ids]
+    except Exception:
+        return False
+    groups = await db.iam_groups.find({"_id": {"$in": oid_list}}).to_list(None)
+    for group in groups:
+        for perm in group.get("permissions", []):
+            if perm.get("resource") == resource and perm.get("action") == action:
+                return True
+    return False
+
+
+async def can_assign_group(grantor: dict, group: dict, db) -> bool:
+    """Return True if grantor holds every permission in group (or is admin)."""
+    if grantor.get("system_role") == "admin":
+        return True
+    for perm in group.get("permissions", []):
+        if not await has_permission(grantor, perm["resource"], perm["action"], db):
+            return False
+    return True
+
+
+async def get_user_permissions(user_doc: dict, db) -> list:
+    """Return flat list of {resource, action} dicts the user holds via IAM groups."""
+    if user_doc.get("system_role") == "admin":
+        from iam_constants import RESOURCES, ACTIONS
+        return [{"resource": r, "action": a} for r in RESOURCES for a in ACTIONS]
+    group_ids = user_doc.get("iam_group_ids", [])
+    if not group_ids:
+        return []
+    try:
+        oid_list = [ObjectId(gid) for gid in group_ids]
+    except Exception:
+        return []
+    groups = await db.iam_groups.find({"_id": {"$in": oid_list}}).to_list(None)
+    seen = set()
+    result = []
+    for group in groups:
+        for perm in group.get("permissions", []):
+            key = (perm["resource"], perm["action"])
+            if key not in seen:
+                seen.add(key)
+                result.append({"resource": perm["resource"], "action": perm["action"]})
+    return result
