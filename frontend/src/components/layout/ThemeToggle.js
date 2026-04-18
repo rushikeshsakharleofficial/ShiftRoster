@@ -7,10 +7,9 @@ export default function ThemeToggle() {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("theme");
       if (saved) return saved === "dark";
-      // No saved preference → default dark (matches html class="dark")
-      return true;
+      return false; // default light
     }
-    return true;
+    return false;
   });
 
   useEffect(() => {
