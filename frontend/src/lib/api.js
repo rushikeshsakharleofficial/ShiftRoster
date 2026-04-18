@@ -71,7 +71,7 @@ export const usersApi = {
   delete: (id) => api.delete(`/users/${id}`),
   changeLevel: (id, data) => api.put(`/users/${id}/level`, data),
   mandateMfa: (data) => api.put("/users/mfa/mandate", data),
-  uploadAvatar: (id, formData) => api.post(`/users/${id}/avatar`, formData, { headers: { "Content-Type": "multipart/form-data" } }),
+  uploadAvatar: (id, formData) => api.post(`/users/${id}/avatar`, formData, { headers: { "Content-Type": undefined } }),
 };
 
 // Departments
@@ -282,9 +282,9 @@ export const chatApi = {
   listUsers: (params) => api.get("/chat/users", { params }),
   mentionUsers: (q) => api.get("/chat/mention-users", { params: { q } }),
 
-  // File upload
+  // File upload — do NOT set Content-Type manually; axios sets it with boundary from FormData
   uploadFile: (formData) => api.post("/chat/upload", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
+    headers: { "Content-Type": undefined },
   }),
 };
 
