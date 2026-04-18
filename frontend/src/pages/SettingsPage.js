@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { orgApi, authApi, usersApi, formatApiError } from "@/lib/api";
+import AccessRuleBook from "@/components/AccessRuleBook";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,12 +11,14 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle, ImageIcon, Upload, X, Mail, Server, Eye, EyeOff, Lock, Trash2, Zap, Building2 } from "lucide-react";
+import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle, ImageIcon, Upload, X, Mail, Server, Eye, EyeOff, Lock, Trash2, Zap, Building2, MessageSquare, BookOpen } from "lucide-react";
 import { generateMnemonic } from "@/lib/crypto";
 
 export default function SettingsPage() {
   const { user, checkAuth } = useAuth();
   const isAdmin = user?.system_role === "admin";
+  const isManager = user?.system_role === "manager";
+  const [activeSection, setActiveSection] = useState("general");
   const [org, setOrg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -360,15 +363,50 @@ export default function SettingsPage() {
     );
   }
 
-  return (
-    <div data-testid="settings-page" className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">Manage organization and security settings</p>
-      </div>
+  const navSections = [
+    { id: "general",      label: "General",       icon: Clock,         show: true },
+    { id: "branding",     label: "Branding",      icon: ImageIcon,     show: isAdmin },
+    { id: "organization", label: "Organization",  icon: Building2,     show: isAdmin },
+    { id: "email",        label: "Email",         icon: Mail,          show: isAdmin },
+    { id: "security",     label: "Security",      icon: Shield,        show: true },
+    { id: "chat",         label: "Chat",          icon: MessageSquare, show: true },
+    { id: "access",       label: "Access Rules",  icon: BookOpen,      show: isAdmin || isManager },
+    { id: "policy",       label: "Policy",        icon: KeyRound,      show: isAdmin },
+  ].filter(s => s.show);
 
-      {/* Attendance Feature Toggle — admin or manager */}
-      <Card className="border">
+  return (
+    <div data-testid="settings-page" className="flex gap-6 max-w-5xl">
+      {/* Sidebar nav */}
+      <aside className="w-44 shrink-0">
+        <div className="sticky top-6 space-y-1">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-3 pb-2">Settings</p>
+          {navSections.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveSection(id)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-left
+                ${activeSection === id
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0 space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {navSections.find(s => s.id === activeSection)?.label || "Settings"}
+          </h1>
+          <p className="text-sm text-muted-foreground">Manage organization and security settings</p>
+        </div>
+
+      {/* ── General ── */}
+      {activeSection === "general" && <Card className="border">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Clock className="h-5 w-5" /> Attendance Tracking
@@ -405,10 +443,10 @@ export default function SettingsPage() {
             />
           </div>
         </CardContent>
-      </Card>
+      </Card>}
 
-      {/* Branding — admin only */}
-      {isAdmin && (
+      {/* ── Branding ── */}
+      {activeSection === "branding" && isAdmin && (
         <Card className="border">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -467,8 +505,8 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {/* SMTP Email Settings — admin only */}
-      {isAdmin && (
+      {/* ── Email ── */}
+      {activeSection === "email" && isAdmin && (
         <Card className="border">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -578,8 +616,8 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {/* Organization Settings — admin only */}
-      {isAdmin && <Card className="border">
+      {/* ── Organization ── */}
+      {activeSection === "organization" && isAdmin && <Card className="border">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <SettingsIcon className="h-5 w-5" /> Organization
@@ -651,8 +689,8 @@ export default function SettingsPage() {
         </CardContent>
       </Card>}
 
-      {/* MFA - Personal */}
-      <Card className="border">
+      {/* ── Security ── */}
+      {activeSection === "security" && (<><Card className="border">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Shield className="h-5 w-5" /> Multi-Factor Authentication
@@ -955,10 +993,10 @@ export default function SettingsPage() {
             <Button variant="outline" onClick={() => setShowShareDialog(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog></>)}
 
-      {/* Chat Security & Privacy (For Users) */}
-      <Card className="border">
+      {/* ── Chat ── */}
+      {activeSection === "chat" && <Card className="border">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
@@ -1003,10 +1041,9 @@ export default function SettingsPage() {
             <p className="text-[10px] text-muted-foreground">New messages will automatically disappear after this duration (if enabled by Admin).</p>
           </div>
         </CardContent>
-      </Card>
+      </Card>}
 
-      {/* Organization Chat Policy (Admin Only) */}
-      {isAdmin && (
+      {activeSection === "chat" && isAdmin && (
         <Card className="border border-primary/20 bg-primary/[0.01]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -1079,8 +1116,13 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {/* MFA Mandate (Admin only) */}
-      {user?.system_role === "admin" && (
+      {/* ── Access Rules ── */}
+      {activeSection === "access" && (isAdmin || isManager) && (
+        <AccessRuleBook />
+      )}
+
+      {/* ── Policy ── */}
+      {activeSection === "policy" && user?.system_role === "admin" && (
         <Card className="border">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -1108,6 +1150,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   );
 }

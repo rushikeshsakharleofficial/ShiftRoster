@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useChat } from "@/contexts/ChatContext";
 import { chatApi, orgApi, usersApi } from "@/lib/api";
 import { getAvatarColor, cn } from "@/lib/utils";
+import { FileCard, getFileFormat } from "@/components/ui/file-card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -72,11 +73,9 @@ function FileAttachment({ fileUrl, fileName, fileSize, fileType }) {
         <a
           href={fullUrl}
           download={fileName}
-          className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-muted/40 hover:bg-muted transition-colors"
+          className="inline-flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-muted/40 hover:bg-muted transition-colors max-w-xs"
         >
-          <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <FileText className="h-4 w-4" />
-          </div>
+          <FileCard formatFile={getFileFormat(fileName, fileType)} />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold truncate text-foreground">{fileName}</p>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
