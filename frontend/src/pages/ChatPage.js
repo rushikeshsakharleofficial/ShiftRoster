@@ -193,7 +193,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                 </div>
               ) : (
                 <>
-                  <div className="relative group/msg">
+                  <div className={cn("flex items-center gap-1.5 group/msg", isOwn ? "flex-row-reverse" : "flex-row")}>
                     {emojiOnly && !msg.file_url ? (
                       <div className="text-4xl leading-none py-0.5">{msg.text}</div>
                     ) : (
@@ -211,10 +211,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                       </div>
                     )}
                     {isOwn && (
-                      <div className={cn(
-                        "absolute top-1/2 -translate-y-1/2 hidden group-hover/msg:flex gap-0.5 items-center",
-                        "right-full mr-1.5"
-                      )}>
+                      <div className="flex gap-0.5 items-center opacity-0 group-hover/msg:opacity-100 transition-opacity">
                         <button
                           onClick={() => startEdit(msg)}
                           className="p-1 rounded-md bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
