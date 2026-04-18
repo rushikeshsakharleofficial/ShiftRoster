@@ -423,13 +423,13 @@ async def change_level(user_id: str, data: ChangeLevelRequest, request: Request)
     if data.level not in ("L1", "L2", "L3"):
         raise HTTPException(status_code=400, detail="Invalid level")
 
-    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    user = await db.users.find_one({"_id": ObjectId(user_id), "org_id": current.get("org_id")})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     old_level = user.get("employee_level")
     await db.users.update_one(
-        {"_id": ObjectId(user_id)},
+        {"_id": ObjectId(user_id), "org_id": current.get("org_id")},
         {"$set": {"employee_level": data.level, "updated_at": datetime.now(timezone.utc)}},
     )
 
