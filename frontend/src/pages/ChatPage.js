@@ -289,6 +289,27 @@ export default function ChatPage() {
       inputRef.current.style.overflowY = scrollHeight > maxHeight ? "auto" : "hidden";
     }
   }, [inputText]);
+
+  const handleEmojiSelect = (emoji) => {
+    if (!inputRef.current) {
+      setInputText((prev) => prev + emoji);
+      return;
+    }
+    const start = inputRef.current.selectionStart;
+    const end = inputRef.current.selectionEnd;
+    const text = inputText;
+    const newText = text.substring(0, start) + emoji + text.substring(end);
+    setInputText(newText);
+    
+    // Defer setting cursor until after state update
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(start + emoji.length, start + emoji.length);
+      }
+    }, 0);
+  };
+
   const handleSend = async () => {
     const text = inputText.trim();
     if (!text && !pendingFile) return;
