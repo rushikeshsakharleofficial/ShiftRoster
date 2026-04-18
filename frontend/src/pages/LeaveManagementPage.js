@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Plus, Check, X, Loader2, ClipboardList } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function LeaveManagementPage() {
   const { user } = useAuth();

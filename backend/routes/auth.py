@@ -13,6 +13,10 @@ from auth_utils import (
 import jwt
 import secrets
 import hashlib
+import os
+
+# Secure cookies over HTTPS — set SECURE_COOKIES=true in production
+_SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -45,10 +49,9 @@ class DisableMfaRequest(BaseModel):
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str, remember_me: bool = False):
     refresh_max_age = 2592000 if remember_me else 604800  # 30 days or 7 days
-    # Set secure=False for testing; re-enable for production HTTPS
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=3600, path="/")
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax", max_age=refresh_max_age, path="/")
-    response.set_cookie(key="remember_me", value="1" if remember_me else "0", httponly=False, secure=False, samesite="lax", max_age=refresh_max_age, path="/")
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=_SECURE_COOKIES, samesite="lax", max_age=3600, path="/")
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=_SECURE_COOKIES, samesite="lax", max_age=refresh_max_age, path="/")
+    response.set_cookie(key="remember_me", value="1" if remember_me else "0", httponly=False, secure=_SECURE_COOKIES, samesite="lax", max_age=refresh_max_age, path="/")
 
 
 @router.post("/login")
