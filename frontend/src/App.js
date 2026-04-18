@@ -5,6 +5,7 @@ import { setupApi } from "@/lib/api";
 import AppLayout from "@/components/layout/AppLayout";
 import LoginPage from "@/pages/LoginPage";
 import SetupPage from "@/pages/SetupPage";
+import SetupPasswordPage from "@/pages/SetupPasswordPage";
 import DashboardPage from "@/pages/DashboardPage";
 import ShiftCalendarPage from "@/pages/ShiftCalendarPage";
 import EmployeesPage from "@/pages/EmployeesPage";
@@ -19,7 +20,9 @@ import AuditLogPage from "@/pages/AuditLogPage";
 import SettingsPage from "@/pages/SettingsPage";
 import StickyNotesPage from "@/pages/StickyNotesPage";
 import ShiftTemplatesPage from "@/pages/ShiftTemplatesPage";
+import HandoverPage from "@/pages/HandoverPage";
 import ChatPage from "@/pages/ChatPage";
+import ChatLayout from "@/components/layout/ChatLayout";
 import { ChatProvider } from "@/contexts/ChatContext";
 import { Toaster } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -75,6 +78,14 @@ export default function App() {
             }
           />
           <Route path="/setup" element={<SetupPage />} />
+          <Route
+            path="/setup-password"
+            element={
+              <PublicRoute>
+                <SetupPasswordPage />
+              </PublicRoute>
+            }
+          />
 
           {/* Protected routes */}
           <Route
@@ -94,11 +105,23 @@ export default function App() {
             <Route path="/swap-requests" element={<SwapRequestsPage />} />
             <Route path="/sticky-notes" element={<StickyNotesPage />} />
             <Route path="/shift-templates" element={<ShiftTemplatesPage />} />
+            <Route path="/handovers" element={<HandoverPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/audit-log" element={<AuditLogPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+          </Route>
+
+          {/* Standalone Full-Screen Chat */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <ChatLayout />
+              </ProtectedRoute>
+            }
+          >
             <Route path="/chat" element={<ChatPage />} />
+            <Route path="/chat/:channelId" element={<ChatPage />} />
           </Route>
 
           {/* Catch all */}

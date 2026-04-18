@@ -575,18 +575,87 @@ async def update_organization(request: Request):
     if is_admin:
         allowed = ["name", "brand_name", "logo_url", "timezone", "locale", "currency",
                    "work_week_start", "overtime_daily_threshold", "overtime_weekly_threshold",
-                   "attendance_enabled"]
+                   "attendance_enabled",
+                   "smtp_host", "smtp_port", "smtp_username", "smtp_password",
+                   "smtp_from_email", "smtp_from_name", "smtp_use_tls", "smtp_enabled",
+                   "chat_features", "purge_policy_days"]
     else:
         allowed = ["attendance_enabled"]
 
     update = {k: v for k, v in body.items() if k in allowed and v is not None}
     if "attendance_enabled" in body and body["attendance_enabled"] is False:
         update["attendance_enabled"] = False
+    
+    # Explicitly handle chat_features if present
+    if "chat_features" in body and is_admin:
+        update["chat_features"] = body["chat_features"]
+
+    if "smtp_password" in body:
+        update["smtp_password"] = body["smtp_password"]
     update["updated_at"] = datetime.now(timezone.utc)
 
     await db.organizations.update_one({"_id": ObjectId(current.get("org_id"))}, {"$set": update})
     org = await db.organizations.find_one({"_id": ObjectId(current.get("org_id"))})
     return serialize_doc(org)
+
+
+@router.post("/organization/test-email")
+async def test_smtp_email(request: Request):
+    current = await get_current_user(request)
+    if current["system_role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    body = await request.json()
+    recipient = body.get("recipient_email", current.get("email", ""))
+    if not recipient:
+        raise HTTPException(status_code=400, detail="recipient_email required")
+
+    org = await db.organizations.find_one({"_id": ObjectId(current.get("org_id"))})
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    smtp_cfg = {
+        "host": org.get("smtp_host", ""),
+        "port": int(org.get("smtp_port", 587)),
+        "username": org.get("smtp_username", ""),
+        "password": org.get("smtp_password", ""),
+        "from_email": org.get("smtp_from_email", ""),
+        "from_name": org.get("smtp_from_name", org.get("name", "ShiftRoster")),
+        "use_tls": org.get("smtp_use_tls", True),
+    }
+    if not smtp_cfg["host"] or not smtp_cfg["from_email"]:
+        raise HTTPException(status_code=400, detail="SMTP not configured. Set host and from_email first.")
+
+    import smtplib
+    import asyncio
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    def _send():
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"Test Email from {smtp_cfg['from_name']}"
+        msg["From"] = f"{smtp_cfg['from_name']} <{smtp_cfg['from_email']}>"
+        msg["To"] = recipient
+        body_html = f"<p>This is a test email from <strong>{smtp_cfg['from_name']}</strong> via ShiftRoster SMTP settings.</p><p>If you received this, your SMTP configuration is working correctly.</p>"
+        msg.attach(MIMEText(body_html, "html"))
+
+        if smtp_cfg["use_tls"]:
+            server = smtplib.SMTP(smtp_cfg["host"], smtp_cfg["port"], timeout=10)
+            server.starttls()
+        else:
+            server = smtplib.SMTP_SSL(smtp_cfg["host"], smtp_cfg["port"], timeout=10)
+
+        if smtp_cfg["username"] and smtp_cfg["password"]:
+            server.login(smtp_cfg["username"], smtp_cfg["password"])
+        server.sendmail(smtp_cfg["from_email"], [recipient], msg.as_string())
+        server.quit()
+
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _send)
+        return {"success": True, "message": f"Test email sent to {recipient}"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"SMTP error: {str(e)}")
 
 
 # ══════════════════════════════════════════

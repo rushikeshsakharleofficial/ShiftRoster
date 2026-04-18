@@ -2,19 +2,22 @@ import { useState, useEffect, useRef } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import ThemeToggle from "@/components/layout/ThemeToggle";
+import AnnouncementBanner from "@/components/layout/AnnouncementBanner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { notificationsApi, orgApi, usersApi } from "@/lib/api";
 import { useChat } from "@/contexts/ChatContext";
-import { getAvatarColor } from "@/lib/utils";
+import { getAvatarColor, cn } from "@/lib/utils";
 import FlipClock from "@/components/ui/flip-clock";
+import { Toggle, GooeyFilter } from "@/components/ui/liquid-toggle";
 import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
@@ -43,6 +46,7 @@ export default function AppLayout() {
   const [notifications, setNotifications] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [attendanceEnabled, setAttendanceEnabled] = useState(false);
+  const [chatFeatures, setChatFeatures] = useState({ encryption_enabled: false, gifs_enabled: false, disappearing_mode_enabled: false });
   const [orgBrand, setOrgBrand] = useState({ name: "ShiftRoster", logo_url: "" });
   const wsRef = useRef(null);
 
@@ -96,41 +100,45 @@ export default function AppLayout() {
 
   // WebSocket presence
   useEffect(() => {
-    if (!user?.id) return;
-    const wsUrl = BACKEND_URL.replace(/^http/, "ws") + "/api/ws";
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    if (!user?.id || !BACKEND_URL) return;
+    try {
+      const wsUrl = BACKEND_URL.replace(/^http/, "ws") + "/api/ws";
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-    // Expose to ChatPage / ChatContext for typing events (set immediately, before open)
-    window._appLayoutWsRef = ws;
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ user_id: user.id }));
-    };
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "presence_update") {
-          setOnlineUsers(msg.online_users || []);
-        } else if (msg.type && msg.type.startsWith("chat_")) {
-          // Dispatch to ChatContext via CustomEvent
-          window.dispatchEvent(new CustomEvent("ws:chat", { detail: msg }));
+      // Expose to ChatPage / ChatContext for typing events (set immediately, before open)
+      window._appLayoutWsRef = ws;
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ user_id: user.id }));
+      };
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === "presence_update") {
+            setOnlineUsers(msg.online_users || []);
+          } else if (msg.type && msg.type.startsWith("chat_")) {
+            // Dispatch to ChatContext via CustomEvent
+            window.dispatchEvent(new CustomEvent("ws:chat", { detail: msg }));
+          }
+        } catch {}
+      };
+
+      const heartbeat = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "heartbeat", current_view: window.location.pathname }));
         }
-      } catch {}
-    };
+      }, 30000);
 
-    const heartbeat = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "heartbeat", current_view: window.location.pathname }));
-      }
-    }, 30000);
-
-    return () => {
-      clearInterval(heartbeat);
-      ws.close();
-      if (window._appLayoutWsRef === ws) {
-        window._appLayoutWsRef = null;
-      }
-    };
+      return () => {
+        clearInterval(heartbeat);
+        ws.close();
+        if (window._appLayoutWsRef === ws) {
+          window._appLayoutWsRef = null;
+        }
+      };
+    } catch (err) {
+      console.error("WebSocket setup failed:", err);
+    }
   }, [user?.id]);
 
   const openProfile = () => {
@@ -223,12 +231,13 @@ export default function AppLayout() {
     { to: "/attendance", icon: Clock, label: "Attendance", show: attendanceEnabled },
     { to: "/swap-requests", icon: ArrowLeftRight, label: "Swap Requests", show: isAdmin || isManager || level !== "L1" },
     { to: "/shift-templates", icon: LayoutTemplate, label: "Shift Templates", show: isAdmin || isManager },
+    { to: "/handovers", icon: ClipboardList, label: "Handovers", show: true },
     { to: "/sticky-notes", icon: StickyNote, label: "Sticky Notes", show: true },
-    { to: "/chat", icon: MessageSquare, label: "Chat", show: true },
+    { to: "/chat", icon: MessageSquare, label: "Chat", show: true, external: true },
     { to: "/notifications", icon: Bell, label: "Notifications", show: true },
     { to: "/reports", icon: BarChart3, label: "Reports", show: isAdmin || isManager },
     { to: "/audit-log", icon: ScrollText, label: "Audit Log", show: isAdmin },
-    { to: "/settings", icon: Settings, label: "Settings", show: isAdmin || isManager },
+    { to: "/settings", icon: Settings, label: "Settings", show: true },
   ].filter((n) => n.show);
 
   const initials = user?.full_name
@@ -237,59 +246,124 @@ export default function AppLayout() {
 
   const roleBadge = isAdmin ? "Admin" : isManager ? "Manager" : level || "Employee";
 
+  // Helper to render status icon
+  const renderStatusIcon = (status, className = "h-3.5 w-3.5") => {
+    switch (status) {
+      case "active":
+        return <CircleDot className={cn(className, "text-green-500")} />;
+      case "break":
+        return <Coffee className={cn(className, "text-yellow-500")} />;
+      case "leave":
+        return <Plane className={cn(className, "text-red-400")} />;
+      default:
+        return <CircleDot className={cn(className, "text-muted-foreground/40")} />;
+    }
+  };
+
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen w-full overflow-hidden bg-background">
+      <GooeyFilter />
       {/* Sidebar */}
       <aside
         data-testid="app-sidebar"
         className={`
           fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border
           bg-[hsl(var(--sidebar-bg))] transition-all duration-300
-          ${sidebarOpen ? "w-60" : "w-16"}
+          ${sidebarOpen ? "w-64" : "w-16"}
           ${mobileSidebar ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0 lg:static
         `}
       >
         {/* Logo */}
         <div className="flex flex-row items-center gap-2 px-4 h-14 border-b border-border shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0 overflow-hidden">
-            {orgBrand.logo_url ? (
+          {orgBrand.logo_url && (
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0 overflow-hidden">
               <img src={orgBrand.logo_url} alt="logo" className="w-full h-full object-cover rounded-lg" />
-            ) : (
-              <CalendarDays className="h-4 w-4 text-primary-foreground" />
-            )}
-          </div>
-          {sidebarOpen && <span className="font-semibold text-sm tracking-tight truncate">{orgBrand.name}</span>}
+            </div>
+          )}
+          {sidebarOpen && <span className="font-bold text-base tracking-tight truncate">{orgBrand.name}</span>}
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/"}
-              onClick={() => setMobileSidebar(false)}
-              className={({ isActive }) =>
-                `flex flex-row items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-200 group ${
-                  isActive
-                    ? "bg-primary/10 text-primary font-medium shadow-sm ring-1 ring-primary/20"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                }`
-              }
-              data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-            >
-              <item.icon className={`h-4 w-4 shrink-0 transition-transform duration-200 ${sidebarOpen ? "" : "mx-auto"} group-hover:scale-110`} />
-              {sidebarOpen && <span className="truncate">{item.label}</span>}
-              {item.to === "/notifications" && unreadCount > 0 && sidebarOpen && (
-                <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{unreadCount}</Badge>
-              )}
-              {item.to === "/chat" && chatUnread > 0 && sidebarOpen && (
-                <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{chatUnread > 99 ? "99+" : chatUnread}</Badge>
-              )}
-            </NavLink>
-          ))}
-        </nav>
+        {/* Nav & Team Status */}
+        <ScrollArea className="flex-1">
+          <nav className="py-3 px-2 space-y-0.5">
+            {navItems.map((item) => (
+              item.external ? (
+                <button
+                  key={item.to}
+                  onClick={() => window.open(item.to, "_blank", "noopener,noreferrer")}
+                  className={`w-full flex flex-row items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-200 group text-muted-foreground hover:bg-accent hover:text-accent-foreground`}
+                >
+                  <item.icon className={`h-4 w-4 shrink-0 transition-transform duration-200 ${sidebarOpen ? "" : "mx-auto"} group-hover:scale-110`} />
+                  {sidebarOpen && <span className="truncate">{item.label}</span>}
+                  {item.to === "/chat" && chatUnread > 0 && sidebarOpen && (
+                    <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{chatUnread > 99 ? "99+" : chatUnread}</Badge>
+                  )}
+                </button>
+              ) : (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === "/"}
+                  onClick={() => setMobileSidebar(false)}
+                  className={({ isActive }) =>
+                    `flex flex-row items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-200 group ${
+                      isActive
+                        ? "bg-primary/10 text-primary font-medium shadow-sm ring-1 ring-primary/20"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    }`
+                  }
+                  data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                >
+                  <item.icon className={`h-4 w-4 shrink-0 transition-transform duration-200 ${sidebarOpen ? "" : "mx-auto"} group-hover:scale-110`} />
+                  {sidebarOpen && <span className="truncate">{item.label}</span>}
+                  {item.to === "/notifications" && unreadCount > 0 && sidebarOpen && (
+                    <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{unreadCount}</Badge>
+                  )}
+                  {item.to === "/chat" && chatUnread > 0 && sidebarOpen && (
+                    <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{chatUnread > 99 ? "99+" : chatUnread}</Badge>
+                  )}
+                </NavLink>
+              )
+            ))}
+          </nav>
+
+          {/* Team Status Panel */}
+          {sidebarOpen && (
+            <div className="flex flex-col border-t border-border/50 min-h-0">
+              <div className="px-5 py-3 flex items-center justify-between shrink-0">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Team Status</span>
+                <Badge variant="outline" className="text-[9px] h-4 px-1">{onlineUsers.length}</Badge>
+              </div>
+              <div className="px-2 pb-4 space-y-0.5">
+                {onlineUsers.map((u) => (
+                  <div key={u.id} className="flex items-center gap-3 px-3 py-1.5 rounded-md hover:bg-accent/30 transition-colors group">
+                    <div className="relative shrink-0">
+                      <Avatar className="h-6 w-6">
+                        {u.avatar && <AvatarImage src={`${BACKEND_URL || ""}${u.avatar}`} />}
+                        <AvatarFallback className={`text-[8px] font-bold ${getAvatarColor(u.name || "User")}`}>
+                          {(u.name || "User").split(" ").map(n => n[0]).join("").slice(0,2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="absolute -bottom-1 -right-1 bg-[hsl(var(--sidebar-bg))] rounded-full p-0.5">
+                        {renderStatusIcon(u.status, "h-2 w-2")}
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate leading-none">{u.name || "Unknown User"}</p>
+                      <p className="text-[9px] text-muted-foreground truncate mt-1 capitalize">{u.status === "active" ? (u.system_role || "Employee") : `On ${u.status}`}</p>
+                    </div>
+                  </div>
+                ))}
+                {onlineUsers.length === 0 && (
+                  <div className="px-3 py-4 text-center">
+                    <p className="text-[10px] text-muted-foreground italic">No one else online</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </ScrollArea>
 
         {/* User section */}
         <div className="border-t border-border p-3 shrink-0">
@@ -303,19 +377,16 @@ export default function AppLayout() {
                       {initials}
                     </AvatarFallback>
                   </Avatar>
-                  {/* My own status dot */}
-                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
-                    myStatus === "active" ? "bg-green-500"
-                    : myStatus === "break" ? "bg-yellow-400"
-                    : myStatus === "leave" ? "border-2 border-red-400 bg-background"
-                    : "bg-muted-foreground/40"
-                  }`} />
+                  {/* My own status icon */}
+                  <div className="absolute -bottom-1 -right-1 bg-[hsl(var(--sidebar-bg))] rounded-full p-0.5 shadow-sm">
+                    {renderStatusIcon(myStatus, "h-2.5 w-2.5")}
+                  </div>
                 </div>
                 {sidebarOpen && (
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{user?.full_name}</p>
                     <p className="text-[10px] text-muted-foreground truncate capitalize">
-                      {myStatus === "active" ? roleBadge : myStatus === "break" ? "On Break" : "On Leave"}
+                      {myStatus === "active" ? roleBadge : `On ${myStatus}`}
                     </p>
                   </div>
                 )}
@@ -325,13 +396,13 @@ export default function AppLayout() {
               <DropdownMenuLabel className="text-[11px] text-muted-foreground">Set Status</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => handleSetStatus("active")} className={myStatus === "active" ? "text-primary font-medium" : ""}>
-                <span className="w-2.5 h-2.5 rounded-full bg-green-500 mr-2 shrink-0" /> Active
+                {renderStatusIcon("active", "h-3.5 w-3.5 mr-2 shrink-0")} Active
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleSetStatus("break")} className={myStatus === "break" ? "text-primary font-medium" : ""}>
-                <Coffee className="h-3.5 w-3.5 mr-2 text-yellow-500 shrink-0" /> On Break
+                {renderStatusIcon("break", "h-3.5 w-3.5 mr-2 shrink-0")} On Break
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleSetStatus("leave")} className={myStatus === "leave" ? "text-primary font-medium" : ""}>
-                <Plane className="h-3.5 w-3.5 mr-2 text-red-400 shrink-0" /> On Leave
+                {renderStatusIcon("leave", "h-3.5 w-3.5 mr-2 shrink-0")} On Leave
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -344,11 +415,11 @@ export default function AppLayout() {
       )}
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-full relative">
         {/* Header */}
         <header
           data-testid="app-header"
-          className="glass-header h-14 border-b border-border bg-background/70 flex items-center justify-between px-4 shrink-0 z-20"
+          className="h-14 border-b border-border bg-background/80 backdrop-blur-md flex items-center justify-between px-4 shrink-0 z-20"
         >
           <div className="flex items-center gap-2">
             <Button
@@ -391,8 +462,8 @@ export default function AppLayout() {
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-80 p-0" align="end">
-                <div className="flex items-center justify-between px-4 py-3 border-b">
+              <PopoverContent className="w-80 p-0 shadow-xl border-border" align="end">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                   <div>
                     <p className="text-sm font-semibold">Notifications</p>
                     <p className="text-xs text-muted-foreground">{unreadCount} unread</p>
@@ -403,40 +474,40 @@ export default function AppLayout() {
                     </Button>
                   )}
                 </div>
-                <div className="max-h-[300px] overflow-y-auto">
+                <div className="max-h-[350px] overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <div className="p-6 text-center text-muted-foreground">
-                      <Bell className="h-6 w-6 mx-auto mb-2 opacity-30" />
-                      <p className="text-xs">No notifications</p>
+                    <div className="p-8 text-center text-muted-foreground">
+                      <Bell className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                      <p className="text-xs">No new notifications</p>
                     </div>
                   ) : (
                     notifications.map((n) => (
                       <div
                         key={n.id}
-                        className={`flex items-start gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer border-b last:border-b-0 transition-colors ${
-                          !n.is_read ? "bg-primary/[0.03]" : ""
+                        className={`flex items-start gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer border-b border-border/50 last:border-b-0 transition-colors ${
+                          !n.is_read ? "bg-primary/[0.02]" : ""
                         }`}
                         onClick={() => !n.is_read && handleMarkRead(n.id)}
                       >
-                        <div className={`mt-0.5 h-7 w-7 rounded-full flex items-center justify-center shrink-0 ${
+                        <div className={`mt-0.5 h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
                           !n.is_read ? "bg-primary/10" : "bg-muted"
                         }`}>
-                          <Bell className={`h-3 w-3 ${!n.is_read ? "text-primary" : "text-muted-foreground"}`} />
+                          <Bell className={`h-3.5 w-3.5 ${!n.is_read ? "text-primary" : "text-muted-foreground"}`} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <p className={`text-xs line-clamp-1 ${!n.is_read ? "font-medium" : ""}`}>{n.title}</p>
+                            <p className={`text-xs line-clamp-1 ${!n.is_read ? "font-bold text-foreground" : "text-muted-foreground"}`}>{n.title}</p>
                             {!n.is_read && <div className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
                           </div>
-                          {n.body && <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{n.body}</p>}
-                          <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(n.created_at)}</p>
+                          {n.body && <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5 leading-relaxed">{n.body}</p>}
+                          <p className="text-[9px] text-muted-foreground/60 mt-1">{timeAgo(n.created_at)}</p>
                         </div>
                       </div>
                     ))
                   )}
                 </div>
-                <div className="border-t px-4 py-2">
-                  <Button variant="ghost" size="sm" className="w-full text-xs h-7" onClick={() => navigate("/notifications")}>
+                <div className="border-t border-border px-4 py-2 bg-muted/20">
+                  <Button variant="ghost" size="sm" className="w-full text-xs h-8" onClick={() => navigate("/notifications")}>
                     View all notifications
                   </Button>
                 </div>
@@ -450,7 +521,7 @@ export default function AppLayout() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-9 w-9" onClick={openProfile}>
-                    <Avatar className="h-7 w-7">
+                    <Avatar className="h-7 w-7 ring-1 ring-border">
                       {user?.avatar_url && (
                         <AvatarImage src={`${BACKEND_URL || ""}${user.avatar_url}`} />
                       )}
@@ -467,7 +538,7 @@ export default function AppLayout() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9"
+              className="h-9 w-9 text-muted-foreground hover:text-destructive transition-colors"
               onClick={handleLogout}
               data-testid="logout-btn"
             >
@@ -535,8 +606,8 @@ export default function AppLayout() {
         </Dialog>
 
         {/* Page content */}
-        <main className={`flex-1 flex flex-col min-h-0 ${isFullBleed ? "" : "p-4 md:p-6 lg:p-8"}`}>
-          <div className={`animate-fade-in flex-1 min-h-0 ${isFullBleed ? "overflow-hidden" : "relative overflow-auto"}`}>
+        <main className={`flex-1 flex flex-col min-h-0 w-full ${isFullBleed ? "" : "p-0"}`}>
+          <div className={`animate-fade-in flex-1 min-h-0 w-full ${isFullBleed ? "overflow-hidden" : "relative overflow-auto p-4 md:p-6 lg:p-8"}`}>
             <Outlet />
           </div>
         </main>

@@ -110,8 +110,8 @@ class ShiftMasterAPITester:
             "phone": "1234567890"
         }
         
-        success, data = self.make_request('POST', '/auth/register', register_data, 
-                                        expected_status=200, use_auth=False)
+        success, data = self.make_request('POST', '/users', register_data, 
+                                        expected_status=200, use_auth=True)
         
         self.log_result("User Registration", success and 'id' in data, 
                        f"Registration response: {data}")
@@ -518,6 +518,50 @@ class ShiftMasterAPITester:
         
         return True
 
+    def test_chat_channel_search(self) -> bool:
+        """Test chat channel search endpoint"""
+        timestamp = datetime.now().strftime('%H%M%S')
+        channel_name = f"public-search-test-{timestamp}"
+        
+        # 1. Create a new public channel
+        channel_data = {
+            "name": channel_name,
+            "is_public": True,
+            "description": "A test channel for searching."
+        }
+        success, created_channel = self.make_request('POST', '/chat/channels', channel_data)
+        if not success:
+            self.log_result("Create Public Channel for Search", False, f"Failed to create channel: {created_channel}")
+            return False
+        
+        created_channel_id = created_channel.get('id')
+        self.log_result("Create Public Channel for Search", True, f"Created channel ID: {created_channel_id}")
+
+        # 2. Search for the newly created channel
+        search_query = channel_name
+        success, search_results = self.make_request('GET', f'/chat/channels/search?q={search_query}')
+        
+        if not success:
+            self.log_result("Search for Existing Channel", False, f"Search request failed: {search_results}")
+            return False
+
+        found = any(c.get('id') == created_channel_id for c in search_results.get('channels', []))
+        self.log_result("Search for Existing Channel", found, 
+                       f"Channel '{channel_name}' found in search results.")
+
+        # 3. Search for a non-existent channel
+        non_existent_query = "non-existent-channel-query-xyz"
+        success, empty_results = self.make_request('GET', f'/chat/channels/search?q={non_existent_query}')
+
+        if not success:
+            self.log_result("Search for Non-Existent Channel", False, f"Search request failed: {empty_results}")
+            return False
+
+        is_empty = isinstance(empty_results.get('channels'), list) and len(empty_results['channels']) == 0
+        self.log_result("Search for Non-Existent Channel", is_empty, "Returned an empty list as expected.")
+
+        return found and is_empty
+
     def run_all_tests(self) -> bool:
         """Run all backend tests"""
         print("🚀 Starting ShiftMaster Backend API Tests")
@@ -551,6 +595,7 @@ class ShiftMasterAPITester:
             self.test_reports_overview,
             self.test_audit_logs,
             self.test_websocket_presence,
+            self.test_chat_channel_search,
         ]
         
         for test_method in test_methods:
@@ -559,14 +604,16 @@ class ShiftMasterAPITester:
             except Exception as e:
                 self.log_result(test_method.__name__, False, f"Exception: {str(e)}")
         
+
         # Print summary
-        print("\n" + "=" * 50)
+        print("\\n" + "=" * 50)
         print(f"📊 Test Summary: {self.tests_passed}/{self.tests_run} passed")
-        
+
         if self.failed_tests:
-            print("\n❌ Failed Tests:")
+            print("\\n❌ Failed Tests:")
             for failed in self.failed_tests:
                 print(f"  • {failed['test']}: {failed['details']}")
+
         
         success_rate = (self.tests_passed / self.tests_run * 100) if self.tests_run > 0 else 0
         print(f"✨ Success Rate: {success_rate:.1f}%")

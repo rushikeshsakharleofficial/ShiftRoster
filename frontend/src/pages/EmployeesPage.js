@@ -19,6 +19,7 @@ const API_URL = import.meta.env.REACT_APP_BACKEND_URL || "";
 const EMPTY_FORM = {
   email: "", password: "", full_name: "", username: "", phone: "",
   system_role: "employee", employee_level: "L1", department_id: "", employment_type: "full_time",
+  send_welcome_email: true,
 };
 
 export default function EmployeesPage() {
@@ -57,7 +58,7 @@ export default function EmployeesPage() {
   useEffect(() => { loadData(); }, [search, roleFilter, deptFilter]);
 
   const handleCreate = async () => {
-    if (form.password.length < 12) {
+    if (form.password && form.password.length < 12) {
       toast.error("Password must be at least 12 characters");
       return;
     }
@@ -65,8 +66,10 @@ export default function EmployeesPage() {
     try {
       const payload = { ...form };
       if (!payload.username) delete payload.username; // server auto-generates
+      if (!payload.password) delete payload.password; // server generates setup token
+      
       await usersApi.create(payload);
-      toast.success("Employee created");
+      toast.success(payload.password ? "Employee created" : "Employee created and welcome email sent");
       setShowCreate(false);
       setForm(EMPTY_FORM);
       loadData();
@@ -379,9 +382,23 @@ export default function EmployeesPage() {
             </div>
 
             {!showEdit && (
-              <div className="space-y-1.5">
-                <Label>Password <span className="text-muted-foreground text-xs">(min 12 chars)</span></Label>
-                <Input data-testid="emp-password-input" type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label>Password <span className="text-muted-foreground text-xs">(optional — leave blank to send setup link)</span></Label>
+                  <Input data-testid="emp-password-input" type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="send-welcome"
+                    checked={form.send_welcome_email}
+                    onChange={(e) => setForm({ ...form, send_welcome_email: e.target.checked })}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <Label htmlFor="send-welcome" className="text-xs font-medium cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
+                    Send welcome email with password setup link
+                  </Label>
+                </div>
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">

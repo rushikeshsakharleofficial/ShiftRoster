@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Toggle } from "@/components/ui/liquid-toggle";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
@@ -146,7 +146,7 @@ function FloatingNote({
         cursor: "grab",
         userSelect: "none",
         boxShadow: isHighlighted
-          ? `0 0 0 2.5px #6366f1, 4px 8px 20px rgba(0,0,0,0.22)`
+          ? `0 0 0 2.5px hsl(var(--primary)), 4px 8px 20px rgba(0,0,0,0.22)`
           : "2px 5px 14px rgba(0,0,0,0.16), 0 1px 3px rgba(0,0,0,0.08)",
         zIndex: isHighlighted ? 20 : 10,
         transition: "box-shadow 0.2s",
@@ -260,19 +260,23 @@ function FloatingNote({
               </DialogTitle>
             </DialogHeader>
             <div
-              className="rounded-sm relative flex-1 overflow-hidden"
-              style={{ background: note.color }}
+              className="rounded-md border shadow-sm relative overflow-hidden transition-colors w-full"
+              style={{ background: note.color, borderColor: "rgba(0,0,0,0.08)" }}
             >
+              {/* Visual Decoration (Tape) */}
               <div
-                className="absolute -top-2 left-1/2 -translate-x-1/2 w-12 h-3.5 rounded-sm"
+                className="absolute top-0 left-1/2 -translate-x-1/2 w-14 h-3 opacity-60"
                 style={{
-                  background: "rgba(255,255,255,0.52)",
-                  border: "1px solid rgba(0,0,0,0.07)",
+                  background: "rgba(255,255,255,0.8)",
+                  borderBottom: "1px solid rgba(0,0,0,0.05)",
+                  borderLeft: "1px solid rgba(0,0,0,0.05)",
+                  borderRight: "1px solid rgba(0,0,0,0.05)",
+                  borderRadius: "0 0 4px 4px",
                 }}
               />
-              <div className="p-6 overflow-y-auto" style={{ maxHeight: "50vh" }}>
+              <div className="p-6 pt-8 overflow-y-auto" style={{ maxHeight: "50vh" }}>
                 <p className="text-base leading-relaxed whitespace-pre-wrap break-words"
-                  style={{ color: "rgba(0,0,0,0.82)" }}>
+                  style={{ color: "rgba(0,0,0,0.82)", wordBreak: "break-word" }}>
                   {note.text}
                 </p>
               </div>
@@ -556,142 +560,148 @@ export default function StickyNotesPage() {
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md flex flex-col max-h-[90vh]">
-          <DialogHeader className="shrink-0">
+        <DialogContent className="sm:max-w-md flex flex-col max-h-[90vh] p-0 overflow-hidden">
+          <DialogHeader className="shrink-0 px-6 pt-6">
             <DialogTitle>
               {editingNote ? "Edit Note" : "New Sticky Note"}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 overflow-y-auto flex-1 pr-1">
-            {/* Calendar date picker */}
-            <div className="space-y-1.5">
-              <Label>Date</Label>
-              <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal gap-2",
-                      !selectedDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="h-4 w-4 shrink-0" />
-                    {selectedDate
-                      ? format(selectedDate, "PPP")
-                      : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={(date) => {
-                      if (date) {
-                        setSelectedDate(date);
-                        setDatePickerOpen(false);
-                      }
+          <div className="flex-1 overflow-y-auto px-6">
+            <div className="flex flex-col gap-5 py-4">
+              {/* Date Picker Section */}
+              <div className="space-y-2">
+                <Label>Date</Label>
+                <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal gap-2 h-10",
+                        !selectedDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="h-4 w-4 shrink-0" />
+                      {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={(date) => {
+                        if (date) {
+                          setSelectedDate(date);
+                          setDatePickerOpen(false);
+                        }
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Note Input Section */}
+              <div className="space-y-2">
+                <Label>Note Content</Label>
+                <Textarea
+                  placeholder="Write your note here..."
+                  value={form.text}
+                  onChange={(e) => setForm({ ...form, text: e.target.value })}
+                  rows={5}
+                  className="resize-none p-3 leading-relaxed w-full border-muted-foreground/20 focus-visible:ring-amber-500/30"
+                />
+              </div>
+
+              {/* Color Picker Section */}
+              <div className="space-y-2">
+                <Label>Note Color</Label>
+                <div className="flex gap-2.5 flex-wrap pt-1">
+                  {NOTE_COLORS.map((c) => (
+                    <button
+                      key={c.value}
+                      className={`w-8 h-8 rounded-full border-2 transition-transform active:scale-95 ${
+                        form.color === c.value
+                          ? "border-foreground scale-110 shadow-sm"
+                          : "border-transparent hover:border-muted-foreground/30"
+                      }`}
+                      style={{ background: c.value }}
+                      onClick={() => setForm({ ...form, color: c.value })}
+                      type="button"
+                      title={c.name}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Toggles Section */}
+              <div className="grid grid-cols-2 gap-4 pt-1">
+                <div 
+                  className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/20 cursor-pointer hover:bg-muted/30 transition-colors"
+                  onClick={() => setForm({ ...form, is_public: !form.is_public })}
+                >
+                  <div className="flex items-center gap-2">
+                    {form.is_public ? <Globe className="h-4 w-4 text-primary" /> : <Lock className="h-4 w-4 text-muted-foreground" />}
+                    <span className="text-sm font-medium">{form.is_public ? "Public" : "Private"}</span>
+                  </div>
+                  <Toggle
+                    checked={form.is_public}
+                    onCheckedChange={(v) => setForm({ ...form, is_public: v })}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+
+                <div 
+                  className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/20 cursor-pointer hover:bg-muted/30 transition-colors"
+                  onClick={() => setForm({ ...form, pinned: !form.pinned })}
+                >
+                  <div className="flex items-center gap-2">
+                    <Pin className={cn("h-4 w-4", form.pinned ? "text-primary" : "text-muted-foreground")} />
+                    <span className="text-sm font-medium">Pinned</span>
+                  </div>
+                  <Toggle
+                    checked={form.pinned}
+                    onCheckedChange={(v) => setForm({ ...form, pinned: v })}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              </div>
+
+              {/* Final Preview Section */}
+              <div className="space-y-2 pt-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Live Preview</Label>
+                <div
+                  className="w-full rounded-md border shadow-sm relative overflow-hidden transition-colors duration-300"
+                  style={{ background: form.color, borderColor: "rgba(0,0,0,0.08)" }}
+                >
+                  {/* Visual Decoration (Tape) */}
+                  <div
+                    className="absolute top-0 left-1/2 -translate-x-1/2 w-14 h-3 opacity-60"
+                    style={{
+                      background: "rgba(255,255,255,0.8)",
+                      borderBottom: "1px solid rgba(0,0,0,0.05)",
+                      borderLeft: "1px solid rgba(0,0,0,0.05)",
+                      borderRight: "1px solid rgba(0,0,0,0.05)",
+                      borderRadius: "0 0 4px 4px",
                     }}
-                    initialFocus
                   />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Note text */}
-            <div className="space-y-1.5">
-              <Label>Note</Label>
-              <Textarea
-                placeholder="Write your note..."
-                value={form.text}
-                onChange={(e) => setForm({ ...form, text: e.target.value })}
-                rows={6}
-                className="resize-none p-3 leading-relaxed"
-              />
-            </div>
-
-            {/* Color */}
-            <div className="space-y-1.5">
-              <Label>Color</Label>
-              <div className="flex gap-2 flex-wrap">
-                {NOTE_COLORS.map((c) => (
-                  <button
-                    key={c.value}
-                    className={`w-7 h-7 rounded-full border-2 transition-all ${
-                      form.color === c.value
-                        ? "border-foreground scale-110"
-                        : "border-transparent hover:border-muted-foreground/40"
-                    }`}
-                    style={{ background: c.value }}
-                    onClick={() => setForm({ ...form, color: c.value })}
-                    type="button"
-                    title={c.name}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Toggles */}
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={form.is_public}
-                  onCheckedChange={(v) =>
-                    setForm({ ...form, is_public: v })
-                  }
-                />
-                <Label className="flex items-center gap-1 text-sm">
-                  {form.is_public ? (
-                    <>
-                      <Globe className="h-3.5 w-3.5" /> Public
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="h-3.5 w-3.5" /> Private
-                    </>
-                  )}
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={form.pinned}
-                  onCheckedChange={(v) => setForm({ ...form, pinned: v })}
-                />
-                <Label className="flex items-center gap-1 text-sm">
-                  <Pin className="h-3.5 w-3.5" /> Pinned
-                </Label>
-              </div>
-            </div>
-
-            {/* Preview */}
-            <div
-              className="rounded-sm border text-sm relative"
-              style={{ background: form.color, marginTop: 12 }}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  top: -8,
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  width: 44,
-                  height: 14,
-                  background: "rgba(255,255,255,0.52)",
-                  border: "1px solid rgba(0,0,0,0.07)",
-                  borderRadius: 2,
-                }}
-              />
-              <div
-                className="p-4 overflow-y-auto"
-                style={{ maxHeight: 160 }}
-              >
-                <span className="leading-relaxed" style={{ color: "rgba(0,0,0,0.72)", whiteSpace: "pre-wrap" }}>
-                  {form.text || "Preview..."}
-                </span>
+                  <div className="p-5 pt-7 min-h-[100px] flex flex-col">
+                    <span 
+                      className="text-sm leading-relaxed" 
+                      style={{ 
+                        color: "rgba(0,0,0,0.75)", 
+                        whiteSpace: "pre-wrap", 
+                        wordBreak: "break-word",
+                        fontWeight: 450
+                      }}
+                    >
+                      {form.text || "Start typing to see your note preview..."}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-
-          <DialogFooter className="shrink-0 pt-2">
+          <DialogFooter className="shrink-0 px-6 py-4 border-t bg-muted/10">
             <Button
               variant="outline"
               onClick={() => setDialogOpen(false)}

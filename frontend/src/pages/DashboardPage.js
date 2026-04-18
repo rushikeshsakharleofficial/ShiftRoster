@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { reportsApi, attendanceApi } from "@/lib/api";
+import { reportsApi, attendanceApi, tasksApi } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
+  const [pendingTasksCount, setPendingTasksCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [clockedIn, setClockedIn] = useState(false);
   const [clockLoading, setClockLoading] = useState(false);
@@ -24,9 +25,15 @@ export default function DashboardPage() {
   useEffect(() => {
     const load = async () => {
       try {
+        const promises = [tasksApi.getPendingCount()];
         if (isAdmin || isManager) {
-          const { data } = await reportsApi.overview();
-          setStats(data);
+          promises.push(reportsApi.overview());
+        }
+        
+        const results = await Promise.all(promises);
+        setPendingTasksCount(results[0]?.data?.count || 0);
+        if (results[1]) {
+          setStats(results[1].data);
         }
       } catch {}
       setLoading(false);
@@ -69,7 +76,7 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Welcome back, {user?.full_name?.split(" ")[0]}
+            Welcome back, {user?.full_name?.split(" ")[0] || "User"}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
@@ -131,7 +138,23 @@ export default function DashboardPage() {
       )}
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="border cursor-pointer hover:-translate-y-0.5 transition-transform" onClick={() => navigate("/handovers")} data-testid="quick-action-handovers">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <ClipboardList className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">Handovers</p>
+                {pendingTasksCount > 0 && (
+                  <Badge variant="destructive" className="h-4 px-1 text-[9px]">{pendingTasksCount}</Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">Manage your tasks</p>
+            </div>
+          </CardContent>
+        </Card>
         <Card className="border cursor-pointer hover:-translate-y-0.5 transition-transform" onClick={() => navigate("/shifts")} data-testid="quick-action-shifts">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-indigo-500/10 flex items-center justify-center">

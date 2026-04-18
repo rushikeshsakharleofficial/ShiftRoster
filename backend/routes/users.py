@@ -32,6 +32,8 @@ class CreateUserRequest(BaseModel):
     employment_type: str = "full_time"
     skills: List[str] = []
     mfa_mandated: bool = False
+    disappearing_timer: Optional[str] = None
+    public_key: Optional[str] = None
 
 
 class UpdateUserRequest(BaseModel):
@@ -48,6 +50,8 @@ class UpdateUserRequest(BaseModel):
     skills: Optional[List[str]] = None
     status: Optional[str] = None
     mfa_mandated: Optional[bool] = None
+    disappearing_timer: Optional[str] = None
+    public_key: Optional[str] = None
 
 
 class ChangeLevelRequest(BaseModel):
@@ -67,8 +71,7 @@ async def list_users(
     limit: int = 50,
 ):
     current = await get_current_user(request)
-    if current["system_role"] not in ("admin", "manager"):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    is_admin_or_mgr = current["system_role"] in ("admin", "manager")
 
     query = {"org_id": current.get("org_id")}
     if role:
@@ -79,7 +82,6 @@ async def list_users(
         mgr_depts = await get_manager_dept_ids(current["id"], db)
         allowed = set(mgr_depts)
         if department_id:
-            # Further filter to only the requested dept if it's in their scope
             if department_id in allowed:
                 query["department_id"] = department_id
             else:
@@ -94,7 +96,7 @@ async def list_users(
     if status:
         query["status"] = status
     if search:
-        # Sanitize regex special characters to prevent ReDoS
+        import re
         safe_search = re.escape(search)
         query["$or"] = [
             {"full_name": {"$regex": safe_search, "$options": "i"}},
@@ -102,13 +104,50 @@ async def list_users(
             {"username": {"$regex": safe_search, "$options": "i"}},
         ]
 
-    users = await db.users.find(query, {"password_hash": 0}).skip(skip).limit(limit).to_list(limit)
+    # If employee, they can only see basic info of others in the same org
+    projection = {
+        "password_hash": 0, 
+        "mfa_secret": 0, 
+        "mfa_backup_codes": 0
+    }
+    if not is_admin_or_mgr:
+        projection = {
+            "id": 1, "full_name": 1, "username": 1, "avatar_url": 1, 
+            "department_id": 1, "system_role": 1, "status": 1
+        }
+
+    users = await db.users.find(query, projection).skip(skip).limit(limit).to_list(limit)
     total = await db.users.count_documents(query)
+    
     return {"users": serialize_list(users), "total": total}
+
+
+class CreateUserRequest(BaseModel):
+    email: str
+    password: Optional[str] = None
+    full_name: str
+    username: Optional[str] = None  # auto-generated from full_name if omitted
+    phone: str = ""
+    system_role: str = "employee"
+    employee_level: Optional[str] = "L1"
+    department_id: Optional[str] = None
+    position_id: Optional[str] = None
+    hourly_rate: Optional[float] = None
+    employment_type: str = "full_time"
+    skills: List[str] = []
+    mfa_mandated: bool = False
+    disappearing_timer: Optional[str] = None
+    public_key: Optional[str] = None
+    send_welcome_email: bool = True
 
 
 @router.post("")
 async def create_user(data: CreateUserRequest, request: Request):
+    from auth_utils import generate_setup_token, hash_setup_token, hash_password
+    from email_utils import send_email
+    import secrets
+    import string
+
     current = await get_current_user(request)
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -129,11 +168,28 @@ async def create_user(data: CreateUserRequest, request: Request):
     else:
         uname = await generate_unique_username(email.split("@")[0], db)
 
+    # Password handling
+    setup_token = None
+    setup_expires = None
+    status = "active"
+    
+    if not data.password:
+        # Generate random temporary password
+        temp_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
+        password_hash = hash_password(temp_pass)
+        
+        # Setup tokens
+        setup_token = generate_setup_token()
+        setup_expires = datetime.now(timezone.utc) + timedelta(hours=24)
+        status = "pending_setup"
+    else:
+        password_hash = hash_password(data.password)
+
     user_doc = {
         "org_id": current.get("org_id"),
         "email": email,
         "username": uname,
-        "password_hash": hash_password(data.password),
+        "password_hash": password_hash,
         "full_name": data.full_name,
         "phone": data.phone,
         "avatar_url": "",
@@ -144,10 +200,14 @@ async def create_user(data: CreateUserRequest, request: Request):
         "hourly_rate": data.hourly_rate,
         "employment_type": data.employment_type,
         "skills": data.skills,
-        "status": "active",
+        "status": status,
         "mfa_enabled": False,
         "mfa_mandated": data.mfa_mandated,
         "mfa_secret": None,
+        "password_setup_token": hash_setup_token(setup_token) if setup_token else None,
+        "password_setup_expires": setup_expires,
+        "disappearing_timer": data.disappearing_timer,
+        "public_key": data.public_key,
         "created_by": current["id"],
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
@@ -156,15 +216,37 @@ async def create_user(data: CreateUserRequest, request: Request):
     user_doc["_id"] = result.inserted_id
     doc = serialize_doc(user_doc)
     doc.pop("password_hash", None)
+    doc.pop("password_setup_token", None)
 
-    # ── Welcome Automation ──
+    # ── Welcome Automation & Email ──
     try:
+        org = await db.organizations.find_one({"_id": ObjectId(current["org_id"])})
+        
+        if setup_token and data.send_welcome_email:
+            # Send setup email
+            origin = request.headers.get("origin", "https://bot.linuxhardened.com")
+            setup_link = f"{origin}/setup-password?token={setup_token}"
+            html = f"""
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+                <h2 style="color: #4f46e5;">Welcome to {org['name']}</h2>
+                <p>Hello {data.full_name},</p>
+                <p>Your account on ShiftMaster has been created by {current['full_name']}.</p>
+                <p>Please click the button below to set your password and access your dashboard. This link will expire in 24 hours.</p>
+                <div style="margin: 30px 0;">
+                    <a href="{setup_link}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Set My Password</a>
+                </div>
+                <p style="color: #666; font-size: 12px;">If the button doesn't work, copy and paste this link into your browser:<br>{setup_link}</p>
+            </div>
+            """
+            await send_email(org, email, f"Welcome to {org['name']} - Set Your Password", html)
+
         # 1. Find the #general channel for this organization
         general_ch = await db.chat_channels.find_one({
             "org_id": user_doc["org_id"],
             "name": "general",
             "type": "public"
         })
+
         
         if general_ch:
             ch_id = str(general_ch["_id"])
@@ -403,8 +485,27 @@ async def mandate_mfa(data: MandateMfaRequest, request: Request):
 @router.post("/{user_id}/avatar")
 async def upload_avatar(user_id: str, request: Request, file: UploadFile = File(...)):
     """Upload or replace a user's avatar image (max 5 MB, images only)."""
+    # --- IDOR Fix ---
+    # 1. Get current user and target user
     current = await get_current_user(request)
-    if current["system_role"] not in ("admin", "manager") and current["id"] != user_id:
+    target_user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 2. Authorization check
+    is_admin = current["system_role"] == "admin"
+    is_self = current["id"] == user_id
+    is_manager = current["system_role"] == "manager"
+    
+    allowed = False
+    if is_admin or is_self:
+        allowed = True
+    elif is_manager:
+        manager_dept_ids = await get_manager_dept_ids(current["id"], db)
+        if target_user.get("department_id") in manager_dept_ids:
+            allowed = True
+    
+    if not allowed:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     UPLOADS_DIR.mkdir(exist_ok=True)

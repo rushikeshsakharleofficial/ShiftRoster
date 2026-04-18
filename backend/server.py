@@ -32,6 +32,10 @@ from routes.leave import router as leave_router
 from routes.operations import router as operations_router
 from routes.sticky_notes import router as sticky_notes_router
 from routes.chat import router as chat_router
+from routes.handovers import router as handovers_router
+from routes.tasks import router as tasks_router
+from routes.announcements import router as announcements_router
+from tasks.purging import run_purging_task
 
 app = FastAPI(title="ShiftRoster API", version="2.0.0")
 
@@ -62,6 +66,8 @@ app.include_router(leave_router)
 app.include_router(operations_router)
 app.include_router(sticky_notes_router)
 app.include_router(chat_router)
+app.include_router(handovers_router)
+app.include_router(tasks_router)
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -193,28 +199,43 @@ from auth_utils import verify_access_token
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     user_id = None
+    user = None
+    user_info = None
     try:
-        # Wait for auth message
-        auth_msg = await asyncio.wait_for(ws.receive_text(), timeout=10)
-        auth_data = json.loads(auth_msg)
-        token = auth_data.get("access_token")
-        
-        if not token:
-            await ws.close(code=1008)  # Policy Violation
-            return
+        # Auth strategy 1: cookie (same-origin requests via nginx proxy)
+        token = ws.cookies.get("access_token")
+        if token:
+            payload = verify_access_token(token)
+            if payload:
+                uid = payload.get("sub")
+                u = await db.users.find_one({"_id": ObjectId(uid)}, {"password_hash": 0})
+                if u:
+                    user_id = uid
+                    user = u
+                    user_info = serialize_doc(user)
 
-        payload = verify_access_token(token)
-        if not payload:
-            await ws.close(code=1008)
-            return
+        # Auth strategy 2: first-message token (fallback / legacy clients)
+        if not user_id:
+            auth_msg = await asyncio.wait_for(ws.receive_text(), timeout=10)
+            auth_data = json.loads(auth_msg)
+            token = auth_data.get("access_token")
 
-        user_id = payload.get("sub")
-        user = await db.users.find_one({"_id": ObjectId(user_id)}, {"password_hash": 0})
-        if not user:
-            await ws.close()
-            return
+            if not token:
+                await ws.close(code=1008)
+                return
 
-        user_info = serialize_doc(user)
+            payload = verify_access_token(token)
+            if not payload:
+                await ws.close(code=1008)
+                return
+
+            user_id = payload.get("sub")
+            user = await db.users.find_one({"_id": ObjectId(user_id)}, {"password_hash": 0})
+            if not user:
+                await ws.close()
+                return
+
+            user_info = serialize_doc(user)
 
         # Auto-detect initial status: check for approved leave today
         initial_status = "active"
@@ -322,6 +343,8 @@ async def startup():
     await db.audit_logs.create_index([("entity", 1), ("entity_id", 1)])
     await db.sticky_notes.create_index([("org_id", 1), ("note_date", 1)])
     await db.sticky_notes.create_index([("user_id", 1)])
+    await db.tasks.create_index([("org_id", 1), ("assigned_to", 1), ("status", 1)])
+    await db.handovers.create_index([("org_id", 1), ("created_at", -1)])
 
     # Chat indexes
     await db.chat_channels.create_index([("org_id", 1), ("type", 1)])
@@ -331,6 +354,12 @@ async def startup():
     await db.chat_read_receipts.create_index(
         [("channel_id", 1), ("user_id", 1)], unique=True
     )
+    
+    # TTL for expiring messages
+    await db.chat_messages.create_index("expires_at", expireAfterSeconds=0)
+
+    # Start background tasks
+    asyncio.create_task(run_purging_task())
 
     logger.info("ShiftRoster API started successfully")
 

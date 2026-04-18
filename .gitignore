@@ -93,3 +93,4 @@ credentials.json
 frontend/node_modules/.cache/default-development/2.pack
 # Added by code-review-graph
 .code-review-graph/
+memory/

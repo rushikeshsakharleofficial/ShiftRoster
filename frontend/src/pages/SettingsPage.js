@@ -5,19 +5,66 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Toggle } from "@/components/ui/liquid-toggle";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle, ImageIcon, Upload, X } from "lucide-react";
+import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle, ImageIcon, Upload, X, Mail, Server, Eye, EyeOff, Lock, Trash2, Zap, Building2 } from "lucide-react";
+import { generateMnemonic } from "@/lib/crypto";
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, checkAuth } = useAuth();
   const isAdmin = user?.system_role === "admin";
   const [org, setOrg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [features, setFeatures] = useState({
+    encryption_enabled: false,
+    gifs_enabled: false,
+    disappearing_mode_enabled: false,
+    purge_policy_days: 0
+  });
+
+  const [userTimer, setUserTimer] = useState(user?.disappearing_timer || "none");
+  const [mnemonic, setMnemonic] = useState("");
+
+  const handleMnemonicGen = () => {
+    const m = generateMnemonic();
+    setMnemonic(m);
+  };
+
+  const downloadMnemonic = () => {
+    const blob = new Blob([mnemonic], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "shiftmaster-recovery-key.txt";
+    a.click();
+    toast.success("Recovery key downloaded. Keep it safe!");
+  };
+
+  const saveOrgFeatures = async (updates) => {
+    const newFeatures = { ...features, ...updates };
+    try {
+      await orgApi.update({ chat_features: newFeatures });
+      setFeatures(newFeatures);
+      toast.success("Organization features updated");
+    } catch (err) {
+      toast.error("Failed to update features");
+    }
+  };
+
+  const handleUserTimerChange = async (val) => {
+    try {
+      await usersApi.update(user.id, { disappearing_timer: val });
+      setUserTimer(val);
+      toast.success(`Disappearing timer set to ${val}`);
+    } catch (err) {
+      toast.error("Failed to update timer");
+    }
+  };
+
   const [form, setForm] = useState({
     name: "",
     timezone: "Asia/Kolkata",
@@ -58,11 +105,28 @@ export default function SettingsPage() {
   const [mandateAll, setMandateAll] = useState(false);
   const [mandateLoading, setMandateLoading] = useState(false);
 
+  // SMTP state
+  const [smtpForm, setSmtpForm] = useState({
+    smtp_host: "", smtp_port: "587", smtp_username: "", smtp_password: "",
+    smtp_from_email: "", smtp_from_name: "", smtp_use_tls: true, smtp_enabled: false,
+  });
+  const [smtpSaving, setSmtpSaving] = useState(false);
+  const [smtpTesting, setSmtpTesting] = useState(false);
+  const [smtpTestResult, setSmtpTestResult] = useState(null); // {ok: bool, msg: str}
+  const [smtpPasswordVisible, setSmtpPasswordVisible] = useState(false);
+  const [smtpTestEmail, setSmtpTestEmail] = useState("");
+
   useEffect(() => {
     const load = async () => {
       try {
         const { data } = await orgApi.get();
         setOrg(data);
+        setFeatures(data.chat_features || {
+          encryption_enabled: false,
+          gifs_enabled: false,
+          disappearing_mode_enabled: false,
+          purge_policy_days: 0
+        });
         setForm({
           name: data.name || "",
           timezone: data.timezone || "Asia/Kolkata",
@@ -75,6 +139,16 @@ export default function SettingsPage() {
         });
         setMandateAll(!!data.mfa_org_mandate);
         setBrandForm({ brand_name: data.brand_name || data.name || "", logo_url: data.logo_url || "" });
+        setSmtpForm({
+          smtp_host: data.smtp_host || "",
+          smtp_port: String(data.smtp_port || "587"),
+          smtp_username: data.smtp_username || "",
+          smtp_password: data.smtp_password || "",
+          smtp_from_email: data.smtp_from_email || "",
+          smtp_from_name: data.smtp_from_name || "",
+          smtp_use_tls: data.smtp_use_tls !== false,
+          smtp_enabled: !!data.smtp_enabled,
+        });
       } catch {}
       setMfaEnabled(!!user?.mfa_enabled);
       setShareManagerName(user?.full_name || "");
@@ -116,6 +190,36 @@ export default function SettingsPage() {
       toast.error(formatApiError(err.response?.data?.detail));
     }
     setBrandSaving(false);
+  };
+
+  // SMTP
+  const handleSmtpSave = async () => {
+    setSmtpSaving(true);
+    try {
+      await orgApi.update({
+        ...smtpForm,
+        smtp_port: parseInt(smtpForm.smtp_port) || 587,
+      });
+      setSmtpTestResult({ ok: true, msg: "SMTP settings saved." });
+    } catch (e) {
+      setSmtpTestResult({ ok: false, msg: formatApiError(e.response?.data?.detail) || "Save failed" });
+    } finally {
+      setSmtpSaving(false);
+    }
+  };
+
+  const handleSmtpTest = async () => {
+    if (!smtpTestEmail) return;
+    setSmtpTesting(true);
+    setSmtpTestResult(null);
+    try {
+      const { data } = await orgApi.testEmail(smtpTestEmail);
+      setSmtpTestResult({ ok: true, msg: data.message });
+    } catch (e) {
+      setSmtpTestResult({ ok: false, msg: e.response?.data?.detail || "Test failed" });
+    } finally {
+      setSmtpTesting(false);
+    }
   };
 
   // MFA - Setup
@@ -286,7 +390,7 @@ export default function SettingsPage() {
                   : "Attendance page is hidden from all users"}
               </p>
             </div>
-            <Switch
+            <Toggle
               checked={form.attendance_enabled}
               onCheckedChange={async (v) => {
                 setForm({ ...form, attendance_enabled: v });
@@ -359,6 +463,117 @@ export default function SettingsPage() {
               {brandSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Save Branding
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* SMTP Email Settings — admin only */}
+      {isAdmin && (
+        <Card className="border">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Mail className="h-5 w-5 text-primary" /> SMTP Email Settings
+            </CardTitle>
+            <CardDescription>Configure a relay server (Gmail, Outlook, or any SMTP) for outbound emails</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Enable toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Enable SMTP</p>
+                <p className="text-xs text-muted-foreground">Send system emails via your SMTP server</p>
+              </div>
+              <Toggle
+                checked={smtpForm.smtp_enabled}
+                onCheckedChange={(v) => setSmtpForm(f => ({ ...f, smtp_enabled: v }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>SMTP Host</Label>
+                <Input placeholder="smtp.gmail.com" value={smtpForm.smtp_host}
+                  onChange={e => setSmtpForm(f => ({ ...f, smtp_host: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Port</Label>
+                <Input placeholder="587" value={smtpForm.smtp_port}
+                  onChange={e => setSmtpForm(f => ({ ...f, smtp_port: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Username</Label>
+                <Input placeholder="you@gmail.com" value={smtpForm.smtp_username}
+                  onChange={e => setSmtpForm(f => ({ ...f, smtp_username: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5 relative">
+                <Label>Password / App Password</Label>
+                <div className="relative">
+                  <Input
+                    type={smtpPasswordVisible ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={smtpForm.smtp_password}
+                    onChange={e => setSmtpForm(f => ({ ...f, smtp_password: e.target.value }))}
+                    className="pr-9"
+                  />
+                  <button type="button" onClick={() => setSmtpPasswordVisible(v => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {smtpPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>From Email</Label>
+                <Input placeholder="noreply@yourcompany.com" value={smtpForm.smtp_from_email}
+                  onChange={e => setSmtpForm(f => ({ ...f, smtp_from_email: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>From Name</Label>
+                <Input placeholder="ShiftRoster" value={smtpForm.smtp_from_name}
+                  onChange={e => setSmtpForm(f => ({ ...f, smtp_from_name: e.target.value }))} />
+              </div>
+            </div>
+
+            {/* TLS toggle */}
+            <div className="flex items-center gap-3">
+              <Toggle
+                checked={smtpForm.smtp_use_tls}
+                onCheckedChange={(v) => setSmtpForm(f => ({ ...f, smtp_use_tls: v }))}
+                className="h-6 w-10"
+              />
+              <span className="text-sm">Use STARTTLS (recommended for port 587)</span>
+            </div>
+
+            {/* Hint for common providers */}
+            <div className="rounded-lg bg-muted/40 border border-border p-3 text-xs text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground">Common providers:</p>
+              <p>• Gmail: host=smtp.gmail.com, port=587, use App Password (2FA required)</p>
+              <p>• Outlook/Office365: host=smtp.office365.com, port=587</p>
+              <p>• SendGrid: host=smtp.sendgrid.net, port=587, user=apikey</p>
+            </div>
+
+            {/* Save button */}
+            <Button onClick={handleSmtpSave} disabled={smtpSaving} size="sm">
+              {smtpSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Server className="h-4 w-4 mr-2" />}
+              Save SMTP Settings
+            </Button>
+
+            {/* Test email */}
+            <div className="border-t border-border pt-4 space-y-2">
+              <p className="text-sm font-medium">Send Test Email</p>
+              <div className="flex gap-2">
+                <Input placeholder="test@example.com" value={smtpTestEmail}
+                  onChange={e => setSmtpTestEmail(e.target.value)} className="max-w-xs" />
+                <Button variant="outline" size="sm" onClick={handleSmtpTest}
+                  disabled={smtpTesting || !smtpTestEmail}>
+                  {smtpTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send Test"}
+                </Button>
+              </div>
+              {smtpTestResult && (
+                <p className={`text-xs ${smtpTestResult.ok ? "text-green-500" : "text-destructive"}`}>
+                  {smtpTestResult.ok ? "✓" : "✗"} {smtpTestResult.msg}
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -742,6 +957,128 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Chat Security & Privacy (For Users) */}
+      <Card className="border">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-primary" />
+            Chat Security & Privacy
+          </CardTitle>
+          <CardDescription>Manage your personal chat security settings</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border border-dashed">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium flex items-center gap-1.5">
+                <Lock className="h-4 w-4" /> End-to-End Encryption
+              </p>
+              <p className="text-xs text-muted-foreground">Encryption keys are managed locally in your browser.</p>
+            </div>
+            {!mnemonic ? (
+              <Button size="sm" variant="outline" onClick={handleMnemonicGen}>
+                <Zap className="h-3.5 w-3.5 mr-1.5" /> Initialize E2EE
+              </Button>
+            ) : (
+              <Button size="sm" onClick={downloadMnemonic}>
+                <Download className="h-3.5 w-3.5 mr-1.5" /> Download Paper Key
+              </Button>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs">Default Disappearing Timer</Label>
+            <Select value={userTimer} onValueChange={handleUserTimerChange}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Disabled" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Disabled</SelectItem>
+                <SelectItem value="7d">7 Days</SelectItem>
+                <SelectItem value="30d">30 Days</SelectItem>
+                <SelectItem value="90d">3 Months</SelectItem>
+                <SelectItem value="180d">6 Months</SelectItem>
+                <SelectItem value="365d">1 Year</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground">New messages will automatically disappear after this duration (if enabled by Admin).</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Organization Chat Policy (Admin Only) */}
+      {isAdmin && (
+        <Card className="border border-primary/20 bg-primary/[0.01]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary" />
+              Organization Chat Policy
+            </CardTitle>
+            <CardDescription>Global controls for chat features and retention</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium">Enable E2EE</p>
+                  <p className="text-xs text-muted-foreground">Allow end-to-end encrypted messaging</p>
+                </div>
+                <Toggle
+                  checked={features.encryption_enabled}
+                  onCheckedChange={(val) => saveOrgFeatures({ encryption_enabled: val })}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium">Enable GIFs</p>
+                  <p className="text-xs text-muted-foreground">Allow users to send GIFs via Giphy</p>
+                </div>
+                <Toggle
+                  checked={features.gifs_enabled}
+                  onCheckedChange={(val) => saveOrgFeatures({ gifs_enabled: val })}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium">Disappearing Mode</p>
+                  <p className="text-xs text-muted-foreground">Allow users to set message expiration</p>
+                </div>
+                <Toggle
+                  checked={features.disappearing_mode_enabled}
+                  onCheckedChange={(val) => saveOrgFeatures({ disappearing_mode_enabled: val })}
+                />
+              </div>
+            </div>
+
+            <Separator className="bg-primary/10" />
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Trash2 className="h-4 w-4 text-rose-500" />
+                <Label className="text-sm font-medium">Global Retention Policy (Housekeeping)</Label>
+              </div>
+              <Select 
+                value={String(features.purge_policy_days || 0)} 
+                onValueChange={(val) => saveOrgFeatures({ purge_policy_days: parseInt(val, 10) || 0 })}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Lifetime" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">Lifetime (No Purge)</SelectItem>
+                  <SelectItem value="30">30 Days</SelectItem>
+                  <SelectItem value="60">60 Days</SelectItem>
+                  <SelectItem value="365">1 Year</SelectItem>
+                  <SelectItem value="1825">5 Years</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground italic">Messages older than this period will be permanently deleted from the server every 24 hours.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* MFA Mandate (Admin only) */}
       {user?.system_role === "admin" && (
         <Card className="border">
@@ -761,7 +1098,7 @@ export default function SettingsPage() {
                   Users will be forced to set up MFA on their next login
                 </p>
               </div>
-              <Switch
+              <Toggle
                 checked={mandateAll}
                 onCheckedChange={handleMandateAll}
                 disabled={mandateLoading}

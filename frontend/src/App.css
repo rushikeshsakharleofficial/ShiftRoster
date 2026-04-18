@@ -43,6 +43,19 @@
   padding: 4px;
 }
 
+/* Outgoing chat bubble — gradient */
+.msg-outgoing {
+  background: linear-gradient(180deg, #0058bc 0%, #0070eb 100%);
+}
+
+/* Generated channel avatar — deterministic gradient from name */
+.channel-avatar {
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
 /* Sticky note styles */
 .sticky-note {
   transition: transform 0.15s ease, box-shadow 0.15s ease;

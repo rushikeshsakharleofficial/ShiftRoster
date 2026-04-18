@@ -113,11 +113,12 @@ export function ChatProvider({ children }) {
   }, []);
 
   // Send message
-  const sendMessage = useCallback(async (channelId, text, replyToId = null, isChannel = true, fileData = null) => {
+  const sendMessage = useCallback(async (channelId, text, replyToId = null, isChannel = true, fileData = null, extraPayload = {}) => {
     try {
       const payload = {
         text: text || "",
         reply_to_id: replyToId || undefined,
+        ...extraPayload,
         ...(fileData ? {
           file_url: fileData.url,
           file_name: fileData.file_name,
@@ -128,7 +129,17 @@ export function ChatProvider({ children }) {
       const res = isChannel
         ? await chatApi.sendChannelMessage(channelId, payload)
         : await chatApi.sendDMMessage(channelId, payload);
-      return res.data;
+      const msg = res.data;
+      if (msg && msg.id) {
+        // Optimistic update: append immediately so sender sees their message
+        const current = messagesRef.current[channelId] || [];
+        if (!current.some((m) => m.id === msg.id)) {
+          const updated = [...current, msg];
+          messagesRef.current = { ...messagesRef.current, [channelId]: updated };
+          setMessages((prev) => ({ ...prev, [channelId]: updated }));
+        }
+      }
+      return msg;
     } catch {
       return null;
     }
@@ -196,6 +207,24 @@ export function ChatProvider({ children }) {
   const joinChannel = useCallback(async (channelId) => {
     await chatApi.joinChannel(channelId);
     setChannels((prev) => prev.map((ch) => ch.id === channelId ? { ...ch, is_member: true } : ch));
+  }, []);
+
+  // Leave channel
+  const leaveChannel = useCallback(async (channelId) => {
+    await chatApi.leaveChannel(channelId);
+    setChannels((prev) => {
+      const ch = prev.find(c => c.id === channelId);
+      if (ch && ch.type === "private") {
+        return prev.filter(c => c.id !== channelId);
+      }
+      return prev.map((c) => c.id === channelId ? { ...c, is_member: false } : c);
+    });
+  }, []);
+
+  // Mute channel
+  const muteChannel = useCallback(async (channelId, isMuted) => {
+    await chatApi.muteChannel(channelId, { is_muted: isMuted });
+    setChannels((prev) => prev.map((ch) => ch.id === channelId ? { ...ch, is_muted: isMuted } : ch));
   }, []);
 
   // Open DM
@@ -354,6 +383,8 @@ export function ChatProvider({ children }) {
       loadChannels,
       userCache,
       updateCache,
+      leaveChannel,
+      muteChannel,
     }}>
       {children}
     </ChatContext.Provider>

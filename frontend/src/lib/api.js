@@ -215,6 +215,15 @@ export const nominationsApi = {
 export const orgApi = {
   get: () => api.get("/organization"),
   update: (data) => api.put("/organization", data),
+  testEmail: (recipient_email) => api.post("/organization/test-email", { recipient_email }),
+};
+
+// Announcements
+export const announcementsApi = {
+  list: () => api.get("/announcements"),
+  listActive: () => api.get("/announcements/active"),
+  create: (data) => api.post("/announcements", data),
+  delete: (id) => api.delete(`/announcements/${id}`),
 };
 
 // Holidays
@@ -223,14 +232,33 @@ export const holidaysApi = {
   create: (data) => api.post("/public-holidays", data),
 };
 
+// Handovers
+export const handoversApi = {
+  list: () => api.get("/handovers"),
+  create: (data) => api.post("/handovers", data),
+  complete: (id) => api.post(`/handovers/${id}/complete`),
+};
+
+// Tasks
+export const tasksApi = {
+  list: (params) => api.get("/tasks", { params }),
+  create: (data) => api.post("/tasks", data),
+  update: (id, data) => api.put(`/tasks/${id}`, data),
+  transfer: (id, data) => api.post(`/tasks/${id}/transfer`, data),
+  complete: (id) => api.post(`/tasks/${id}/complete`),
+  getPendingCount: () => api.get("/tasks/pending-count"),
+};
+
 // Chat
 export const chatApi = {
   // Channels
   listChannels: () => api.get("/chat/channels"),
   createChannel: (data) => api.post("/chat/channels", data),
-  getChannel: (id) => api.get(`/chat/channels/${id}`),
+  searchChannels: (q) => api.get(`/chat/channels/search?q=${encodeURIComponent(q)}`),
+  getChannel: (id) => api.get(`/chat/chat/channels/${id}`),
   joinChannel: (id) => api.post(`/chat/channels/${id}/join`),
   leaveChannel: (id) => api.post(`/chat/channels/${id}/leave`),
+  muteChannel: (id, data) => api.post(`/chat/channels/${id}/mute`, data),
   inviteToChannel: (id, data) => api.post(`/chat/channels/${id}/invite`, data),
   getChannelMembers: (id) => api.get(`/chat/channels/${id}/members`),
   getChannelMessages: (id, params) => api.get(`/chat/channels/${id}/messages`, { params }),
