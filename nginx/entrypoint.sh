@@ -9,6 +9,8 @@ SSL_CERT="${SSL_CERT:-/etc/nginx/ssl/cert.pem}"
 SSL_KEY="${SSL_KEY:-/etc/nginx/ssl/key.pem}"
 
 COMMON_LOCATIONS='
+    client_max_body_size 110m;
+
     location /api {
         proxy_pass '"$BACKEND_URL"';
         proxy_http_version 1.1;
