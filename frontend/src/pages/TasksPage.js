@@ -111,7 +111,7 @@ export default function TasksPage() {
 
   useEffect(() => {
     if (!canManage) return;
-    usersApi.list({ role: "employee" }).then(({ data }) => setEmployees(data || [])).catch(() => {});
+    usersApi.list().then(({ data }) => setEmployees(data.users || data || [])).catch(() => {});
   }, [canManage]);
 
   // Auto-open from notification deep-link
