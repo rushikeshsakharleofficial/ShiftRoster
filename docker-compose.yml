@@ -1,11 +1,13 @@
 services:
-  # MongoDB
+  # MongoDB — NOT exposed to host; internal network only
   mongo:
     image: mongo:7
     container_name: shiftroster-mongo
     restart: unless-stopped
-    ports:
-      - "27017:27017"
+    # No ports binding — reachable only from internal Docker network
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-shiftroster}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -22,14 +24,14 @@ services:
     container_name: shiftroster-backend
     restart: unless-stopped
     environment:
-      MONGO_URL: mongodb://mongo:27017
+      MONGO_URL: mongodb://${MONGO_USER:-shiftroster}:${MONGO_PASSWORD}@mongo:27017
       DB_NAME: shiftroster
       JWT_SECRET: ${JWT_SECRET}
+      SECURE_COOKIES: ${SECURE_COOKIES:-false}
     depends_on:
       mongo:
         condition: service_healthy
     volumes:
-      - ./backend:/app
       - backend_uploads:/app/uploads
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]

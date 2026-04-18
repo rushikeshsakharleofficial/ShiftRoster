@@ -197,6 +197,7 @@ async def create_swap(data: SwapRequestCreate, request: Request):
         raise HTTPException(status_code=403, detail="L1 employees cannot request swaps")
 
     doc = {
+        "org_id": current.get("org_id"),
         "requester_id": current["id"],
         "requester_shift": data.requester_shift,
         "target_id": data.target_id,
@@ -228,7 +229,7 @@ async def review_swap(swap_id: str, data: SwapReview, request: Request):
     if data.status not in ("approved", "rejected"):
         raise HTTPException(status_code=400, detail="Status must be approved or rejected")
 
-    swap = await db.swap_requests.find_one({"_id": ObjectId(swap_id)})
+    swap = await db.swap_requests.find_one({"_id": ObjectId(swap_id), "org_id": current.get("org_id")})
     if not swap:
         raise HTTPException(status_code=404, detail="Swap request not found")
 

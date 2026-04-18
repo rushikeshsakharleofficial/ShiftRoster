@@ -53,7 +53,7 @@ async def list_handovers(user=Depends(get_current_user)):
 @router.post("/{handover_id}/complete")
 async def complete_handover(handover_id: str, user=Depends(get_current_user)):
     h_id = ObjectId(handover_id)
-    handover = await db.handovers.find_one({"_id": h_id})
+    handover = await db.handovers.find_one({"_id": h_id, "org_id": user.get("org_id")})
     if not handover:
         raise HTTPException(status_code=404, detail="Handover not found")
     

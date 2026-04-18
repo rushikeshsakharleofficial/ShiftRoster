@@ -236,6 +236,13 @@ async def review_leave(leave_id: str, data: LeaveReview, request: Request):
 @router.get("/leave-balances")
 async def list_leave_balances(request: Request, user_id: Optional[str] = None, year: Optional[int] = None):
     current = await get_current_user(request)
+    if user_id and user_id != current["id"]:
+        if current["system_role"] not in ("admin", "manager"):
+            raise HTTPException(status_code=403, detail="Access denied")
+        # Verify target user belongs to same org
+        target = await db.users.find_one({"_id": ObjectId(user_id), "org_id": current.get("org_id")})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
     uid = user_id or current["id"]
     query = {"user_id": uid}
     if year:
