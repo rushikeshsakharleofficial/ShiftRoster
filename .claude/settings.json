@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "code-review-graph update --skip-flows",
+            "command": "/home/rushikesh.sakharle/.local/bin/code-review-graph update --skip-flows",
             "timeout": 30
           }
         ]
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "code-review-graph status",
+            "command": "/home/rushikesh.sakharle/.local/bin/code-review-graph status",
             "timeout": 10
           }
         ]
