@@ -84,8 +84,87 @@ function FileAttachment({ fileUrl, fileName, fileSize, fileType }) {
   );
 }
 
-// --- Main Component ---
+function SystemEvent({ message }) {
+  // Use a regex to make the user's name bold, if present
+  const formatText = (text) => {
+    // This regex looks for a name at the start of the string, assuming it's followed by a verb
+    const parts = text.match(/^([\w\s]+)( (created|joined|left|added|removed|renamed|archived)\b.*)/);
+    if (parts) {
+      return (
+        <>
+          <span className="font-bold">{parts[1]}</span>
+          {parts[2]}
+        </>
+      );
+    }
+    return text;
+  };
 
+  return (
+    <div className="flex justify-center py-2 animate-in fade-in duration-700">
+      <div className="bg-surface-container-high/40 text-muted-foreground text-[10px] font-semibold px-5 py-2 rounded-full shadow-sm tracking-wide flex items-center gap-2.5 backdrop-blur-sm border border-border/20">
+        <Zap className="h-3 w-3 text-primary/60" />
+        <span className="leading-snug">{formatText(message.text)}</span>
+      </div>
+    </div>
+  );
+}
+
+const isOnlyEmojis = (text) => {
+  if (!text) return false;
+  // Match emojis and whitespace. If after removing them nothing is left, it's emoji only.
+  const stripped = text.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Emoji_Component}\uFE0F\u200D\s\n]/gu, '');
+  return stripped.length === 0;
+};
+
+function UserMessageBubble({ message, isOwn, user }) {
+  const emojiOnly = isOnlyEmojis(message.text);
+
+  return (
+    <div className={cn(
+      "group flex gap-4 px-8 py-1.5 transition-all",
+      isOwn ? "flex-row-reverse" : "flex-row"
+    )}>
+      <Avatar className={cn("h-10 w-10 border-2 border-white shadow-sm ring-1 ring-black/5 flex-shrink-0 mt-0.5", isOwn && "hidden")}>
+        <AvatarImage src={`${BACKEND_URL}${message.avatar_url}`} />
+        <AvatarFallback className={cn("text-xs font-bold", getAvatarColor(message.sender_name))}>{message.sender_initials}</AvatarFallback>
+      </Avatar>
+
+      <div className={cn("flex flex-col max-w-[75%]", isOwn ? "items-end" : "items-start")}>
+        <div className={cn("flex items-center gap-2 mb-1.5", isOwn ? "flex-row-reverse" : "flex-row")}>
+          {!isOwn && <span className="text-[11px] font-black text-foreground uppercase tracking-wider opacity-80">{message.sender_name}</span>}
+          <span className="text-[9px] font-bold text-muted-foreground/40 tracking-widest">{format(new Date(message.created_at), "h:mm aa")}</span>
+        </div>
+
+        {emojiOnly && !message.file_url ? (
+          <div className="text-5xl leading-none py-1">
+            {message.text}
+          </div>
+        ) : (
+          <div className={cn(
+            "px-5 py-3.5 rounded-3xl text-[13px] leading-relaxed shadow-sm font-medium transition-all",
+            isOwn 
+              ? "bg-primary text-white rounded-tr-none shadow-primary/20" 
+              : "bg-white text-on-surface-variant rounded-tl-none border border-border/30 hover:shadow-md"
+          )}>
+            {message.text}
+          </div>
+        )}
+
+        {message.file_url && (
+          <FileAttachment 
+            fileUrl={message.file_url} 
+            fileName={message.file_name} 
+            fileSize={message.file_size} 
+            fileType={message.file_type} 
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Main Component ---
 export default function ChatPage() {
   const { channelId: urlChannelId } = useParams();
   const { user } = useAuth();
@@ -108,7 +187,7 @@ export default function ChatPage() {
   const [isE2EEnabled, setIsE2EEnabled] = useState(false);
   const [myKeyPair, setMyKeyPair] = useState(null);
   const [orgGifsEnabled, setOrgGifsEnabled] = useState(false);
-  
+
   // Dialogs
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showDiscovery, setShowDiscovery] = useState(false);
@@ -210,7 +289,6 @@ export default function ChatPage() {
       inputRef.current.style.overflowY = scrollHeight > maxHeight ? "auto" : "hidden";
     }
   }, [inputText]);
-
   const handleSend = async () => {
     const text = inputText.trim();
     if (!text && !pendingFile) return;
@@ -274,7 +352,6 @@ export default function ChatPage() {
       toast.error("Failed to leave channel");
     }
   };
-
   const onChannelClick = (id) => {
     navigate(`/chat/${id}`);
     setActiveChannelId(id);
@@ -516,61 +593,19 @@ return (
                 <p className="text-sm font-bold text-muted-foreground/50 uppercase tracking-[0.2em]">Start of conversation</p>
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-1 pb-4">
                 {currentMessages.map((msg, idx) => {
                   const prevMsg = currentMessages[idx - 1];
                   const showSep = !prevMsg || !isSameDay(new Date(prevMsg.created_at), new Date(msg.created_at));
                   const isOwn = msg.sender_id === user.id;
-                  const isSystem = msg.type === "system";
 
-                  if (isSystem) {
-                    return (
-                      <div key={msg.id} className="flex justify-center py-2 animate-in fade-in duration-700">
-                        <div className="bg-surface-container-high/40 text-muted-foreground text-[10px] font-black px-5 py-2 rounded-full shadow-sm tracking-[0.1em] flex items-center gap-2.5 uppercase backdrop-blur-sm border border-border/20">
-                          <Zap className="h-3 w-3 text-primary/60" />
-                          {msg.text}
-                        </div>
-                      </div>
-                    );
-                  }
-                  
                   return (
                     <div key={msg.id} className="animate-in fade-in slide-in-from-bottom-2 duration-500">
                       {showSep && <DaySeparator date={msg.created_at} />}
-                      <div className={cn(
-                        "group flex gap-4 px-8 py-1.5 transition-all",
-                        isOwn ? "flex-row-reverse" : "flex-row"
-                      )}>
-                        <Avatar className={cn("h-10 w-10 border-2 border-white shadow-sm ring-1 ring-black/5 flex-shrink-0 mt-0.5", isOwn && "hidden")}>
-                          <AvatarImage src={`${BACKEND_URL}${msg.avatar_url}`} />
-                          <AvatarFallback className={cn("text-xs font-bold", getAvatarColor(msg.sender_name))}>{msg.sender_initials}</AvatarFallback>
-                        </Avatar>
-                        
-                        <div className={cn("flex flex-col max-w-[75%]", isOwn ? "items-end" : "items-start")}>
-                          <div className={cn("flex items-center gap-2 mb-1.5", isOwn ? "flex-row-reverse" : "flex-row")}>
-                            {!isOwn && <span className="text-[11px] font-black text-foreground uppercase tracking-wider opacity-80">{msg.sender_name}</span>}
-                            <span className="text-[9px] font-bold text-muted-foreground/40 tracking-widest">{format(new Date(msg.created_at), "h:mm aa")}</span>
-                          </div>
-                          
-                          <div className={cn(
-                            "px-5 py-3.5 rounded-3xl text-[13px] leading-relaxed shadow-sm font-medium transition-all",
-                            isOwn 
-                              ? "bg-primary text-white rounded-tr-none shadow-primary/20" 
-                              : "bg-white text-on-surface-variant rounded-tl-none border border-border/30 hover:shadow-md"
-                          )}>
-                            {msg.text}
-                          </div>
-                          
-                          {msg.file_url && (
-                            <FileAttachment 
-                              fileUrl={msg.file_url} 
-                              fileName={msg.file_name} 
-                              fileSize={msg.file_size} 
-                              fileType={msg.file_type} 
-                            />
-                          )}
-                        </div>
-                      </div>
+                      {msg.type === 'system' 
+                        ? <SystemEvent message={msg} />
+                        : <UserMessageBubble message={msg} isOwn={isOwn} user={user} />
+                      }
                     </div>
                   );
                 })}
@@ -580,7 +615,7 @@ return (
         </div>
 
         {/* Input Bar */}
-        <div className="p-6 border-t border-border shrink-0 bg-background">
+        <div className="p-4 border-t border-border shrink-0 bg-background">
           <div className="max-w-4xl mx-auto relative">
             <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-t from-background to-transparent pointer-events-none" />
             
@@ -592,12 +627,11 @@ return (
                   </Button>
                   <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setPendingFile(e.target.files[0])} />
                   
-                  {orgGifsEnabled && (
-                    <MediaMenu 
-                      onEmojiSelect={(emoji) => setInputText(prev => prev + emoji)}
-                      onGifSelect={(gif) => { /* already handled in prev logic */ }}
-                    />
-                  )}
+                  <MediaMenu 
+                    onEmojiSelect={handleEmojiSelect}
+                    onGifSelect={(gif) => { /* already handled in prev logic */ }}
+                    gifsEnabled={orgGifsEnabled}
+                  />
                 </div>
 
                 <Textarea
@@ -610,7 +644,7 @@ return (
                       handleSend();
                     }
                   }}
-                  placeholder={activeChannel ? `Message ${activeChannel.name}` : "Select a channel to chat"}
+                  placeholder={activeChannel ? `Message #${activeChannel.name}` : "Select a channel"}
                   disabled={!activeChannelId || (activeChannel && !activeChannel.is_member && !isActiveDM)}
                   className="flex-1 min-h-[44px] max-h-[200px] bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm py-3 px-2 resize-none custom-scrollbar"
                 />

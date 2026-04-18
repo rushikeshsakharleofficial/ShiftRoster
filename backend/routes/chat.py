@@ -175,6 +175,7 @@ async def list_channels(request: Request):
     public_channels = await db.chat_channels.find({
         "org_id": org_id,
         "type": "public",
+        "members": user_id,
         "deleted_at": {"$exists": False},
     }).sort("last_message_at", -1).to_list(200)
 
