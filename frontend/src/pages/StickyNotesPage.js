@@ -146,7 +146,7 @@ function FloatingNote({
         cursor: "grab",
         userSelect: "none",
         boxShadow: isHighlighted
-          ? `0 0 0 2.5px #6366f1, 4px 8px 20px rgba(0,0,0,0.22)`
+          ? `0 0 0 2.5px hsl(var(--primary)), 4px 8px 20px rgba(0,0,0,0.22)`
           : "2px 5px 14px rgba(0,0,0,0.16), 0 1px 3px rgba(0,0,0,0.08)",
         zIndex: isHighlighted ? 20 : 10,
         transition: "box-shadow 0.2s",

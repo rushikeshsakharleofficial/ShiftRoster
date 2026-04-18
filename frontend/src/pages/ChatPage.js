@@ -125,7 +125,7 @@ function UserMessageBubble({ message, isOwn, user }) {
       "group flex gap-4 px-8 py-1.5 transition-all",
       isOwn ? "flex-row-reverse" : "flex-row"
     )}>
-      <Avatar className={cn("h-10 w-10 border-2 border-background shadow-sm ring-1 ring-black/5 flex-shrink-0 mt-0.5", isOwn && "hidden")}>
+      <Avatar className={cn("h-10 w-10 border-2 border-background shadow-sm ring-1 ring-border flex-shrink-0 mt-0.5", isOwn && "hidden")}>
         <AvatarImage src={`${BACKEND_URL}${message.avatar_url}`} />
         <AvatarFallback className={cn("text-xs font-bold", getAvatarColor(message.sender_name))}>{message.sender_initials}</AvatarFallback>
       </Avatar>
@@ -145,7 +145,7 @@ function UserMessageBubble({ message, isOwn, user }) {
             "px-5 py-3.5 rounded-3xl text-[13px] leading-relaxed shadow-sm font-medium transition-all",
             isOwn 
               ? "bg-primary text-white rounded-tr-none shadow-primary/20" 
-              : "bg-white text-on-surface-variant rounded-tl-none border border-border/30 hover:shadow-md"
+              : "bg-card text-card-foreground rounded-tl-none border border-border/30 hover:shadow-md"
           )}>
             {message.text}
           </div>
@@ -432,12 +432,12 @@ return (
                 onClick={() => onChannelClick(ch.id)}
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-300 group relative",
-                  activeChannelId === ch.id ? "bg-white text-primary shadow-md scale-[1.02] ring-1 ring-black/5" : "text-muted-foreground hover:bg-white/60 hover:text-foreground",
+                  activeChannelId === ch.id ? "bg-card text-primary shadow-md scale-[1.02] ring-1 ring-border" : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
               >
                 <div className={cn(
                   "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all shadow-sm",
-                  activeChannelId === ch.id ? "bg-primary text-white" : "bg-surface-container group-hover:bg-white"
+                  activeChannelId === ch.id ? "bg-primary text-white" : "bg-muted group-hover:bg-accent"
                 )}>
                   {ch.type === "private" ? <Lock className="h-4.5 w-4.5" /> : <Hash className="h-4.5 w-4.5" />}
                 </div>
@@ -463,15 +463,15 @@ return (
                 onClick={() => onChannelClick(dm.id)}
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-300 group",
-                  activeChannelId === dm.id ? "bg-white text-primary shadow-md scale-[1.02] ring-1 ring-black/5" : "text-muted-foreground hover:bg-white/60 hover:text-foreground"
+                  activeChannelId === dm.id ? "bg-card text-primary shadow-md scale-[1.02] ring-1 ring-border" : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 )}
               >
                 <div className="relative">
-                  <Avatar className="h-9 w-9 border-2 border-background shadow-sm ring-1 ring-black/5">
+                  <Avatar className="h-9 w-9 border-2 border-background shadow-sm ring-1 ring-border">
                     <AvatarImage src={`${BACKEND_URL}${dm.avatar_url}`} />
                     <AvatarFallback className={cn("text-[10px] font-bold", getAvatarColor(dm.name))}>{dm.name?.charAt(0)}</AvatarFallback>
                   </Avatar>
-                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-white flex items-center justify-center">
+                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-card flex items-center justify-center">
                     <div className={cn("w-2 h-2 rounded-full", dm.is_online ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-muted-foreground/30")} />
                   </div>
                 </div>
@@ -489,7 +489,7 @@ return (
     {/* 2. MAIN CHAT AREA (Center Panel) */}
       <div className="flex-1 flex flex-col min-w-0 bg-background relative shadow-2xl z-10">
         {/* Chat Header */}
-        <header className="h-20 border-b border-border/40 px-8 flex items-center justify-between bg-white/80 backdrop-blur-xl sticky top-0 z-20">
+        <header className="h-20 border-b border-border/40 px-8 flex items-center justify-between bg-card/80 backdrop-blur-xl sticky top-0 z-20">
           <div className="flex items-center gap-4 min-w-0">
             <div className="w-11 h-11 rounded-2xl bg-primary-fixed/30 flex items-center justify-center shrink-0 shadow-inner">
               {isActiveDM ? (
@@ -517,7 +517,7 @@ return (
         </header>
 
         {/* Messages List */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-smooth custom-scrollbar bg-[#fcfcfd]">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-smooth custom-scrollbar bg-background">
           <div className="max-w-4xl mx-auto py-10">
             {!activeChannelId && !showDiscovery ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-12 mt-20 animate-in zoom-in-95 duration-500">
@@ -552,7 +552,7 @@ return (
                     <Search className="absolute left-4 top-3.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
                     <Input 
                       placeholder="Search by channel name or topic..." 
-                      className="pl-12 h-12 bg-white border-border/50 focus-visible:ring-primary/20 rounded-2xl text-sm shadow-sm"
+                      className="pl-12 h-12 bg-input border-border/50 focus-visible:ring-primary/20 rounded-2xl text-sm shadow-sm"
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
                     />
@@ -569,7 +569,7 @@ return (
                   ) : searchResults.length > 0 ? (
                     <div className="grid gap-4">
                       {searchResults.map(ch => (
-                        <div key={ch.id} className="p-6 bg-white rounded-3xl border border-border/50 shadow-sm flex items-center justify-between group hover:border-primary/20 transition-all hover:shadow-md">
+                        <div key={ch.id} className="p-6 bg-card rounded-3xl border border-border/50 shadow-sm flex items-center justify-between group hover:border-primary/20 transition-all hover:shadow-md">
                           <div className="flex items-center gap-4 min-w-0">
                             <div className="w-12 h-12 rounded-2xl bg-primary/5 text-primary flex items-center justify-center shrink-0">
                               <Hash className="h-6 w-6" />
