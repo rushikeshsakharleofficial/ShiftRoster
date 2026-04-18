@@ -153,7 +153,7 @@ function MessageGroup({ messages, isOwn, user }) {
                     "px-4 py-2 text-[14px] leading-snug shadow-sm",
                     isOwn
                       ? "msg-outgoing text-white"
-                      : "bg-primary/10 text-foreground dark:bg-muted",
+                      : "msg-incoming",
                     // Round corners — only the bubble adjacent to the avatar/edge
                     // gets a flat corner; rest are fully rounded.
                     isOwn
