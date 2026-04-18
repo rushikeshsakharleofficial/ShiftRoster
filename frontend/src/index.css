@@ -37,6 +37,12 @@
     --sidebar-border: 214 32% 88%;
     --sidebar-text: 215 20% 45%;
     --sidebar-active: 217 91% 60%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 214 32% 91%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-ring: 217 91% 60%;
   }
 
   /* ── DARK THEME (AMOLED) ── */
@@ -69,6 +75,12 @@
     --sidebar-border: 0 0% 12%;
     --sidebar-text: 0 0% 64%;
     --sidebar-active: 217 91% 60%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-ring: 217 91% 60%;
   }
 }
 
