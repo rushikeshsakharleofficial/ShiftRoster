@@ -630,7 +630,7 @@ export default function ChatPage() {
                           {ch.type === "private" ? (
                             <Lock className="h-4 w-4" />
                           ) : (
-                            <span>{ch.name?.charAt(0)?.toUpperCase() || "#"}</span>
+                            <Hash className="h-4 w-4" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -725,7 +725,7 @@ export default function ChatPage() {
                   {activeChannel.type === "private" ? (
                     <Lock className="h-4 w-4" />
                   ) : (
-                    <span>{activeChannel.name?.charAt(0)?.toUpperCase()}</span>
+                    <Hash className="h-4 w-4" />
                   )}
                 </div>
               )}
@@ -860,7 +860,11 @@ export default function ChatPage() {
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-lg channel-avatar flex items-center justify-center shrink-0 text-sm">
-                          <span>{ch.name?.charAt(0)?.toUpperCase()}</span>
+                          {ch.type === "private" ? (
+                            <Lock className="h-4 w-4" />
+                          ) : (
+                            <Hash className="h-4 w-4" />
+                          )}
                         </div>
                         <div className="min-w-0">
                           <h4 className="font-semibold text-sm truncate">{ch.name}</h4>
