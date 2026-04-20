@@ -11,9 +11,13 @@
 ## 📍 Table of Contents
 - [🚀 Key Features](#-key-features)
 - [🛡️ Enterprise-Grade Security](#️-enterprise-grade-security)
+- [⚡ Performance](#-performance)
 - [⚙️ Tech Stack](#️-tech-stack)
 - [📦 Project Architecture](#-project-structure)
 - [🛠️ Quick Start (Docker)](#️-quick-start-docker)
+- [🧪 Testing](#-testing)
+- [🔐 Password Policy](#-password-policy)
+- [🎨 Branding](#-branding)
 - [🧠 How-to: Agentic Automation](#-how-to-agentic-automation)
 - [🤝 Contributing](#-contributing)
 - [⚖️ License](#️-license)
@@ -32,8 +36,24 @@
 ShiftRoster is built with a **Security-First** philosophy:
 -   **Multi-Factor Authentication (MFA)**: Native TOTP support (Google Authenticator/Authy) with QR code setup.
 -   **Secure Session Management**: JWT-based authentication using **HTTP-only, Secure, and SameSite** cookies to prevent XSS and CSRF attacks.
+-   **Refresh Token Rotation**: Each `/refresh` issues a new refresh token; old tokens are invalidated to limit replay window.
+-   **Atomic Password Setup**: TOCTOU-safe `find_one_and_update` prevents setup-token reuse on password creation.
+-   **Rate Limiting**: `/forgot-password` throttled to 3 attempts/hour per IP+email to block enumeration and SMTP DoS.
+-   **File Upload Hardening**: Blocked extension list (`.php`, `.exe`, `.sh`, ...) + MIME whitelist + streaming writer (no in-memory buffering).
+-   **Startup Secret Validation**: Missing `JWT_SECRET` / `MONGO_URL` / `DB_NAME` fails boot; `JWT_SECRET` enforced ≥ 32 chars.
+-   **CORS Tightening**: Explicit method/header lists instead of wildcards when `allow_credentials=True`.
+-   **Admin-Configurable Password Policy**: Per-org min/max length, uppercase/lowercase/digit/special requirements.
 -   **Comprehensive Audit Logs**: Every administrative action is cryptographically timestamped and logged for compliance and security auditing.
 -   **Fine-Grained IAM**: Custom groups with `Resource x Action` mapping (e.g., `Shifts:Edit`, `Financials:Read`).
+
+## ⚡ Performance
+
+-   **Tuned Mongo Pool**: `maxPoolSize=50`, retry reads/writes, idle timeouts to handle concurrent async workload without queueing.
+-   **Parallel WebSocket Broadcasts**: Presence fan-out via `asyncio.gather` (one slow client no longer blocks others).
+-   **N+1 Query Elimination**: Calendar notes batched (≈400 queries → 3); chat unread counts aggregated (≈100 queries → 2).
+-   **Streaming File Uploads**: 1 MB chunks instead of full in-memory read; 100 MB uploads no longer spike memory.
+-   **Parallel Startup Indexes**: All collection index creations run concurrently; fast cold-start.
+-   **Frontend Code Splitting**: Heavy pages (Reports/recharts) and chat emoji picker (`emoji-mart` 3.2 MB) lazy-loaded via `React.lazy`.
 
 ## ⚙️ Tech Stack
 
@@ -82,21 +102,88 @@ frontend/
 2.  **Set Environment Variables**:
     Create a `.env` file in the root:
     ```env
-    JWT_SECRET=your_super_secret_key_here
-    MONGO_URL=mongodb://mongo:27017
-    DB_NAME=shiftroster
+    # Required (boot will fail fast if missing)
+    JWT_SECRET=$(openssl rand -hex 32)            # must be >= 32 chars
+    MONGO_USER=shiftroster
+    MONGO_PASSWORD=$(openssl rand -base64 24)
+    SECURE_COOKIES=true                            # set false only for local HTTP
+    DOMAIN=example.com
+    PROTOCOL=https
+    # Optional
+    CORS_ORIGINS=https://app.example.com,https://admin.example.com
+    MONGO_MAX_POOL=50
+    MONGO_MIN_POOL=5
     ```
 
-3.  **Launch the Stack**:
+3.  **Provide SSL Certificates** (HTTPS):
+    Place `cert.pem` and `key.pem` in `./ssl/` before launching. For local testing:
+    ```bash
+    mkdir -p ssl && openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+      -keyout ssl/key.pem -out ssl/cert.pem -subj "/CN=localhost"
+    ```
+
+4.  **Launch the Stack**:
     ```bash
     docker compose up -d
     ```
 
-4.  **Create Admin**:
-    ```bash
-    docker compose exec backend python create_admin.py
-    ```
-    *Access the dashboard at `http://localhost`.*
+5.  **First-Time Setup**:
+    Visit `http://<host>:8080/setup` (or HTTPS on `8443`) and create the initial SuperAdmin account via the web UI.
+
+## 🧪 Testing
+
+Full test infrastructure is included — pytest for backend, Vitest for frontend, Selenium for E2E.
+
+```bash
+# Backend
+cd backend && pip install -r requirements-dev.txt
+pytest tests/ -v --cov                 # unit + integration + coverage
+pytest tests/e2e/ -v                   # E2E (Selenium, services must be up)
+
+# Frontend
+cd frontend && npm install
+npm run test                           # Vitest watch mode
+npm run test:coverage                  # coverage report
+npm run lint                           # ESLint
+```
+
+CI runs on every push/PR via GitHub Actions (`.github/workflows/tests.yml`):
+- Hard-blocks merges on test failures
+- Coverage thresholds: backend ≥ 80%, frontend ≥ 70%
+
+See [TESTING.md](./TESTING.md) for fixture docs, patterns, and troubleshooting.
+
+## 🔐 Password Policy
+
+Admins configure password rules per organization — no hardcoded defaults past initial setup.
+
+**Settings → Policy → Password Policy** (admin only):
+- Min length (6–128) / Max length (8–256)
+- Require uppercase / lowercase / digit / special character (independent toggles)
+- Persists to `organizations.password_policy`
+- Enforced on: initial setup, `setup-password` token flow, admin-created users with explicit passwords
+
+**API:**
+```bash
+# Admin: update policy
+PUT /api/organization  { "password_policy": {"min_length": 14, "require_digit": true} }
+
+# Authed: read current policy (for frontend to show requirements)
+GET /api/organization/password-policy
+
+# Public: policy by org_id (for setup-password page)
+GET /api/organization/password-policy/public?org_id=<id>
+```
+
+## 🎨 Branding
+
+Favicon and page title are driven by organization settings — **no default logo**, nothing loads until admin uploads one.
+
+```bash
+PUT /api/organization  { "brand_name": "Acme Corp", "logo_url": "https://cdn.acme.com/logo.svg" }
+```
+
+Frontend reads `GET /api/public/branding` on every page load and injects `<link rel="icon">` + updates `document.title` only when `logo_url` is non-empty.
 
 ## 🧠 How-to: Agentic Automation
 
