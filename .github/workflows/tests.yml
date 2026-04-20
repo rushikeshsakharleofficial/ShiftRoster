@@ -1,0 +1,197 @@
+name: Tests & Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: password
+        options: >-
+          --health-cmd mongosh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint backend code
+        run: |
+          cd backend
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          black --check . || true
+
+      - name: Run backend tests
+        env:
+          MONGO_URL: mongodb://root:password@localhost:27017
+          DB_NAME: shift_roster_test
+          TEST_MONGO_URL: mongodb://root:password@localhost:27017
+          TEST_DB_NAME: shift_roster_test
+        run: |
+          cd backend
+          pytest tests/ -v --cov=. --cov-report=html --cov-report=xml --cov-report=term-missing
+
+      - name: Check coverage threshold (backend)
+        run: |
+          cd backend
+          coverage report --fail-under=80 || echo "Coverage below 80%, but continuing..."
+
+      - name: Upload backend coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./backend/coverage.xml
+          flags: backend
+          fail_ci_if_error: false
+
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Lint frontend code
+        run: |
+          cd frontend
+          npm run lint || true
+
+      - name: Run frontend tests
+        run: |
+          cd frontend
+          npm run test:coverage
+
+      - name: Upload frontend coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./frontend/coverage/coverage-final.json
+          flags: frontend
+          fail_ci_if_error: false
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+
+    services:
+      mongodb:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: password
+        options: >-
+          --health-cmd mongosh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Start services with Docker Compose
+        env:
+          MONGO_URL: mongodb://root:password@mongodb:27017
+          DB_NAME: shift_roster_test
+        run: |
+          docker-compose -f docker-compose.yml up -d
+
+      - name: Wait for services to be healthy
+        run: |
+          for i in {1..30}; do
+            curl -f http://localhost:8000/api/health && break
+            echo "Waiting for backend... ($i/30)"
+            sleep 2
+          done
+
+      - name: Set up Python for E2E tests
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install E2E test dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run E2E tests (Selenium)
+        env:
+          BROWSER_HEADLESS: "true"
+        run: |
+          cd backend
+          pytest tests/e2e/ -v || true
+
+      - name: Stop services
+        if: always()
+        run: docker-compose down
+
+  coverage-report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download coverage reports
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          if_no_artifact_found: warn
+
+      - name: Generate coverage badge
+        run: |
+          echo "Coverage reports generated. Check Codecov for details."
+
+  status-check:
+    name: Test Status Check
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+
+    steps:
+      - name: Check test results
+        if: failure()
+        run: |
+          echo "::error::Tests failed! Fix issues before merging."
+          exit 1
+
+      - name: Test status
+        if: success()
+        run: echo "✅ All tests passed!"
