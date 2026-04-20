@@ -322,3 +322,31 @@ async def complete_task(task_id: str, user=Depends(get_current_user)):
 
     await log_audit(None, user["id"], "complete", "task", task_id)
     return {"message": "Task completed"}
+
+
+@router.post("/{task_id}/revert")
+async def revert_task(task_id: str, user=Depends(get_current_user)):
+    t_id = ObjectId(task_id)
+    task = await db.tasks.find_one({"_id": t_id, "org_id": user.get("org_id")})
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="Task is not completed")
+
+    now = datetime.now(timezone.utc)
+    await db.tasks.update_one(
+        {"_id": t_id},
+        {
+            "$set": {"status": "pending", "completed_at": None, "completed_by": None},
+            "$push": {"audit_log": {
+                "action": "reverted",
+                "user_id": ObjectId(user["id"]),
+                "timestamp": now,
+                "details": "Task marked as pending",
+            }},
+        },
+    )
+
+    await log_audit(None, user["id"], "revert", "task", task_id)
+    return {"message": "Task reverted to pending"}

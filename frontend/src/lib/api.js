@@ -255,6 +255,7 @@ export const tasksApi = {
   update: (id, data) => api.put(`/tasks/${id}`, data),
   transfer: (id, data) => api.post(`/tasks/${id}/transfer`, data),
   complete: (id) => api.post(`/tasks/${id}/complete`),
+  revert: (id) => api.post(`/tasks/${id}/revert`),
   getPendingCount: () => api.get("/tasks/pending-count"),
   addNote: (id, data) => api.post(`/tasks/${id}/notes`, data),
 };

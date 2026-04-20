@@ -17,7 +17,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getAvatarColor } from "@/lib/utils";
 import {
   Plus, CheckCircle2, Circle, Clock, AlertCircle,
-  ArrowRight, MessageSquare, Loader2, X
+  ArrowRight, MessageSquare, Loader2, X, RotateCcw
 } from "lucide-react";
 
 const PRIORITY_CONFIG = {
@@ -191,6 +191,17 @@ export default function TasksPage() {
     try {
       await tasksApi.complete(detailTask.id);
       toast.success("Task marked complete");
+      setDetailOpen(false);
+      loadTasks();
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail));
+    }
+  };
+
+  const handleRevert = async () => {
+    try {
+      await tasksApi.revert(detailTask.id);
+      toast.success("Task reverted to pending");
       setDetailOpen(false);
       loadTasks();
     } catch (e) {
@@ -431,7 +442,7 @@ export default function TasksPage() {
           ) : detailTask ? (
             <>
               <DialogHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start justify-between gap-3 pr-6">
                   <div className="flex-1 min-w-0">
                     <DialogTitle className="text-base leading-tight">{detailTask.title}</DialogTitle>
                     {detailTask.description && (
@@ -494,32 +505,39 @@ export default function TasksPage() {
                         onChange={e => setNoteText(e.target.value)}
                         className="text-sm resize-none"
                       />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={!noteText.trim() || addingNote}
-                        onClick={handleAddNote}
-                        className="w-full"
-                      >
-                        {addingNote && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-                        Add Note
-                      </Button>
+                      <div className="flex justify-end mt-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!noteText.trim() || addingNote}
+                          onClick={handleAddNote}
+                        >
+                          {addingNote && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                          Add Note
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
               </ScrollArea>
 
               {/* Actions footer */}
-              {detailTask.status !== "completed" && (
-                <div className="px-6 py-4 border-t border-border flex items-center gap-2 shrink-0">
-                  <Button size="sm" variant="default" className="gap-1.5 flex-1" onClick={handleComplete}>
-                    <CheckCircle2 className="h-4 w-4" /> Mark Complete
-                  </Button>
+              {detailTask.status !== "completed" ? (
+                <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-2 shrink-0 bg-muted/30">
                   {canManage && (
                     <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { setTransferTo(""); setTransferReason(""); setTransferOpen(true); }}>
                       <ArrowRight className="h-4 w-4" /> Transfer
                     </Button>
                   )}
+                  <Button size="sm" variant="default" className="gap-1.5" onClick={handleComplete}>
+                    <CheckCircle2 className="h-4 w-4" /> Mark Complete
+                  </Button>
+                </div>
+              ) : (
+                <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-2 shrink-0 bg-muted/30">
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={handleRevert}>
+                    <RotateCcw className="h-4 w-4" /> Revert to Pending
+                  </Button>
                 </div>
               )}
             </>
