@@ -48,6 +48,7 @@ def _serialize_subdoc(item: dict) -> dict:
     return out
 
 
+@router.post("", response_model=dict)
 @router.post("/", response_model=dict)
 async def create_task(req: TaskCreate, user=Depends(get_current_user)):
     is_employee = user.get("system_role") == "employee"

@@ -24,6 +24,7 @@ class HandoverResponse(BaseModel):
     completed_at: Optional[str] = None
 
 
+@router.post("", response_model=dict)
 @router.post("/", response_model=dict)
 async def create_handover(req: HandoverCreate, user=Depends(get_current_user)):
     new_handover = {
