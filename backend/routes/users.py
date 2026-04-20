@@ -315,10 +315,9 @@ async def create_user(data: CreateUserRequest, request: Request):
                     "created_at": now.isoformat(),
                 }
             })
-    except Exception as e:
-        import traceback
-        print(f"Error in welcome automation: {e}")
-        traceback.print_exc()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Error in welcome automation")
 
     await log_audit(current.get("org_id"), current["id"], "create", "user", doc["id"])
     return doc

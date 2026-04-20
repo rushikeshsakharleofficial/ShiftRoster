@@ -1,4 +1,5 @@
 """Shared PresenceManager instance — importable by both server.py and route modules."""
+import asyncio
 import json
 from datetime import datetime, timezone
 from fastapi import WebSocket
@@ -54,16 +55,22 @@ class PresenceManager:
             self.user_data[user_id]["last_seen"] = datetime.now(timezone.utc).isoformat()
             await self.broadcast_presence()
 
+    async def _send_safe(self, user_id: str, ws, payload: str):
+        try:
+            await ws.send_text(payload)
+            return user_id, True
+        except Exception:
+            return user_id, False
+
     async def broadcast_presence(self):
         online = list(self.user_data.values())
         message = json.dumps({"type": "presence_update", "online_users": online})
-        disconnected = []
-        for uid, ws in self.connections.items():
-            try:
-                await ws.send_text(message)
-            except Exception:
-                disconnected.append(uid)
-        for uid in disconnected:
+        tasks = [self._send_safe(uid, ws, message) for uid, ws in self.connections.items()]
+        if not tasks:
+            return
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        dead = [uid for uid, ok in results if isinstance(ok, bool) and not ok]
+        for uid in dead:
             self.disconnect(uid)
 
     def get_online_users(self):
@@ -79,8 +86,18 @@ class PresenceManager:
                 self.user_data.pop(user_id, None)
 
     async def send_to_users(self, user_ids: list, payload: dict):
-        for uid in user_ids:
-            await self.send_to_user(uid, payload)
+        payload_str = json.dumps(payload)
+        tasks = [
+            self._send_safe(uid, self.connections[uid], payload_str)
+            for uid in user_ids
+            if uid in self.connections
+        ]
+        if not tasks:
+            return
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        dead = [uid for uid, ok in results if isinstance(ok, bool) and not ok]
+        for uid in dead:
+            self.disconnect(uid)
 
 
 # Singleton instance — import this everywhere

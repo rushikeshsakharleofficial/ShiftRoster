@@ -57,17 +57,38 @@ async def list_notes(request: Request, note_date: Optional[str] = None, start_da
     query["$or"] = vis_filter
 
     notes = await db.calendar_notes.find(query).sort([("is_pinned", -1), ("created_at", -1)]).to_list(200)
+
+    # Fetch all replies for all notes in one query
+    note_ids = [str(n["_id"]) for n in notes]
+    all_replies = await db.calendar_note_replies.find({"note_id": {"$in": note_ids}}).sort("created_at", 1).to_list(None)
+
+    # Collect all unique author IDs from notes and replies
+    author_ids = set()
+    for n in notes:
+        if n.get("author_id"):
+            author_ids.add(ObjectId(n["author_id"]))
+    for r in all_replies:
+        if r.get("author_id"):
+            author_ids.add(ObjectId(r["author_id"]))
+
+    # Single batch fetch for all authors
+    authors = {u["_id"]: u async for u in db.users.find({"_id": {"$in": list(author_ids)}}, {"full_name": 1})}
+
+    # Group replies by note_id
+    replies_by_note = {}
+    for r in all_replies:
+        replies_by_note.setdefault(r["note_id"], []).append(r)
+
     result = []
     for n in notes:
         ndata = serialize_doc(n)
-        author = await db.users.find_one({"_id": ObjectId(n["author_id"])}, {"full_name": 1})
+        author = authors.get(ObjectId(n["author_id"])) if n.get("author_id") else None
         ndata["author_name"] = author.get("full_name", "") if author else ""
-        # Get replies
-        replies = await db.calendar_note_replies.find({"note_id": ndata["id"]}).sort("created_at", 1).to_list(50)
+        # Attach replies from pre-fetched dict
         reply_list = []
-        for r in replies:
+        for r in replies_by_note.get(ndata["id"], []):
             rd = serialize_doc(r)
-            rauthor = await db.users.find_one({"_id": ObjectId(r["author_id"])}, {"full_name": 1})
+            rauthor = authors.get(ObjectId(r["author_id"])) if r.get("author_id") else None
             rd["author_name"] = rauthor.get("full_name", "") if rauthor else ""
             reply_list.append(rd)
         ndata["replies"] = reply_list

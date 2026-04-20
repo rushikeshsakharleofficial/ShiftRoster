@@ -3,6 +3,18 @@ from pathlib import Path
 
 load_dotenv(Path(__file__).parent / '.env')
 
+import os
+
+# Security: validate critical secrets at startup (fail fast, not at first auth request)
+_REQUIRED_ENV_VARS = ["JWT_SECRET", "MONGO_URL", "DB_NAME"]
+_missing = [v for v in _REQUIRED_ENV_VARS if not os.getenv(v)]
+if _missing:
+    raise RuntimeError(f"Required environment variables not set: {', '.join(_missing)}")
+
+# Security: enforce strong JWT_SECRET length
+if len(os.getenv("JWT_SECRET", "")) < 32:
+    raise RuntimeError("JWT_SECRET must be at least 32 characters")
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
@@ -12,7 +24,6 @@ from db import db, client
 from auth_utils import hash_password, verify_password, serialize_doc, generate_unique_username
 from datetime import datetime, timezone
 from bson import ObjectId
-import os
 import logging
 import json
 import asyncio
@@ -48,17 +59,18 @@ app = FastAPI(
 )
 
 # CORS - allow credentials for HTTP-only cookies
+# Security: explicit methods/headers instead of wildcards when allow_credentials=True
+_CORS_ORIGINS = os.getenv(
+    "CORS_ORIGINS",
+    "https://bot.linuxhardened.com,http://72.62.231.43:8080,http://localhost:8080,http://localhost:3000"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://bot.linuxhardened.com",
-        "http://72.62.231.43:8080",
-        "http://localhost:8080",
-        "http://localhost:3000"
-    ],
+    allow_origins=[o.strip() for o in _CORS_ORIGINS if o.strip()],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"],
 )
 
 # Serve uploaded files
@@ -339,27 +351,39 @@ async def get_presence():
 async def startup():
     logger.info("Starting ShiftRoster API...")
 
-    # Create indexes
-    await db.users.create_index("email", unique=True)
-    await db.users.create_index("username", unique=True, sparse=True)
-    await db.login_attempts.create_index("identifier")
-    await db.shifts.create_index([("org_id", 1), ("start_time", 1)])
-    await db.shift_assignments.create_index("shift_id")
-    await db.shift_assignments.create_index("user_id")
-    await db.attendance_logs.create_index([("user_id", 1), ("clock_in", 1)])
-    await db.leave_requests.create_index([("user_id", 1), ("status", 1)])
-    await db.calendar_notes.create_index([("org_id", 1), ("note_date", 1)])
-    await db.notifications.create_index([("user_id", 1), ("is_read", 1)])
-    await db.audit_logs.create_index([("entity", 1), ("entity_id", 1)])
-    await db.sticky_notes.create_index([("org_id", 1), ("note_date", 1)])
-    await db.sticky_notes.create_index([("user_id", 1)])
-    await db.tasks.create_index([("org_id", 1), ("assigned_to", 1), ("status", 1)])
-    await db.tasks.create_index([("status", 1), ("due_date", 1)])
-    await db.handovers.create_index([("org_id", 1), ("created_at", -1)])
-
-    # IAM indexes
-    await db.iam_groups.create_index([("org_id", 1), ("name", 1)])
-    await db.iam_groups.create_index("is_global")
+    # Create indexes in parallel to reduce startup await overhead
+    index_tasks = [
+        db.users.create_index("email", unique=True),
+        db.users.create_index("username", unique=True, sparse=True),
+        db.login_attempts.create_index("identifier"),
+        db.shifts.create_index([("org_id", 1), ("start_time", 1)]),
+        db.shift_assignments.create_index("shift_id"),
+        db.shift_assignments.create_index("user_id"),
+        db.attendance_logs.create_index([("user_id", 1), ("clock_in", 1)]),
+        db.leave_requests.create_index([("user_id", 1), ("status", 1)]),
+        db.calendar_notes.create_index([("org_id", 1), ("note_date", 1)]),
+        db.notifications.create_index([("user_id", 1), ("is_read", 1)]),
+        db.audit_logs.create_index([("entity", 1), ("entity_id", 1)]),
+        db.sticky_notes.create_index([("org_id", 1), ("note_date", 1)]),
+        db.sticky_notes.create_index([("user_id", 1)]),
+        db.tasks.create_index([("org_id", 1), ("assigned_to", 1), ("status", 1)]),
+        db.tasks.create_index([("status", 1), ("due_date", 1)]),
+        db.handovers.create_index([("org_id", 1), ("created_at", -1)]),
+        # IAM indexes
+        db.iam_groups.create_index([("org_id", 1), ("name", 1)]),
+        db.iam_groups.create_index("is_global"),
+        # Chat indexes
+        db.chat_channels.create_index([("org_id", 1), ("type", 1)]),
+        db.chat_channels.create_index([("members", 1)]),
+        db.chat_channels.create_index([("org_id", 1), ("name", 1)]),
+        db.chat_messages.create_index([("channel_id", 1), ("created_at", -1)]),
+        db.chat_read_receipts.create_index(
+            [("channel_id", 1), ("user_id", 1)], unique=True
+        ),
+        # TTL for expiring messages
+        db.chat_messages.create_index("expires_at", expireAfterSeconds=0),
+    ]
+    await asyncio.gather(*index_tasks)
 
     # Seed global IAM templates (idempotent — skip if name already exists)
     from iam_constants import GLOBAL_TEMPLATES
@@ -378,18 +402,6 @@ async def startup():
                 "created_at": datetime.now(tz.utc),
                 "updated_at": datetime.now(tz.utc),
             })
-
-    # Chat indexes
-    await db.chat_channels.create_index([("org_id", 1), ("type", 1)])
-    await db.chat_channels.create_index([("members", 1)])
-    await db.chat_channels.create_index([("org_id", 1), ("name", 1)])
-    await db.chat_messages.create_index([("channel_id", 1), ("created_at", -1)])
-    await db.chat_read_receipts.create_index(
-        [("channel_id", 1), ("user_id", 1)], unique=True
-    )
-    
-    # TTL for expiring messages
-    await db.chat_messages.create_index("expires_at", expireAfterSeconds=0)
 
     # Start background tasks
     asyncio.create_task(run_purging_task())

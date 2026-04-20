@@ -1,7 +1,7 @@
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { setupApi } from "@/lib/api";
 import AppLayout from "@/components/layout/AppLayout";
 import LoginPage from "@/pages/LoginPage";
@@ -16,7 +16,7 @@ import LeavePage from "@/pages/LeaveManagementPage";
 import AttendancePage from "@/pages/AttendancePage";
 import SwapRequestsPage from "@/pages/SwapRequestsPage";
 import NotificationsPage from "@/pages/NotificationsPage";
-import ReportsPage from "@/pages/ReportsPage";
+const ReportsPage = lazy(() => import("@/pages/ReportsPage"));
 import AuditLogPage from "@/pages/AuditLogPage";
 import SettingsPage from "@/pages/SettingsPage";
 import StickyNotesPage from "@/pages/StickyNotesPage";
@@ -110,7 +110,7 @@ export default function App() {
             <Route path="/handovers" element={<HandoverPage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/reports" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}><ReportsPage /></Suspense>} />
             <Route path="/audit-log" element={<AuditLogPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>

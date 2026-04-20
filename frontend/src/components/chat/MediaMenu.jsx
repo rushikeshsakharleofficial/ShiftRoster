@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import data from "@emoji-mart/data";
-import Picker from "@emoji-mart/react";
+const Picker = lazy(() =>
+  import("@emoji-mart/react").then((m) => ({ default: m.default ?? m.Picker }))
+);
 import axios from "axios";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -109,19 +111,21 @@ export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEn
   };
 
   const renderEmojiPicker = () => (
-    <Picker
-      data={data}
-      onEmojiSelect={handleEmojiClick}
-      theme={pickerTheme}
-      set="native"
-      skinTonePosition="search"
-      previewPosition="none"
-      navPosition="bottom"
-      perLine={8}
-      maxFrequentRows={2}
-      width="100%"
-      autoFocus={true}
-    />
+    <Suspense fallback={<div className="flex items-center justify-center h-[352px]"><span className="text-xs text-muted-foreground">Loading...</span></div>}>
+      <Picker
+        data={data}
+        onEmojiSelect={handleEmojiClick}
+        theme={pickerTheme}
+        set="native"
+        skinTonePosition="search"
+        previewPosition="none"
+        navPosition="bottom"
+        perLine={8}
+        maxFrequentRows={2}
+        width="100%"
+        autoFocus={true}
+      />
+    </Suspense>
   );
 
   return (
