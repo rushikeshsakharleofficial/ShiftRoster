@@ -108,6 +108,18 @@ export default function SettingsPage() {
   const [mandateAll, setMandateAll] = useState(false);
   const [mandateLoading, setMandateLoading] = useState(false);
 
+  // Password policy state
+  const DEFAULT_PASSWORD_POLICY = {
+    min_length: 12,
+    max_length: 128,
+    require_uppercase: false,
+    require_lowercase: false,
+    require_digit: false,
+    require_special: false,
+  };
+  const [passwordPolicy, setPasswordPolicy] = useState(DEFAULT_PASSWORD_POLICY);
+  const [passwordPolicySaving, setPasswordPolicySaving] = useState(false);
+
   // SMTP state
   const [smtpForm, setSmtpForm] = useState({
     smtp_host: "", smtp_port: "587", smtp_username: "", smtp_password: "",
@@ -141,6 +153,7 @@ export default function SettingsPage() {
           attendance_enabled: !!data.attendance_enabled,
         });
         setMandateAll(!!data.mfa_org_mandate);
+        setPasswordPolicy({ ...DEFAULT_PASSWORD_POLICY, ...(data.password_policy || {}) });
         setBrandForm({ brand_name: data.brand_name || data.name || "", logo_url: data.logo_url || "" });
         setSmtpForm({
           smtp_host: data.smtp_host || "",
@@ -1123,32 +1136,117 @@ export default function SettingsPage() {
 
       {/* ── Policy ── */}
       {activeSection === "policy" && user?.system_role === "admin" && (
-        <Card className="border">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <KeyRound className="h-5 w-5" /> MFA Policy
-            </CardTitle>
-            <CardDescription>
-              Mandate MFA for all users in your organization
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Require MFA for all users</p>
-                <p className="text-xs text-muted-foreground">
-                  Users will be forced to set up MFA on their next login
-                </p>
+        <div className="space-y-6">
+          <Card className="border">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <KeyRound className="h-5 w-5" /> MFA Policy
+              </CardTitle>
+              <CardDescription>
+                Mandate MFA for all users in your organization
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Require MFA for all users</p>
+                  <p className="text-xs text-muted-foreground">
+                    Users will be forced to set up MFA on their next login
+                  </p>
+                </div>
+                <Toggle
+                  checked={mandateAll}
+                  onCheckedChange={handleMandateAll}
+                  disabled={mandateLoading}
+                  data-testid="mandate-mfa-switch"
+                />
               </div>
-              <Toggle
-                checked={mandateAll}
-                onCheckedChange={handleMandateAll}
-                disabled={mandateLoading}
-                data-testid="mandate-mfa-switch"
-              />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          <Card className="border">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Lock className="h-5 w-5" /> Password Policy
+              </CardTitle>
+              <CardDescription>
+                Configure password length and complexity requirements for all users
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="pp-min">Minimum length</Label>
+                  <Input
+                    id="pp-min"
+                    type="number"
+                    min={6}
+                    max={128}
+                    value={passwordPolicy.min_length}
+                    onChange={(e) => setPasswordPolicy((p) => ({ ...p, min_length: parseInt(e.target.value, 10) || 6 }))}
+                  />
+                  <p className="text-xs text-muted-foreground">Range: 6-128</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="pp-max">Maximum length</Label>
+                  <Input
+                    id="pp-max"
+                    type="number"
+                    min={8}
+                    max={256}
+                    value={passwordPolicy.max_length}
+                    onChange={(e) => setPasswordPolicy((p) => ({ ...p, max_length: parseInt(e.target.value, 10) || 128 }))}
+                  />
+                  <p className="text-xs text-muted-foreground">Range: 8-256</p>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Complexity requirements</p>
+                {[
+                  { key: "require_uppercase", label: "Require uppercase letter (A-Z)" },
+                  { key: "require_lowercase", label: "Require lowercase letter (a-z)" },
+                  { key: "require_digit", label: "Require digit (0-9)" },
+                  { key: "require_special", label: "Require special character (!@#$...)" },
+                ].map(({ key, label }) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <p className="text-sm">{label}</p>
+                    <Toggle
+                      checked={!!passwordPolicy[key]}
+                      onCheckedChange={(v) => setPasswordPolicy((p) => ({ ...p, [key]: !!v }))}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <Separator />
+
+              <Button
+                onClick={async () => {
+                  if (passwordPolicy.min_length > passwordPolicy.max_length) {
+                    toast.error("Min length cannot exceed max length");
+                    return;
+                  }
+                  setPasswordPolicySaving(true);
+                  try {
+                    await orgApi.update({ password_policy: passwordPolicy });
+                    toast.success("Password policy saved");
+                  } catch (err) {
+                    toast.error(formatApiError(err) || "Failed to save password policy");
+                  } finally {
+                    setPasswordPolicySaving(false);
+                  }
+                }}
+                disabled={passwordPolicySaving}
+              >
+                {passwordPolicySaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                Save Password Policy
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       )}
       </div>
     </div>
