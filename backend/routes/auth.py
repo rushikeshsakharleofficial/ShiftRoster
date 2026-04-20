@@ -267,8 +267,32 @@ async def forgot_password_request(data: RecoveryRequest, request: Request):
     """User forgot password. Send email if SMTP is up, else alert manager."""
     from auth_utils import generate_setup_token, hash_setup_token
     from email_utils import send_email
+    from datetime import timedelta
 
-    user = await db.users.find_one({"email": data.email.lower().strip()})
+    # Rate limit: 3 attempts per IP+email per hour to prevent enumeration + SMTP DoS
+    ip = request.client.host if request.client else "unknown"
+    email_normalized = data.email.lower().strip()
+    rate_key = f"{ip}:{email_normalized}"
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(hours=1)
+
+    attempt = await db.password_reset_attempts.find_one({"identifier": rate_key})
+    if attempt and attempt.get("first_attempt_at", now) > window_start:
+        if attempt.get("count", 0) >= 3:
+            # Silent fail (same response as success) to avoid enumeration leak
+            return {"message": "If this account exists, instructions have been sent."}
+        await db.password_reset_attempts.update_one(
+            {"identifier": rate_key},
+            {"$inc": {"count": 1}, "$set": {"last_attempt_at": now}}
+        )
+    else:
+        await db.password_reset_attempts.update_one(
+            {"identifier": rate_key},
+            {"$set": {"identifier": rate_key, "count": 1, "first_attempt_at": now, "last_attempt_at": now}},
+            upsert=True
+        )
+
+    user = await db.users.find_one({"email": email_normalized})
     if not user:
         return {"message": "If this account exists, instructions have been sent."}
 
@@ -423,22 +447,27 @@ class SetupPasswordRequest(BaseModel):
 @router.post("/setup-password")
 async def setup_password(data: SetupPasswordRequest):
     """New user sets their password for the first time using a secure token."""
-    from auth_utils import hash_password, hash_setup_token
-    
+    from auth_utils import hash_password, hash_setup_token, validate_password
+
     hashed_token = hash_setup_token(data.token)
-    user = await db.users.find_one({
+
+    # Lookup user first to get org_id for policy check
+    user_lookup = await db.users.find_one({
         "password_setup_token": hashed_token,
         "password_setup_expires": {"$gt": datetime.now(timezone.utc)}
     })
-    
-    if not user:
+    if not user_lookup:
         raise HTTPException(status_code=400, detail="Invalid or expired setup token")
-    
-    if len(data.password) < 12:
-        raise HTTPException(status_code=400, detail="Password must be at least 12 characters")
 
-    await db.users.update_one(
-        {"_id": user["_id"]},
+    # Enforce org-specific password policy
+    await validate_password(db, user_lookup.get("org_id"), data.password)
+
+    # Atomic find-and-update still protects against TOCTOU (token match required)
+    user = await db.users.find_one_and_update(
+        {
+            "password_setup_token": hashed_token,
+            "password_setup_expires": {"$gt": datetime.now(timezone.utc)}
+        },
         {"$set": {
             "password_hash": hash_password(data.password),
             "password_setup_token": None,
@@ -447,9 +476,12 @@ async def setup_password(data: SetupPasswordRequest):
             "updated_at": datetime.now(timezone.utc)
         }}
     )
-    
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired setup token")
+
     await log_audit(user["org_id"], str(user["_id"]), "setup_password", "user", str(user["_id"]))
-    
+
     return {"message": "Password set successfully. You can now log in."}
 
 
@@ -517,8 +549,24 @@ async def refresh_token(request: Request, response: Response):
         user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
+
+        # Rotate both access and refresh tokens (prevents long-lived token reuse)
         access_token = create_access_token(str(user["_id"]), user["email"])
-        response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=3600, path="/")
+        new_refresh_token = create_refresh_token(str(user["_id"]))
+
+        remember_me = request.cookies.get("remember_me") == "1"
+        refresh_max_age = 2592000 if remember_me else 604800
+
+        response.set_cookie(
+            key="access_token", value=access_token,
+            httponly=True, secure=_SECURE_COOKIES, samesite="lax",
+            max_age=3600, path="/"
+        )
+        response.set_cookie(
+            key="refresh_token", value=new_refresh_token,
+            httponly=True, secure=_SECURE_COOKIES, samesite="lax",
+            max_age=refresh_max_age, path="/"
+        )
         return {"message": "Token refreshed"}
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token expired")

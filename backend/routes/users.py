@@ -183,6 +183,9 @@ async def create_user(data: CreateUserRequest, request: Request):
         setup_expires = datetime.now(timezone.utc) + timedelta(hours=24)
         status = "pending_setup"
     else:
+        # Enforce org password policy when admin provides explicit password
+        from auth_utils import validate_password
+        await validate_password(db, current.get("org_id"), data.password)
         password_hash = hash_password(data.password)
 
     user_doc = {
@@ -315,10 +318,9 @@ async def create_user(data: CreateUserRequest, request: Request):
                     "created_at": now.isoformat(),
                 }
             })
-    except Exception as e:
-        import traceback
-        print(f"Error in welcome automation: {e}")
-        traceback.print_exc()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Error in welcome automation")
 
     await log_audit(current.get("org_id"), current["id"], "create", "user", doc["id"])
     return doc

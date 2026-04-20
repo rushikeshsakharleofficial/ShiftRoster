@@ -57,17 +57,38 @@ async def list_notes(request: Request, note_date: Optional[str] = None, start_da
     query["$or"] = vis_filter
 
     notes = await db.calendar_notes.find(query).sort([("is_pinned", -1), ("created_at", -1)]).to_list(200)
+
+    # Fetch all replies for all notes in one query
+    note_ids = [str(n["_id"]) for n in notes]
+    all_replies = await db.calendar_note_replies.find({"note_id": {"$in": note_ids}}).sort("created_at", 1).to_list(None)
+
+    # Collect all unique author IDs from notes and replies
+    author_ids = set()
+    for n in notes:
+        if n.get("author_id"):
+            author_ids.add(ObjectId(n["author_id"]))
+    for r in all_replies:
+        if r.get("author_id"):
+            author_ids.add(ObjectId(r["author_id"]))
+
+    # Single batch fetch for all authors
+    authors = {u["_id"]: u async for u in db.users.find({"_id": {"$in": list(author_ids)}}, {"full_name": 1})}
+
+    # Group replies by note_id
+    replies_by_note = {}
+    for r in all_replies:
+        replies_by_note.setdefault(r["note_id"], []).append(r)
+
     result = []
     for n in notes:
         ndata = serialize_doc(n)
-        author = await db.users.find_one({"_id": ObjectId(n["author_id"])}, {"full_name": 1})
+        author = authors.get(ObjectId(n["author_id"])) if n.get("author_id") else None
         ndata["author_name"] = author.get("full_name", "") if author else ""
-        # Get replies
-        replies = await db.calendar_note_replies.find({"note_id": ndata["id"]}).sort("created_at", 1).to_list(50)
+        # Attach replies from pre-fetched dict
         reply_list = []
-        for r in replies:
+        for r in replies_by_note.get(ndata["id"], []):
             rd = serialize_doc(r)
-            rauthor = await db.users.find_one({"_id": ObjectId(r["author_id"])}, {"full_name": 1})
+            rauthor = authors.get(ObjectId(r["author_id"])) if r.get("author_id") else None
             rd["author_name"] = rauthor.get("full_name", "") if rauthor else ""
             reply_list.append(rd)
         ndata["replies"] = reply_list
@@ -579,11 +600,35 @@ async def update_organization(request: Request):
                    "attendance_enabled",
                    "smtp_host", "smtp_port", "smtp_username", "smtp_password",
                    "smtp_from_email", "smtp_from_name", "smtp_use_tls", "smtp_enabled",
-                   "chat_features", "purge_policy_days"]
+                   "chat_features", "purge_policy_days", "password_policy"]
     else:
         allowed = ["attendance_enabled"]
 
     update = {k: v for k, v in body.items() if k in allowed and v is not None}
+
+    # Validate password_policy structure if being updated
+    if "password_policy" in update and is_admin:
+        pp = update["password_policy"]
+        if not isinstance(pp, dict):
+            raise HTTPException(status_code=400, detail="password_policy must be an object")
+        valid_keys = {"min_length", "max_length", "require_uppercase", "require_lowercase",
+                      "require_digit", "require_special"}
+        cleaned = {k: v for k, v in pp.items() if k in valid_keys}
+        # Sanity bounds
+        if "min_length" in cleaned:
+            ml = int(cleaned["min_length"])
+            if ml < 6 or ml > 128:
+                raise HTTPException(status_code=400, detail="min_length must be between 6 and 128")
+            cleaned["min_length"] = ml
+        if "max_length" in cleaned:
+            xl = int(cleaned["max_length"])
+            if xl < 8 or xl > 256:
+                raise HTTPException(status_code=400, detail="max_length must be between 8 and 256")
+            cleaned["max_length"] = xl
+        for bk in ("require_uppercase", "require_lowercase", "require_digit", "require_special"):
+            if bk in cleaned:
+                cleaned[bk] = bool(cleaned[bk])
+        update["password_policy"] = cleaned
     if "attendance_enabled" in body and body["attendance_enabled"] is False:
         update["attendance_enabled"] = False
     
@@ -598,6 +643,23 @@ async def update_organization(request: Request):
     await db.organizations.update_one({"_id": ObjectId(current.get("org_id"))}, {"$set": update})
     org = await db.organizations.find_one({"_id": ObjectId(current.get("org_id"))})
     return serialize_doc(org)
+
+
+@router.get("/organization/password-policy")
+async def get_org_password_policy(request: Request):
+    """Return the current org's password policy (for setup/reset pages to show requirements)."""
+    from auth_utils import get_password_policy
+    current = await get_current_user(request)
+    return await get_password_policy(db, current.get("org_id"))
+
+
+@router.get("/organization/password-policy/public")
+async def get_public_password_policy(org_id: str = ""):
+    """Public password policy endpoint for unauthenticated setup-password flow."""
+    from auth_utils import get_password_policy, DEFAULT_PASSWORD_POLICY
+    if not org_id:
+        return dict(DEFAULT_PASSWORD_POLICY)
+    return await get_password_policy(db, org_id)
 
 
 @router.post("/organization/test-email")

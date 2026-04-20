@@ -13,6 +13,38 @@ MAX_MESSAGE_LEN = 50_000
 UPLOADS_DIR = Path(__file__).parent.parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 MAX_FILE_BYTES = 100 * 1024 * 1024  # 100 MB
+CHUNK_SIZE = 1024 * 1024  # 1 MB streaming chunks
+
+# Security: blocked file extensions (executables, scripts)
+BLOCKED_EXTENSIONS = {
+    ".php", ".phtml", ".php3", ".php4", ".php5", ".phps",
+    ".exe", ".msi", ".bat", ".cmd", ".com", ".scr", ".vbs", ".vbe",
+    ".js", ".jse", ".ws", ".wsf", ".wsh", ".ps1", ".psm1",
+    ".sh", ".bash", ".zsh", ".csh", ".ksh",
+    ".jar", ".war", ".ear",
+    ".html", ".htm", ".shtml", ".svg",  # XSS risk when served
+    ".py", ".pyc", ".pyo", ".pyw",
+    ".rb", ".pl", ".cgi",
+    ".app", ".deb", ".rpm", ".dmg",
+}
+
+# Security: allowed MIME type prefixes (whitelist)
+ALLOWED_MIME_PREFIXES = (
+    "image/",
+    "video/",
+    "audio/",
+    "text/plain",
+    "text/csv",
+    "application/pdf",
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument",
+    "application/vnd.ms-excel",
+    "application/vnd.ms-powerpoint",
+    "application/json",
+    "application/octet-stream",  # Generic binary; extension check blocks dangerous
+)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -207,22 +239,52 @@ async def list_channels(request: Request):
         }).to_list(1000)
         read_receipts = {r["channel_id"]: r for r in receipts}
 
+    # Split channels into two groups: those with a last_read_at and those without
+    channels_with_read = [ch for ch in channels if read_receipts.get(ch["id"]) and read_receipts[ch["id"]].get("last_read_at")]
+    channels_without_read = [ch for ch in channels if not (read_receipts.get(ch["id"]) and read_receipts[ch["id"]].get("last_read_at"))]
+
+    unread_counts = {}
+
+    # For channels with per-channel last_read_at we need per-channel cutoffs.
+    # Use $or aggregation to handle all of them in one pipeline.
+    if channels_with_read:
+        or_conditions = [
+            {
+                "channel_id": ch["id"],
+                "created_at": {"$gt": read_receipts[ch["id"]]["last_read_at"]},
+            }
+            for ch in channels_with_read
+        ]
+        pipeline_read = [
+            {
+                "$match": {
+                    "$or": or_conditions,
+                    "deleted_at": {"$exists": False},
+                    "sender_id": {"$ne": user_id},
+                }
+            },
+            {"$group": {"_id": "$channel_id", "count": {"$sum": 1}}},
+        ]
+        async for r in db.chat_messages.aggregate(pipeline_read):
+            unread_counts[r["_id"]] = r["count"]
+
+    # For channels without a last_read_at, count all non-deleted messages not from user
+    if channels_without_read:
+        pipeline_no_read = [
+            {
+                "$match": {
+                    "channel_id": {"$in": [ch["id"] for ch in channels_without_read]},
+                    "deleted_at": {"$exists": False},
+                    "sender_id": {"$ne": user_id},
+                }
+            },
+            {"$group": {"_id": "$channel_id", "count": {"$sum": 1}}},
+        ]
+        async for r in db.chat_messages.aggregate(pipeline_no_read):
+            unread_counts[r["_id"]] = r["count"]
+
     for ch in channels:
-        receipt = read_receipts.get(ch["id"])
-        if receipt and receipt.get("last_read_at"):
-            unread = await db.chat_messages.count_documents({
-                "channel_id": ch["id"],
-                "created_at": {"$gt": receipt["last_read_at"]},
-                "deleted_at": {"$exists": False},
-                "sender_id": {"$ne": user_id},
-            })
-        else:
-            unread = await db.chat_messages.count_documents({
-                "channel_id": ch["id"],
-                "deleted_at": {"$exists": False},
-                "sender_id": {"$ne": user_id},
-            })
-        ch["unread_count"] = unread
+        ch["unread_count"] = unread_counts.get(ch["id"], 0)
 
     return {"channels": channels}
 
@@ -1241,29 +1303,47 @@ async def mention_users(request: Request, q: Optional[str] = Query("")):
 
 @router.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
-    """Upload a file attachment (max 100 MB). Returns {url, file_name, file_size, file_type}."""
+    """Upload a file attachment (max 100 MB). Validates MIME type, blocks executables, streams to disk."""
     user = await get_current_user(request)
 
     if not file.filename:
         raise HTTPException(400, "No file provided")
 
-    # Read file and check size
-    content = await file.read(MAX_FILE_BYTES + 1)
-    if len(content) > MAX_FILE_BYTES:
-        raise HTTPException(400, "File too large (max 100 MB)")
+    # Security: block dangerous extensions (case-insensitive)
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext in BLOCKED_EXTENSIONS:
+        raise HTTPException(400, f"File type '{ext}' is not allowed")
+
+    # Security: validate MIME type against whitelist
+    content_type = (file.content_type or "application/octet-stream").lower()
+    if not any(content_type.startswith(p) for p in ALLOWED_MIME_PREFIXES):
+        raise HTTPException(400, f"MIME type '{content_type}' is not allowed")
 
     # Generate unique filename preserving extension
-    ext = os.path.splitext(file.filename)[1]
     unique_name = f"{uuid.uuid4().hex}{ext}"
     save_path = UPLOADS_DIR / unique_name
 
-    with open(save_path, "wb") as f:
-        f.write(content)
+    # Stream to disk (avoid loading full file in memory)
+    total_bytes = 0
+    try:
+        with open(save_path, "wb") as f:
+            while chunk := await file.read(CHUNK_SIZE):
+                total_bytes += len(chunk)
+                if total_bytes > MAX_FILE_BYTES:
+                    f.close()
+                    save_path.unlink(missing_ok=True)
+                    raise HTTPException(400, "File too large (max 100 MB)")
+                f.write(chunk)
+    except HTTPException:
+        raise
+    except Exception:
+        save_path.unlink(missing_ok=True)
+        raise HTTPException(500, "Upload failed")
 
     file_url = f"/uploads/{unique_name}"
     return {
         "url": file_url,
         "file_name": file.filename,
-        "file_size": len(content),
-        "file_type": file.content_type or "application/octet-stream",
+        "file_size": total_bytes,
+        "file_type": content_type,
     }
