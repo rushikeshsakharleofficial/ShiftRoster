@@ -447,14 +447,22 @@ class SetupPasswordRequest(BaseModel):
 @router.post("/setup-password")
 async def setup_password(data: SetupPasswordRequest):
     """New user sets their password for the first time using a secure token."""
-    from auth_utils import hash_password, hash_setup_token
-
-    if len(data.password) < 12:
-        raise HTTPException(status_code=400, detail="Password must be at least 12 characters")
+    from auth_utils import hash_password, hash_setup_token, validate_password
 
     hashed_token = hash_setup_token(data.token)
 
-    # Atomic find-and-update prevents TOCTOU token reuse attack
+    # Lookup user first to get org_id for policy check
+    user_lookup = await db.users.find_one({
+        "password_setup_token": hashed_token,
+        "password_setup_expires": {"$gt": datetime.now(timezone.utc)}
+    })
+    if not user_lookup:
+        raise HTTPException(status_code=400, detail="Invalid or expired setup token")
+
+    # Enforce org-specific password policy
+    await validate_password(db, user_lookup.get("org_id"), data.password)
+
+    # Atomic find-and-update still protects against TOCTOU (token match required)
     user = await db.users.find_one_and_update(
         {
             "password_setup_token": hashed_token,

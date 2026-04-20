@@ -183,6 +183,9 @@ async def create_user(data: CreateUserRequest, request: Request):
         setup_expires = datetime.now(timezone.utc) + timedelta(hours=24)
         status = "pending_setup"
     else:
+        # Enforce org password policy when admin provides explicit password
+        from auth_utils import validate_password
+        await validate_password(db, current.get("org_id"), data.password)
         password_hash = hash_password(data.password)
 
     user_doc = {

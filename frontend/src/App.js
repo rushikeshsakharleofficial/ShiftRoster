@@ -64,7 +64,26 @@ function PublicRoute({ children }) {
   return children;
 }
 
+function useBrandFavicon() {
+  useEffect(() => {
+    fetch("/api/public/branding")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const link = document.getElementById("app-favicon");
+        if (link && data.logo_url) {
+          link.href = data.logo_url;
+        }
+        if (data.brand_name) {
+          document.title = data.brand_name;
+        }
+      })
+      .catch(() => {});
+  }, []);
+}
+
 export default function App() {
+  useBrandFavicon();
   return (
     <BrowserRouter>
       <AuthProvider>

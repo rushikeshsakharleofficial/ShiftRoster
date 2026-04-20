@@ -64,6 +64,68 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
+# ── Password Policy ──
+
+DEFAULT_PASSWORD_POLICY = {
+    "min_length": 12,
+    "require_uppercase": False,
+    "require_lowercase": False,
+    "require_digit": False,
+    "require_special": False,
+    "max_length": 128,
+}
+
+SPECIAL_CHARS = set("!@#$%^&*()_+-=[]{}|;:,.<>?/~`\"'\\")
+
+
+async def get_password_policy(db, org_id) -> dict:
+    """Return org-specific password policy, merged with defaults."""
+    if not org_id:
+        return dict(DEFAULT_PASSWORD_POLICY)
+    try:
+        org = await db.organizations.find_one({"_id": ObjectId(org_id)})
+    except Exception:
+        org = None
+    policy = dict(DEFAULT_PASSWORD_POLICY)
+    if org and isinstance(org.get("password_policy"), dict):
+        policy.update({k: v for k, v in org["password_policy"].items() if k in policy})
+    return policy
+
+
+def validate_password_policy(password: str, policy: dict) -> None:
+    """Raise HTTPException(400) if password fails policy. Uses default policy if None."""
+    policy = policy or DEFAULT_PASSWORD_POLICY
+    errors = []
+
+    min_len = int(policy.get("min_length", 12))
+    max_len = int(policy.get("max_length", 128))
+
+    if len(password) < min_len:
+        errors.append(f"at least {min_len} characters")
+    if len(password) > max_len:
+        errors.append(f"at most {max_len} characters")
+    if policy.get("require_uppercase") and not any(c.isupper() for c in password):
+        errors.append("one uppercase letter")
+    if policy.get("require_lowercase") and not any(c.islower() for c in password):
+        errors.append("one lowercase letter")
+    if policy.get("require_digit") and not any(c.isdigit() for c in password):
+        errors.append("one digit")
+    if policy.get("require_special") and not any(c in SPECIAL_CHARS for c in password):
+        errors.append("one special character")
+
+    if errors:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password must contain: {', '.join(errors)}"
+        )
+
+
+async def validate_password(db, org_id, password: str) -> None:
+    """Convenience: fetch policy for org and validate."""
+    policy = await get_password_policy(db, org_id)
+    validate_password_policy(password, policy)
+
+
 def create_access_token(user_id: str, email: str) -> str:
     payload = {
         "sub": user_id,

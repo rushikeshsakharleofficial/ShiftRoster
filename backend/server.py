@@ -121,6 +121,19 @@ async def setup_status():
     return {"setup_required": user_count == 0}
 
 
+@app.get("/api/public/branding")
+async def public_branding():
+    """Public branding (brand_name, logo_url) used for favicon + login page.
+    Only returns logo_url if admin has uploaded one — no default."""
+    org = await db.organizations.find_one({}, {"brand_name": 1, "name": 1, "logo_url": 1})
+    if not org:
+        return {"brand_name": "", "logo_url": ""}
+    return {
+        "brand_name": org.get("brand_name") or org.get("name") or "",
+        "logo_url": org.get("logo_url") or "",
+    }
+
+
 @app.post("/api/setup")
 async def initial_setup(data: SetupRequest):
     """First-time SuperAdmin setup. Only works when database has zero users."""
@@ -129,8 +142,9 @@ async def initial_setup(data: SetupRequest):
         raise HTTPException(status_code=403, detail="Setup already completed. System already has users.")
 
     email = data.admin_email.strip().lower()
-    if len(data.admin_password) < 12:
-        raise HTTPException(status_code=400, detail="Password must be at least 12 characters")
+    # Initial setup uses default policy (no org yet exists)
+    from auth_utils import validate_password_policy
+    validate_password_policy(data.admin_password, None)
 
     # Create organization
     org_result = await db.organizations.insert_one({
