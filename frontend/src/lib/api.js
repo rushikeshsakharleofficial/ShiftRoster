@@ -218,6 +218,14 @@ export const orgApi = {
   testEmail: (recipient_email) => api.post("/organization/test-email", { recipient_email }),
 };
 
+// LDAP / Active Directory
+export const ldapApi = {
+  get: () => api.get("/settings/ldap"),
+  update: (data) => api.put("/settings/ldap", data),
+  test: (data) => api.post("/settings/ldap/test", data),
+  sync: () => api.post("/settings/ldap/sync"),
+};
+
 // Announcements
 export const announcementsApi = {
   list: () => api.get("/announcements"),

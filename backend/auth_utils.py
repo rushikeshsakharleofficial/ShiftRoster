@@ -149,16 +149,24 @@ def serialize_doc(doc):
     """Convert MongoDB document to JSON-safe dict, handling _id and ObjectId fields."""
     if doc is None:
         return None
+
+    def serialize_value(value):
+        if isinstance(value, ObjectId):
+            return str(value)
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, list):
+            return [serialize_value(item) for item in value]
+        if isinstance(value, dict):
+            return {k: serialize_value(v) for k, v in value.items()}
+        return value
+
     result = {}
     for key, val in doc.items():
         if key == "_id":
             result["id"] = str(val)
-        elif isinstance(val, ObjectId):
-            result[key] = str(val)
-        elif isinstance(val, datetime):
-            result[key] = val.isoformat()
         else:
-            result[key] = val
+            result[key] = serialize_value(val)
     return result
 
 

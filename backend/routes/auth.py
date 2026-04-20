@@ -10,6 +10,7 @@ from auth_utils import (
     generate_totp_secret, get_totp_uri, verify_totp_code,
     generate_qr_base64, create_mfa_temp_token, verify_mfa_temp_token
 )
+from ldap_service import authenticate_user as authenticate_ldap_user
 import jwt
 import secrets
 import hashlib
@@ -79,7 +80,23 @@ async def login(data: LoginRequest, request: Request, response: Response):
     else:
         user = await db.users.find_one({"username": raw.lower()})
 
-    if not user or not verify_password(data.password, user["password_hash"]):
+    valid_credentials = False
+    if user:
+        if user.get("auth_provider", "local") == "ldap":
+            ldap_username = user.get("username") or raw.lower()
+            try:
+                valid_credentials = await authenticate_ldap_user(
+                    user["org_id"],
+                    ldap_username,
+                    data.password,
+                    user.get("ldap_dn", ""),
+                )
+            except HTTPException:
+                valid_credentials = False
+        elif user.get("password_hash"):
+            valid_credentials = verify_password(data.password, user["password_hash"])
+
+    if not user or not valid_credentials:
         await db.login_attempts.update_one(
             {"identifier": identifier},
             {
