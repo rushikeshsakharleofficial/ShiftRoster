@@ -62,7 +62,7 @@ export default function SOPsPage() {
         category: effectiveCategory || undefined,
         tags: form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
         content: form.sop_type === "document" ? { html: "" }
-          : form.sop_type === "spreadsheet" ? { data: [[{ value: "" }]] }
+          : form.sop_type === "spreadsheet" ? { data: Array.from({ length: 20 }, () => Array.from({ length: 10 }, () => ({ value: "" }))) }
           : form.sop_type === "presentation" ? { slides: [{ id: 1, title: "Slide 1", body: "" }] }
           : {},
       };

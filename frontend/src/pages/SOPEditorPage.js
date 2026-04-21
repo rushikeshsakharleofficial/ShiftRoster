@@ -199,7 +199,8 @@ function DocumentEditor({ content, onChange, editable, sopId }) {
 // ── Spreadsheet editor ──
 
 function SpreadsheetEditor({ content, onChange, editable }) {
-  const data = content?.data || [[{ value: "" }]];
+  const defaultGrid = Array.from({ length: 20 }, () => Array.from({ length: 10 }, () => ({ value: "" })));
+  const data = content?.data || defaultGrid;
   return (
     <div className={`border rounded-lg overflow-auto ${!editable ? "pointer-events-none opacity-80" : ""}`}>
       <Spreadsheet data={data} onChange={d => editable && onChange({ data: d })} />
