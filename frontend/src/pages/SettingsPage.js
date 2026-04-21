@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { orgApi, authApi, usersApi, formatApiError } from "@/lib/api";
+import { orgApi, authApi, usersApi, ldapApi, formatApiError } from "@/lib/api";
 import AccessRuleBook from "@/components/AccessRuleBook";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -131,6 +131,30 @@ export default function SettingsPage() {
   const [smtpPasswordVisible, setSmtpPasswordVisible] = useState(false);
   const [smtpTestEmail, setSmtpTestEmail] = useState("");
 
+  // LDAP / Active Directory state
+  const [ldapForm, setLdapForm] = useState({
+    enabled: false,
+    host: "",
+    port: "636",
+    use_ssl: true,
+    start_tls: false,
+    bind_dn: "",
+    bind_password: "",
+    search_base: "",
+    user_filter: "(&(objectClass=person)(sAMAccountName=*))",
+    mapping: {
+      username: "sAMAccountName",
+      email: "mail",
+      full_name: "displayName",
+      phone: "telephoneNumber",
+    },
+  });
+  const [ldapSaving, setLdapSaving] = useState(false);
+  const [ldapTesting, setLdapTesting] = useState(false);
+  const [ldapSyncing, setLdapSyncing] = useState(false);
+  const [ldapPasswordVisible, setLdapPasswordVisible] = useState(false);
+  const [ldapResult, setLdapResult] = useState(null);
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -165,6 +189,16 @@ export default function SettingsPage() {
           smtp_use_tls: data.smtp_use_tls !== false,
           smtp_enabled: !!data.smtp_enabled,
         });
+        try {
+          const ldapRes = await ldapApi.get();
+          setLdapForm((current) => ({
+            ...current,
+            ...ldapRes.data,
+            port: String(ldapRes.data.port || "636"),
+            bind_password: ldapRes.data.bind_password || "",
+            mapping: { ...current.mapping, ...(ldapRes.data.mapping || {}) },
+          }));
+        } catch {}
       } catch {}
       setMfaEnabled(!!user?.mfa_enabled);
       setShareManagerName(user?.full_name || "");
@@ -235,6 +269,60 @@ export default function SettingsPage() {
       setSmtpTestResult({ ok: false, msg: e.response?.data?.detail || "Test failed" });
     } finally {
       setSmtpTesting(false);
+    }
+  };
+
+  const ldapPayload = () => ({
+    ...ldapForm,
+    port: parseInt(ldapForm.port, 10) || (ldapForm.use_ssl ? 636 : 389),
+  });
+
+  const handleLdapSave = async () => {
+    setLdapSaving(true);
+    setLdapResult(null);
+    try {
+      const { data } = await ldapApi.update(ldapPayload());
+      setLdapForm((current) => ({
+        ...current,
+        ...data,
+        port: String(data.port || current.port),
+        bind_password: data.bind_password || "",
+        mapping: { ...current.mapping, ...(data.mapping || {}) },
+      }));
+      setLdapResult({ ok: true, msg: "LDAP settings saved." });
+    } catch (e) {
+      setLdapResult({ ok: false, msg: formatApiError(e.response?.data?.detail) });
+    } finally {
+      setLdapSaving(false);
+    }
+  };
+
+  const handleLdapTest = async () => {
+    setLdapTesting(true);
+    setLdapResult(null);
+    try {
+      const { data } = await ldapApi.test(ldapPayload());
+      setLdapResult({ ok: true, msg: data.message || "LDAP connection succeeded." });
+    } catch (e) {
+      setLdapResult({ ok: false, msg: formatApiError(e.response?.data?.detail) });
+    } finally {
+      setLdapTesting(false);
+    }
+  };
+
+  const handleLdapSync = async () => {
+    setLdapSyncing(true);
+    setLdapResult(null);
+    try {
+      const { data } = await ldapApi.sync();
+      setLdapResult({
+        ok: true,
+        msg: `Sync complete. Created ${data.created || 0}, updated ${data.updated || 0}, skipped ${data.skipped || 0}.`,
+      });
+    } catch (e) {
+      setLdapResult({ ok: false, msg: formatApiError(e.response?.data?.detail) });
+    } finally {
+      setLdapSyncing(false);
     }
   };
 
@@ -381,6 +469,7 @@ export default function SettingsPage() {
     { id: "branding",     label: "Branding",      icon: ImageIcon,     show: isAdmin },
     { id: "organization", label: "Organization",  icon: Building2,     show: isAdmin },
     { id: "email",        label: "Email",         icon: Mail,          show: isAdmin },
+    { id: "ldap",         label: "LDAP / AD",     icon: Server,        show: isAdmin },
     { id: "security",     label: "Security",      icon: Shield,        show: true },
     { id: "chat",         label: "Chat",          icon: MessageSquare, show: true },
     { id: "access",       label: "Access Rules",  icon: BookOpen,      show: isAdmin || isManager },
@@ -630,6 +719,131 @@ export default function SettingsPage() {
       )}
 
       {/* ── Organization ── */}
+      {/* LDAP / AD */}
+      {activeSection === "ldap" && isAdmin && (
+        <Card className="border">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Server className="h-5 w-5 text-primary" /> LDAP / Active Directory
+            </CardTitle>
+            <CardDescription>Sync employees from your directory and authenticate LDAP users against AD</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Enable LDAP login</p>
+                <p className="text-xs text-muted-foreground">LDAP-managed users will use their directory password</p>
+              </div>
+              <Toggle checked={ldapForm.enabled} onCheckedChange={(v) => setLdapForm(f => ({ ...f, enabled: v }))} />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>LDAP Host</Label>
+                <Input placeholder="ad.example.com" value={ldapForm.host}
+                  onChange={e => setLdapForm(f => ({ ...f, host: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Port</Label>
+                <Input placeholder={ldapForm.use_ssl ? "636" : "389"} value={ldapForm.port}
+                  onChange={e => setLdapForm(f => ({ ...f, port: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Bind DN</Label>
+                <Input placeholder="CN=ServiceAccount,OU=Users,DC=example,DC=com" value={ldapForm.bind_dn}
+                  onChange={e => setLdapForm(f => ({ ...f, bind_dn: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Bind Password</Label>
+                <div className="relative">
+                  <Input
+                    type={ldapPasswordVisible ? "text" : "password"}
+                    placeholder="Directory service account password"
+                    value={ldapForm.bind_password}
+                    onChange={e => setLdapForm(f => ({ ...f, bind_password: e.target.value }))}
+                    className="pr-9"
+                  />
+                  <button type="button" onClick={() => setLdapPasswordVisible(v => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {ldapPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {ldapForm.bind_password === "__KEEP_EXISTING_LDAP_PASSWORD__" && (
+                  <p className="text-xs text-muted-foreground">A bind password is saved. Type a new password to replace it.</p>
+                )}
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Search Base</Label>
+                <Input placeholder="OU=Employees,DC=example,DC=com" value={ldapForm.search_base}
+                  onChange={e => setLdapForm(f => ({ ...f, search_base: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>User Filter</Label>
+                <Input placeholder="(&(objectClass=person)(sAMAccountName=*))" value={ldapForm.user_filter}
+                  onChange={e => setLdapForm(f => ({ ...f, user_filter: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[
+                ["username", "Username attribute"],
+                ["email", "Email attribute"],
+                ["full_name", "Full name attribute"],
+                ["phone", "Phone attribute"],
+              ].map(([key, label]) => (
+                <div key={key} className="space-y-1.5">
+                  <Label>{label}</Label>
+                  <Input value={ldapForm.mapping[key] || ""}
+                    onChange={e => setLdapForm(f => ({ ...f, mapping: { ...f.mapping, [key]: e.target.value } }))} />
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Toggle checked={ldapForm.use_ssl}
+                  onCheckedChange={(v) => setLdapForm(f => ({ ...f, use_ssl: v, start_tls: v ? false : f.start_tls }))}
+                  className="h-6 w-10" />
+                <span className="text-sm">Use LDAPS</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Toggle checked={ldapForm.start_tls}
+                  onCheckedChange={(v) => setLdapForm(f => ({ ...f, start_tls: v, use_ssl: v ? false : f.use_ssl }))}
+                  className="h-6 w-10" />
+                <span className="text-sm">Use StartTLS</span>
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-muted/40 border border-border p-3 text-xs text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground">Directory sync behavior</p>
+              <p>LDAP users are matched by DN, username, or email. Existing local users are not converted automatically.</p>
+              <p>Enable LDAPS or StartTLS before enabling LDAP login.</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleLdapSave} disabled={ldapSaving} size="sm">
+                {ldapSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                Save LDAP Settings
+              </Button>
+              <Button variant="outline" onClick={handleLdapTest} disabled={ldapTesting} size="sm">
+                {ldapTesting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Server className="h-4 w-4 mr-2" />}
+                Test Connection
+              </Button>
+              <Button variant="outline" onClick={handleLdapSync} disabled={ldapSyncing || !ldapForm.enabled} size="sm">
+                {ldapSyncing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                Force Sync
+              </Button>
+            </div>
+
+            {ldapResult && (
+              <p className={`text-xs ${ldapResult.ok ? "text-green-500" : "text-destructive"}`}>
+                {ldapResult.ok ? "OK" : "Error"}: {ldapResult.msg}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {activeSection === "organization" && isAdmin && <Card className="border">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">

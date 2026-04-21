@@ -47,8 +47,10 @@ from routes.handovers import router as handovers_router
 from routes.tasks import router as tasks_router
 from routes.announcements import router as announcements_router
 from routes.iam import router as iam_router
+from routes.ldap import router as ldap_router
 from tasks.purging import run_purging_task
 from tasks.due_date_reminders import run_due_date_reminders
+from ldap_service import run_ldap_sync_task
 
 app = FastAPI(
     title="ShiftRoster API",
@@ -90,6 +92,7 @@ app.include_router(handovers_router)
 app.include_router(tasks_router)
 app.include_router(announcements_router)
 app.include_router(iam_router)
+app.include_router(ldap_router)
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -369,6 +372,8 @@ async def startup():
     index_tasks = [
         db.users.create_index("email", unique=True),
         db.users.create_index("username", unique=True, sparse=True),
+        db.users.create_index([("org_id", 1), ("auth_provider", 1)]),
+        db.users.create_index([("org_id", 1), ("ldap_dn", 1)], sparse=True),
         db.login_attempts.create_index("identifier"),
         db.shifts.create_index([("org_id", 1), ("start_time", 1)]),
         db.shift_assignments.create_index("shift_id"),
@@ -420,6 +425,7 @@ async def startup():
     # Start background tasks
     asyncio.create_task(run_purging_task())
     asyncio.create_task(run_due_date_reminders())
+    asyncio.create_task(run_ldap_sync_task())
 
     logger.info("ShiftRoster API started successfully")
 

@@ -582,6 +582,9 @@ async def get_organization(request: Request):
     org = await db.organizations.find_one({"_id": ObjectId(current.get("org_id"))})
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
+    if org.get("ldap_settings"):
+        from ldap_service import public_ldap_settings
+        org["ldap_settings"] = public_ldap_settings(org.get("ldap_settings"))
     return serialize_doc(org)
 
 
