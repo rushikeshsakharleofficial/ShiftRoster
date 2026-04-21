@@ -916,6 +916,84 @@ export default function SOPEditorPage() {
     setShowTransfer(true);
   };
 
+  const csvImportRef = useRef();
+
+  const handleExportPDF = () => {
+    const win = window.open("", "_blank", "width=960,height=720");
+    if (!win) { toast.error("Allow popups to export PDF"); return; }
+    let body = "";
+    if (sop.sop_type === "document") {
+      body = draft?.html || "<p>Empty document</p>";
+    } else if (sop.sop_type === "spreadsheet") {
+      const { cells = {} } = draft || {};
+      let maxR = 0, maxC = 0;
+      Object.keys(cells).forEach(k => { const [r, c] = k.split(",").map(Number); maxR = Math.max(maxR, r); maxC = Math.max(maxC, c); });
+      if (!Object.keys(cells).length) { win.close(); toast.error("No data to export"); return; }
+      const getV = (r, c) => { const cell = cells[`${r},${c}`]; if (!cell?.v) return ""; const v = String(cell.v); return v.startsWith("=") ? String(evalFormula(v, (r2, c2) => cells[`${r2},${c2}`])) : v; };
+      let table = '<table border="1" cellpadding="4" style="border-collapse:collapse;width:100%;font-size:12px;"><thead><tr><th style="background:#f0f0f0"></th>';
+      for (let c = 0; c <= maxC; c++) table += `<th style="background:#f0f0f0">${COL_LETTER(c)}</th>`;
+      table += "</tr></thead><tbody>";
+      for (let r = 0; r <= maxR; r++) {
+        table += `<tr><th style="background:#f0f0f0;text-align:center;font-size:11px">${r+1}</th>`;
+        for (let c = 0; c <= maxC; c++) {
+          const cell = cells[`${r},${c}`] || {}; const cs = cell.s || {};
+          const st = [cs.bold?"font-weight:bold":"", cs.italic?"font-style:italic":"", cs.underline?"text-decoration:underline":"", cs.color?`color:${cs.color}`:"", cs.bg?`background:${cs.bg}`:"", cs.align?`text-align:${cs.align}`:"", cs.fontSize?`font-size:${cs.fontSize}px`:""].filter(Boolean).join(";");
+          table += `<td style="${st}">${getV(r, c)}</td>`;
+        }
+        table += "</tr>";
+      }
+      body = table + "</tbody></table>";
+    } else if (sop.sop_type === "presentation") {
+      const slides = draft?.slides || [];
+      body = slides.map((slide, i) => `<div style="page-break-after:${i<slides.length-1?"always":"avoid"};background:${slide.bg||"#1e293b"};color:${isLightBg(slide.bg)?"#111":"#fff"};padding:60px;min-height:480px;border-radius:8px;margin-bottom:24px;"><div style="font-size:10px;opacity:0.5;margin-bottom:8px">Slide ${i+1} / ${slides.length}</div><h1 style="font-size:36px;font-weight:bold;margin:0 0 24px">${slide.title||""}</h1><div style="font-size:18px;line-height:1.6">${slide.body||""}</div></div>`).join("");
+    }
+    win.document.write(`<!DOCTYPE html><html><head><title>${sop.title}</title><style>*{box-sizing:border-box}body{font-family:system-ui,sans-serif;padding:32px;max-width:960px;margin:0 auto}h1,h2,h3{margin:1em 0 .4em}p{margin:.5em 0;line-height:1.6}ul,ol{padding-left:1.5em}blockquote{border-left:4px solid #ccc;padding-left:16px;color:#666;margin:1em 0}pre,code{background:#f5f5f5;padding:2px 6px;border-radius:3px;font-family:monospace}img{max-width:100%}hr{border:none;border-top:1px solid #ddd;margin:1.5em 0}@media print{body{padding:0;max-width:none}@page{margin:15mm}}</style></head><body><h1 style="font-size:26px;border-bottom:2px solid #ddd;padding-bottom:8px;margin-bottom:24px">${sop.title}</h1>${body}<script>window.onload=()=>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+    win.document.close();
+  };
+
+  const handleExportCSV = () => {
+    const { cells = {} } = draft || {};
+    if (!Object.keys(cells).length) { toast.error("No data to export"); return; }
+    let maxR = 0, maxC = 0;
+    Object.keys(cells).forEach(k => { const [r, c] = k.split(",").map(Number); maxR = Math.max(maxR, r); maxC = Math.max(maxC, c); });
+    const getV = (r, c) => { const cell = cells[`${r},${c}`]; if (!cell?.v) return ""; const v = String(cell.v); return v.startsWith("=") ? String(evalFormula(v, (r2,c2) => cells[`${r2},${c2}`])) : v; };
+    let csv = "";
+    for (let r = 0; r <= maxR; r++) {
+      const row = [];
+      for (let c = 0; c <= maxC; c++) { const v = getV(r, c); row.push(v.includes(",") || v.includes('"') || v.includes("\n") ? `"${v.replace(/"/g,'""')}"` : v); }
+      csv += row.join(",") + "\n";
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    a.download = `${sop.title || "spreadsheet"}.csv`; a.click();
+  };
+
+  const handleImportCSV = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const parseCSVLine = (line) => {
+        const res = []; let cur = "", inQ = false;
+        for (let i = 0; i < line.length; i++) {
+          if (line[i] === '"' && !inQ) inQ = true;
+          else if (line[i] === '"' && inQ && line[i+1] === '"') { cur += '"'; i++; }
+          else if (line[i] === '"' && inQ) inQ = false;
+          else if (line[i] === ',' && !inQ) { res.push(cur); cur = ""; }
+          else cur += line[i];
+        }
+        res.push(cur); return res;
+      };
+      const rows = ev.target.result.split(/\r?\n/).filter(l => l.trim());
+      const newCells = {}; let maxC = 0;
+      rows.forEach((line, r) => { const cols = parseCSVLine(line); maxC = Math.max(maxC, cols.length); cols.forEach((val, c) => { if (val.trim()) newCells[`${r},${c}`] = { v: val }; }); });
+      setDraft({ cells: newCells, numRows: Math.max(rows.length + 20, 100), numCols: Math.max(maxC + 5, 26), colWidths: {} });
+      toast.success(`Imported ${rows.length} rows`);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
   if (loading) return <div className="flex justify-center items-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
   if (!sop) return null;
 
@@ -938,6 +1016,15 @@ export default function SOPEditorPage() {
         <Badge variant="outline">v{sop.current_version}</Badge>
         <Badge variant={isArchived ? "secondary" : "default"}>{sop.status}</Badge>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {/* Export / Import */}
+          <Button variant="outline" size="sm" onClick={handleExportPDF}><Download className="h-4 w-4 mr-1" />PDF</Button>
+          {sop.sop_type === "spreadsheet" && (
+            <>
+              <Button variant="outline" size="sm" onClick={handleExportCSV}><Download className="h-4 w-4 mr-1" />CSV</Button>
+              <Button variant="outline" size="sm" onClick={() => csvImportRef.current?.click()}><Upload className="h-4 w-4 mr-1" />Import CSV</Button>
+              <input ref={csvImportRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportCSV} />
+            </>
+          )}
           <Button variant={acked ? "secondary" : "outline"} size="sm" onClick={handleAcknowledge} disabled={acked}>
             {acked ? <><CheckCircle2 className="h-4 w-4 mr-1 text-green-600" />Acknowledged</> : <><Check className="h-4 w-4 mr-1" />Acknowledge</>}
           </Button>
