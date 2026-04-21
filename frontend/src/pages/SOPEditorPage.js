@@ -389,7 +389,7 @@ function SpreadsheetEditor({ content, onChange, editable }) {
         />
       </div>
       {/* Grid */}
-      <div ref={gridRef} tabIndex={0} className="overflow-auto flex-1 outline-none" style={{ maxHeight: 560 }} onKeyDown={handleGridKey}>
+      <div ref={gridRef} tabIndex={0} className="overflow-auto flex-1 outline-none bg-background" style={{ maxHeight: 560 }} onKeyDown={handleGridKey}>
         <table className="border-collapse text-xs select-none" style={{ tableLayout: "fixed" }}>
           <thead>
             <tr>
