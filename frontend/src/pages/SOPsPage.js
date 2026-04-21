@@ -14,27 +14,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Plus, Loader2, FileText, Table2, Presentation, Upload,
-  CheckCircle2, Clock, Archive, Trash2, ExternalLink, Check, X
+  Clock, Trash2, ExternalLink, Check, X
 } from "lucide-react";
+import { PREDEFINED_CATEGORIES } from "./SOPEditorPage";
 
-const TYPE_ICONS = {
-  document: FileText,
-  spreadsheet: Table2,
-  presentation: Presentation,
-  file: Upload,
-};
-
-const TYPE_LABELS = {
-  document: "Document",
-  spreadsheet: "Spreadsheet",
-  presentation: "Presentation",
-  file: "File Upload",
-};
-
-const STATUS_BADGE = {
-  published: "default",
-  archived: "secondary",
-};
+const TYPE_ICONS = { document: FileText, spreadsheet: Table2, presentation: Presentation, file: Upload };
+const TYPE_LABELS = { document: "Document", spreadsheet: "Spreadsheet", presentation: "Presentation", file: "File" };
 
 export default function SOPsPage() {
   const { user } = useAuth();
@@ -47,12 +32,9 @@ export default function SOPsPage() {
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [search, setSearch] = useState("");
+  const [customCategory, setCustomCategory] = useState("");
   const [form, setForm] = useState({
-    title: "",
-    description: "",
-    category: "",
-    tags: "",
-    sop_type: "document",
+    title: "", description: "", category: "", tags: "", sop_type: "document",
   });
 
   const loadSops = useCallback(async () => {
@@ -72,8 +54,12 @@ export default function SOPsPage() {
     if (!form.title.trim()) { toast.error("Title is required"); return; }
     setSaving(true);
     try {
+      const effectiveCategory = form.category === "Others"
+        ? (customCategory || "Others")
+        : form.category;
       const payload = {
         ...form,
+        category: effectiveCategory || undefined,
         tags: form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
         content: form.sop_type === "document" ? { html: "" }
           : form.sop_type === "spreadsheet" ? { data: [[{ value: "" }]] }
@@ -84,6 +70,7 @@ export default function SOPsPage() {
       toast.success("SOP created");
       setShowCreate(false);
       setForm({ title: "", description: "", category: "", tags: "", sop_type: "document" });
+      setCustomCategory("");
       navigate(`/sops/${data.id}`);
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail));
@@ -105,24 +92,14 @@ export default function SOPsPage() {
 
   const handleApprove = async (sop, e) => {
     e.stopPropagation();
-    try {
-      await sopsApi.approve(sop.id);
-      toast.success("Edit approved");
-      loadSops();
-    } catch (err) {
-      toast.error(formatApiError(err?.response?.data?.detail));
-    }
+    try { await sopsApi.approve(sop.id); toast.success("Edit approved"); loadSops(); }
+    catch (err) { toast.error(formatApiError(err?.response?.data?.detail)); }
   };
 
   const handleReject = async (sop, e) => {
     e.stopPropagation();
-    try {
-      await sopsApi.reject(sop.id);
-      toast.success("Edit rejected");
-      loadSops();
-    } catch (err) {
-      toast.error(formatApiError(err?.response?.data?.detail));
-    }
+    try { await sopsApi.reject(sop.id); toast.success("Edit rejected"); loadSops(); }
+    catch (err) { toast.error(formatApiError(err?.response?.data?.detail)); }
   };
 
   const isOwner = (sop) => sop.owner === user?.id;
@@ -143,19 +120,12 @@ export default function SOPsPage() {
           <h1 className="text-2xl font-bold">SOPs</h1>
           <p className="text-muted-foreground text-sm mt-1">Standard Operating Procedures</p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>
-          <Plus className="h-4 w-4 mr-2" /> New SOP
-        </Button>
+        <Button onClick={() => setShowCreate(true)}><Plus className="h-4 w-4 mr-2" /> New SOP</Button>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
-        <Input
-          placeholder="Search by title…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-56"
-        />
+        <Input placeholder="Search by title…" value={search} onChange={e => setSearch(e.target.value)} className="w-56" />
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-40"><SelectValue placeholder="All types" /></SelectTrigger>
           <SelectContent>
@@ -203,11 +173,7 @@ export default function SOPsPage() {
                 const TypeIcon = TYPE_ICONS[sop.sop_type] || FileText;
                 const pendingForMe = sop.has_pending_edit && (isOwner(sop) || ["admin", "manager"].includes(user?.system_role));
                 return (
-                  <tr
-                    key={sop.id}
-                    className="hover:bg-muted/30 cursor-pointer"
-                    onClick={() => navigate(`/sops/${sop.id}`)}
-                  >
+                  <tr key={sop.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => navigate(`/sops/${sop.id}`)}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <TypeIcon className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -218,46 +184,24 @@ export default function SOPsPage() {
                           </Badge>
                         )}
                       </div>
-                      {sop.description && (
-                        <p className="text-muted-foreground text-xs mt-0.5 truncate max-w-xs">{sop.description}</p>
-                      )}
+                      {sop.description && <p className="text-muted-foreground text-xs mt-0.5 truncate max-w-xs">{sop.description}</p>}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{TYPE_LABELS[sop.sop_type]}</td>
                     <td className="px-4 py-3 text-muted-foreground">{sop.category || "—"}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline">v{sop.current_version}</Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={STATUS_BADGE[sop.status] || "secondary"}>
-                        {sop.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {sop.acknowledged_by?.length || 0}
-                    </td>
+                    <td className="px-4 py-3"><Badge variant="outline">v{sop.current_version}</Badge></td>
+                    <td className="px-4 py-3"><Badge variant={sop.status === "archived" ? "secondary" : "default"}>{sop.status}</Badge></td>
+                    <td className="px-4 py-3 text-muted-foreground">{sop.acknowledged_by?.length || 0}</td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
                         {pendingForMe && (
                           <>
-                            <Button size="sm" variant="outline" className="h-7 px-2 text-green-600 border-green-300 hover:bg-green-50"
-                              onClick={e => handleApprove(sop, e)}>
-                              <Check className="h-3 w-3" />
-                            </Button>
-                            <Button size="sm" variant="outline" className="h-7 px-2 text-red-600 border-red-300 hover:bg-red-50"
-                              onClick={e => handleReject(sop, e)}>
-                              <X className="h-3 w-3" />
-                            </Button>
+                            <Button size="sm" variant="outline" className="h-7 px-2 text-green-600 border-green-300 hover:bg-green-50" onClick={e => handleApprove(sop, e)}><Check className="h-3 w-3" /></Button>
+                            <Button size="sm" variant="outline" className="h-7 px-2 text-red-600 border-red-300 hover:bg-red-50" onClick={e => handleReject(sop, e)}><X className="h-3 w-3" /></Button>
                           </>
                         )}
-                        <Button size="sm" variant="ghost" className="h-7 px-2"
-                          onClick={() => navigate(`/sops/${sop.id}`)}>
-                          <ExternalLink className="h-3 w-3" />
-                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => navigate(`/sops/${sop.id}`)}><ExternalLink className="h-3 w-3" /></Button>
                         {canDelete(sop) && (
-                          <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive hover:text-destructive"
-                            onClick={() => setConfirmDelete(sop)}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive hover:text-destructive" onClick={() => setConfirmDelete(sop)}><Trash2 className="h-3 w-3" /></Button>
                         )}
                       </div>
                     </td>
@@ -272,14 +216,11 @@ export default function SOPsPage() {
       {/* Create dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>New SOP</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>New SOP</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
               <Label>Title <span className="text-destructive">*</span></Label>
-              <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="Enter SOP title" />
+              <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Enter SOP title" />
             </div>
             <div className="space-y-1.5">
               <Label>Type</Label>
@@ -295,19 +236,25 @@ export default function SOPsPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Description</Label>
-              <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="Brief description…" rows={2} />
+              <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description…" rows={2} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Category</Label>
-                <Input value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                  placeholder="e.g. HR, IT" />
+                <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                  <SelectContent>
+                    {PREDEFINED_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {form.category === "Others" && (
+                  <Input placeholder="Custom category name" value={customCategory}
+                    onChange={e => setCustomCategory(e.target.value)} className="mt-1 text-sm" />
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Tags (comma-separated)</Label>
-                <Input value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
-                  placeholder="tag1, tag2" />
+                <Input value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} placeholder="tag1, tag2" />
               </div>
             </div>
           </div>
@@ -324,15 +271,11 @@ export default function SOPsPage() {
       {/* Delete confirm */}
       <AlertDialog open={!!confirmDelete} onOpenChange={() => setConfirmDelete(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete "{confirmDelete?.title}"?</AlertDialogTitle>
-          </AlertDialogHeader>
-          <p className="text-sm text-muted-foreground px-6">This permanently deletes the SOP and all its version history.</p>
+          <AlertDialogHeader><AlertDialogTitle>Delete "{confirmDelete?.title}"?</AlertDialogTitle></AlertDialogHeader>
+          <p className="text-sm text-muted-foreground px-6">Permanently deletes SOP and all version history.</p>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
