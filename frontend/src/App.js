@@ -23,6 +23,8 @@ import StickyNotesPage from "@/pages/StickyNotesPage";
 import ShiftTemplatesPage from "@/pages/ShiftTemplatesPage";
 import HandoverPage from "@/pages/HandoverPage";
 import TasksPage from "@/pages/TasksPage";
+import SOPsPage from "@/pages/SOPsPage";
+import SOPEditorPage from "@/pages/SOPEditorPage";
 import ChatPage from "@/pages/ChatPage";
 import ChatLayout from "@/components/layout/ChatLayout";
 import { ChatProvider } from "@/contexts/ChatContext";
@@ -128,6 +130,8 @@ export default function App() {
             <Route path="/shift-templates" element={<ShiftTemplatesPage />} />
             <Route path="/handovers" element={<HandoverPage />} />
             <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/sops" element={<SOPsPage />} />
+            <Route path="/sops/:id" element={<SOPEditorPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/reports" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}><ReportsPage /></Suspense>} />
             <Route path="/audit-log" element={<AuditLogPage />} />

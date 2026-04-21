@@ -22,7 +22,7 @@ import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
   BarChart3, ScrollText, Settings, LogOut, Menu, X, Check, LayoutTemplate,
-  MessageSquare, Coffee, Plane, CircleDot, UserCircle, Camera, Loader2, ListChecks
+  MessageSquare, Coffee, Plane, CircleDot, UserCircle, Camera, Loader2, ListChecks, FileText
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -233,6 +233,7 @@ export default function AppLayout() {
     { to: "/shift-templates", icon: LayoutTemplate, label: "Shift Templates", show: isAdmin || isManager },
     { to: "/handovers", icon: ClipboardList, label: "Handovers", show: true },
     { to: "/tasks", icon: ListChecks, label: "Tasks", show: true },
+    { to: "/sops", icon: FileText, label: "SOPs", show: true },
     { to: "/sticky-notes", icon: StickyNote, label: "Sticky Notes", show: true },
     { to: "/chat", icon: MessageSquare, label: "Chat", show: true, external: true },
     { to: "/notifications", icon: Bell, label: "Notifications", show: true },

@@ -11,6 +11,7 @@ RESOURCES = [
     "announcements",
     "audit_logs",
     "settings",
+    "sops",
 ]
 
 ACTIONS = ["read", "create", "update", "delete", "approve", "export"]

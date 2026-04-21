@@ -310,4 +310,21 @@ export const iamApi = {
   myPermissions: () => api.get("/iam/me/permissions"),
 };
 
+// SOPs
+export const sopsApi = {
+  list: () => api.get("/sops"),
+  create: (data) => api.post("/sops", data),
+  get: (id) => api.get(`/sops/${id}`),
+  update: (id, data) => api.put(`/sops/${id}`, data),
+  delete: (id) => api.delete(`/sops/${id}`),
+  approve: (id) => api.put(`/sops/${id}/approve`),
+  reject: (id) => api.put(`/sops/${id}/reject`),
+  acknowledge: (id) => api.post(`/sops/${id}/acknowledge`),
+  transfer: (id, data) => api.post(`/sops/${id}/transfer`, data),
+  versions: (id) => api.get(`/sops/${id}/versions`),
+  revert: (id, versionId) => api.post(`/sops/${id}/revert/${versionId}`),
+  archive: (id) => api.post(`/sops/${id}/archive`),
+  upload: (formData) => api.post("/sops/upload", formData, { headers: { "Content-Type": undefined } }),
+};
+
 export default api;

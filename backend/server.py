@@ -48,6 +48,7 @@ from routes.tasks import router as tasks_router
 from routes.announcements import router as announcements_router
 from routes.iam import router as iam_router
 from routes.ldap import router as ldap_router
+from routes.sops import router as sops_router
 from tasks.purging import run_purging_task
 from tasks.due_date_reminders import run_due_date_reminders
 from ldap_service import run_ldap_sync_task
@@ -93,6 +94,7 @@ app.include_router(tasks_router)
 app.include_router(announcements_router)
 app.include_router(iam_router)
 app.include_router(ldap_router)
+app.include_router(sops_router)
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -388,6 +390,10 @@ async def startup():
         db.tasks.create_index([("org_id", 1), ("assigned_to", 1), ("status", 1)]),
         db.tasks.create_index([("status", 1), ("due_date", 1)]),
         db.handovers.create_index([("org_id", 1), ("created_at", -1)]),
+        db.sops.create_index([("org_id", 1), ("created_at", -1)]),
+        db.sops.create_index([("org_id", 1), ("owner", 1)]),
+        db.sops.create_index([("org_id", 1), ("has_pending_edit", 1)]),
+        db.sop_versions.create_index([("sop_id", 1), ("version", -1)]),
         # IAM indexes
         db.iam_groups.create_index([("org_id", 1), ("name", 1)]),
         db.iam_groups.create_index("is_global"),
