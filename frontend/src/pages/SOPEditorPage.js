@@ -925,7 +925,7 @@ export default function SOPEditorPage() {
     if (sop.sop_type === "document") {
       body = draft?.html || "<p>Empty document</p>";
     } else if (sop.sop_type === "spreadsheet") {
-      const { cells = {} } = draft || {};
+      const cells = resolveCells();
       let maxR = 0, maxC = 0;
       Object.keys(cells).forEach(k => { const [r, c] = k.split(",").map(Number); maxR = Math.max(maxR, r); maxC = Math.max(maxC, c); });
       if (!Object.keys(cells).length) { win.close(); toast.error("No data to export"); return; }
@@ -951,8 +951,20 @@ export default function SOPEditorPage() {
     win.document.close();
   };
 
+  const resolveCells = () => {
+    if (draft?.cells) return draft.cells;
+    if (draft?.data && Array.isArray(draft.data)) {
+      const c = {};
+      draft.data.forEach((row, r) => row?.forEach((cell, col) => {
+        if (cell?.value != null && cell.value !== "") c[`${r},${col}`] = { v: String(cell.value) };
+      }));
+      return c;
+    }
+    return {};
+  };
+
   const handleExportCSV = () => {
-    const { cells = {} } = draft || {};
+    const cells = resolveCells();
     if (!Object.keys(cells).length) { toast.error("No data to export"); return; }
     let maxR = 0, maxC = 0;
     Object.keys(cells).forEach(k => { const [r, c] = k.split(",").map(Number); maxR = Math.max(maxR, r); maxC = Math.max(maxC, c); });
