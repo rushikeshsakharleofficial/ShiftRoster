@@ -732,131 +732,84 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Tabs: Chats / Groups */}
-        <Tabs defaultValue="groups" className="flex-1 flex flex-col min-h-0">
-          <TabsList className="mx-3 mb-1 grid grid-cols-2 rounded-lg bg-muted/40 p-0.5 h-8 shrink-0">
-            <TabsTrigger
-              value="chats"
-              className="rounded-md text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
-            >
-              Chats
-            </TabsTrigger>
-            <TabsTrigger
-              value="groups"
-              className="rounded-md text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
-            >
-              Groups
-            </TabsTrigger>
-          </TabsList>
+        {/* Chat list — Channels + DMs */}
+        <ScrollArea className="flex-1">
+          {/* Channels */}
+          <div className="pt-3">
+            <div className="flex items-center justify-between px-4 pb-1">
+              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50">Channels</span>
+              <button
+                onClick={() => setShowCreateChannel(true)}
+                className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                title="New channel"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="px-2 space-y-0.5">
+              {filteredChannels.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground/40 px-2 py-2 italic">No channels yet</p>
+              ) : filteredChannels.map((ch) => (
+                <button
+                  key={ch.id}
+                  onClick={() => onChannelClick(ch.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors",
+                    activeChannelId === ch.id
+                      ? "bg-primary/10 text-foreground font-medium"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                >
+                  {ch.type === "private"
+                    ? <Lock className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                    : <Hash className="h-3.5 w-3.5 shrink-0 opacity-50" />}
+                  <span className="flex-1 truncate text-[13px]">{ch.name}</span>
+                  {unreadCounts[ch.id] > 0 && (
+                    <span className="h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-semibold">
+                      {unreadCounts[ch.id]}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Direct messages */}
-          <TabsContent value="chats" className="flex-1 mt-0 min-h-0 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="px-2 pb-3 pt-1 space-y-0.5">
-                {filteredDms.length === 0 ? (
-                  <div className="px-3 py-8 text-center text-[11px] text-muted-foreground/60">
-                    No direct messages
+          <div className="pt-4 pb-3">
+            <div className="flex items-center justify-between px-4 pb-1">
+              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50">Direct Messages</span>
+            </div>
+            <div className="px-2 space-y-0.5">
+              {filteredDms.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground/40 px-2 py-2 italic">No conversations</p>
+              ) : filteredDms.map((dm) => (
+                <button
+                  key={dm.id}
+                  onClick={() => onChannelClick(dm.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors",
+                    activeChannelId === dm.id
+                      ? "bg-primary/10 text-foreground"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                >
+                  <div className="relative shrink-0">
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage src={`${BACKEND_URL}${dm.avatar_url}`} />
+                      <AvatarFallback className={cn("text-[9px] font-bold text-white", getAvatarColor(dm.name))}>
+                        {dm.name?.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    {dm.is_online && (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500 ring-1 ring-card" />
+                    )}
                   </div>
-                ) : (
-                  filteredDms.map((dm) => (
-                    <button
-                      key={dm.id}
-                      onClick={() => onChannelClick(dm.id)}
-                      className={cn(
-                        "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors",
-                        activeChannelId === dm.id
-                          ? "bg-primary/10 text-foreground"
-                          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                      )}
-                    >
-                      <div className="relative shrink-0">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={`${BACKEND_URL}${dm.avatar_url}`} />
-                          <AvatarFallback
-                            className={cn("text-[11px] font-semibold text-white", getAvatarColor(dm.name))}
-                          >
-                            {dm.name?.charAt(0)}
-                          </AvatarFallback>
-                        </Avatar>
-                        {dm.is_online && (
-                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-card" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium truncate leading-tight text-foreground">
-                          {dm.name}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground/70 truncate mt-0.5">
-                          @{dm.username}
-                        </p>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </TabsContent>
-
-          {/* Channels */}
-          <TabsContent value="groups" className="flex-1 mt-0 min-h-0 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="px-2 pb-3 pt-1 space-y-0.5">
-                {filteredChannels.length === 0 ? (
-                  <div className="px-3 py-8 text-center text-[11px] text-muted-foreground/60">
-                    No groups
-                  </div>
-                ) : (
-                  filteredChannels.map((ch) => {
-                    const isGeneral = ch.name?.toLowerCase() === "general";
-                    return (
-                      <button
-                        key={ch.id}
-                        onClick={() => onChannelClick(ch.id)}
-                        className={cn(
-                          "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors",
-                          activeChannelId === ch.id
-                            ? "bg-primary/10 text-foreground"
-                            : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                        )}
-                      >
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 channel-avatar text-sm">
-                          {ch.type === "private" ? (
-                            <Lock className="h-4 w-4" />
-                          ) : (
-                            <Hash className="h-4 w-4" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-[13px] font-medium truncate leading-tight text-foreground">
-                              {ch.name}
-                            </p>
-                            {isGeneral && (
-                              <Badge
-                                variant="outline"
-                                className="h-4 px-1 text-[8px] font-bold uppercase tracking-wide border-primary/40 text-primary/80"
-                              >
-                                Pinned
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-muted-foreground/70 truncate mt-0.5">
-                            {ch.last_message_preview || "No messages yet"}
-                          </p>
-                        </div>
-                        {unreadCounts[ch.id] > 0 && (
-                          <Badge className="bg-primary text-primary-foreground text-[10px] h-4 px-1.5 min-w-[18px] justify-center rounded-full">
-                            {unreadCounts[ch.id]}
-                          </Badge>
-                        )}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            </ScrollArea>
-          </TabsContent>
-        </Tabs>
+                  <span className="flex-1 truncate text-[13px] text-foreground font-medium">{dm.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </ScrollArea>
 
         {/* Footer */}
         <div className="border-t border-border/60 px-2 py-2 shrink-0 flex flex-col gap-1">
@@ -916,11 +869,11 @@ export default function ChatPage() {
                   </AvatarFallback>
                 </Avatar>
               ) : (
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 channel-avatar text-sm">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-primary/10">
                   {activeChannel.type === "private" ? (
-                    <Lock className="h-4 w-4" />
+                    <Lock className="h-4 w-4 text-primary" />
                   ) : (
-                    <Hash className="h-4 w-4" />
+                    <Hash className="h-4 w-4 text-primary" />
                   )}
                 </div>
               )}
@@ -1061,11 +1014,11 @@ export default function ChatPage() {
                       className="p-4 bg-card rounded-xl border border-border flex items-center justify-between hover:border-primary/30 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-lg channel-avatar flex items-center justify-center shrink-0 text-sm">
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                           {ch.type === "private" ? (
-                            <Lock className="h-4 w-4" />
+                            <Lock className="h-4 w-4 text-primary" />
                           ) : (
-                            <Hash className="h-4 w-4" />
+                            <Hash className="h-4 w-4 text-primary" />
                           )}
                         </div>
                         <div className="min-w-0">
@@ -1129,7 +1082,7 @@ export default function ChatPage() {
               </p>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto py-4 space-y-3">
+            <div className="max-w-2xl mx-auto py-4 space-y-4">
               <AnimatePresence initial={false}>
                 {messageBlocks.map((block, idx) => {
                   if (block.kind === "day") {
@@ -1179,7 +1132,7 @@ export default function ChatPage() {
               inputDisabled && "opacity-60"
             )}
           >
-            <div className="max-w-3xl mx-auto px-4 py-3">
+            <div className="max-w-2xl mx-auto px-4 py-3">
               {replyTo && (
                 <div className="mb-2 flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-xl border-l-2 border-primary animate-in slide-in-from-bottom-2">
                   <Reply className="h-3 w-3 text-primary shrink-0" />
@@ -1209,7 +1162,7 @@ export default function ChatPage() {
                   onChange={handleFileSelect}
                 />
 
-                <div className="flex-1 flex items-end bg-muted/50 rounded-2xl min-h-[40px] focus-within:bg-muted/70 transition-colors">
+                <div className="flex-1 flex items-end bg-muted/40 border border-border/60 rounded-2xl min-h-[40px] focus-within:border-primary/40 transition-colors">
                   <Textarea
                     ref={inputRef}
                     value={inputText}
