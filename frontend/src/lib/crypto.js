@@ -66,11 +66,11 @@ async function loadOrCreate(userId) {
 }
 
 // Called after login/checkAuth. Generates keypair if missing and publishes public key.
-// publishFn(jwkString) should POST the JWK string to the backend.
-export async function initCrypto(userId, publishFn) {
+// forcePub=true when the server doesn't have the key yet (check from /auth/me response).
+export async function initCrypto(userId, publishFn, forcePub = false) {
   try {
     const { privateKey, publicKey, pubJwk, isNew } = await loadOrCreate(userId);
-    if (isNew) {
+    if (isNew || forcePub) {
       await publishFn(JSON.stringify(pubJwk));
     }
     return { privateKey, publicKey };
