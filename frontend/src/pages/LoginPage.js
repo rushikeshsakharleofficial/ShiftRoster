@@ -65,6 +65,8 @@ export default function LoginPage() {
       setError("Your Slack account is pending admin approval. You will be notified when access is granted.");
     } else if (slackError === "slack_denied") {
       setError("Slack sign-in was cancelled.");
+    } else if (slackError === "slack_workspace_not_configured") {
+      setError("Slack SSO is not fully configured. Contact your administrator.");
     } else if (slackError === "slack_workspace_not_allowed") {
       setError("Your Slack workspace is not allowed for this organization.");
     } else if (slackError) {

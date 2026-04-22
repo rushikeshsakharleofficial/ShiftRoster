@@ -629,8 +629,11 @@ async def slack_login():
 
     client_id = slack.get("client_id", "").strip()
     instance_base_url = (slack.get("instance_base_url") or "").rstrip("/")
+    allowed_workspace = (slack.get("allowed_workspace") or "").strip()
     if not client_id or not instance_base_url:
         raise HTTPException(status_code=400, detail="Slack SSO missing client_id or instance_base_url")
+    if not allowed_workspace:
+        raise HTTPException(status_code=400, detail="Slack SSO requires Allowed Workspace Domain to be configured before accepting logins")
 
     redirect_uri = f"{instance_base_url}/api/auth/slack/callback"
 
@@ -739,7 +742,10 @@ async def slack_callback(
 
     # Workspace restriction
     allowed_workspace = (slack.get("allowed_workspace") or "").strip().lower()
-    if allowed_workspace and team_domain.lower() != allowed_workspace:
+    if not allowed_workspace:
+        # Organization must configure workspace restriction before Slack SSO accepts logins
+        return fail("slack_workspace_not_configured")
+    if team_domain.lower() != allowed_workspace:
         return fail("slack_workspace_not_allowed")
 
     # Find or provision user

@@ -347,6 +347,10 @@ export default function SettingsPage() {
   };
 
   const handleSlackSave = async () => {
+    if (slackForm.enabled && !slackForm.allowed_workspace.trim()) {
+      toast.error("Allowed Workspace Domain is required when Slack SSO is enabled");
+      return;
+    }
     setSlackSaving(true);
     try {
       const { data } = await slackSsoApi.saveSettings(slackForm);
@@ -998,13 +1002,13 @@ export default function SettingsPage() {
 
             {/* Workspace restriction */}
             <div className="space-y-1.5">
-              <Label>Allowed Workspace Domain <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Label>Allowed Workspace Domain <span className="text-destructive">*</span></Label>
               <Input
                 placeholder="your-company (Slack team domain, without .slack.com)"
                 value={slackForm.allowed_workspace}
                 onChange={e => setSlackForm(f => ({ ...f, allowed_workspace: e.target.value.trim().toLowerCase() }))}
               />
-              <p className="text-xs text-muted-foreground">Leave blank to allow any Slack workspace.</p>
+              <p className="text-xs text-muted-foreground">Required. Only users from this Slack workspace can log in. Find it in your Slack workspace URL: <code>your-company.slack.com</code>.</p>
             </div>
 
             <Separator />
