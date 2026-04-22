@@ -812,22 +812,21 @@ export default function ChatPage() {
         </ScrollArea>
 
         {/* Footer */}
-        <div className="border-t border-border/60 px-2 py-2 shrink-0 flex flex-col gap-1">
-          <div className="flex items-center gap-1">
-            <ThemeToggle />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9"
-              onClick={() => navigate("/settings")}
-              title="Settings"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          </div>
+        <div className="border-t border-border/60 px-2 py-2 shrink-0 flex items-center gap-1">
+          <ThemeToggle />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            onClick={() => navigate("/settings")}
+            title="Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+          <div className="flex-1 min-w-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full h-9 px-2 gap-2 text-xs font-medium justify-start">
+              <Button variant="ghost" className="w-full h-9 px-2 gap-2 text-xs font-medium justify-start min-w-0">
                 <Avatar className="h-6 w-6">
                   <AvatarFallback
                     className={cn("text-[10px] text-white", getAvatarColor(userName))}
@@ -852,6 +851,7 @@ export default function ChatPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
       </aside>
 
