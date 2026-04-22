@@ -110,9 +110,19 @@ function StoryViewer({ groups, startGroupIdx, currentUserId, onClose, onDelete }
   const lastTickRef = useRef(null);
   const progressRef = useRef(0);
 
-  const group = groups[groupIdx];
-  const story = group?.stories[storyIdx];
-  const totalStories = group?.stories.length || 1;
+  // Clamp indices when groups mutate (e.g. after deletion)
+  const safeGroupIdx = groups.length > 0 ? Math.min(groupIdx, groups.length - 1) : 0;
+  const safeGroup = groups[safeGroupIdx];
+  const safeStoryIdx = safeGroup ? Math.min(storyIdx, safeGroup.stories.length - 1) : 0;
+  const story = safeGroup?.stories[safeStoryIdx];
+  const group = safeGroup;
+  const totalStories = safeGroup?.stories.length || 1;
+
+  // Sync state if indices drifted
+  useEffect(() => {
+    if (safeGroupIdx !== groupIdx) { setGroupIdx(safeGroupIdx); setStoryIdx(0); }
+    else if (safeStoryIdx !== storyIdx) setStoryIdx(safeStoryIdx);
+  }, [safeGroupIdx, safeStoryIdx, groupIdx, storyIdx]);
 
   // Mark viewed
   useEffect(() => {
@@ -171,7 +181,7 @@ function StoryViewer({ groups, startGroupIdx, currentUserId, onClose, onDelete }
 
   if (!group || !story) return null;
 
-  const isOwn = story.user_id === currentUserId;
+  const isOwn = String(story.user_id) === String(currentUserId);
 
   return (
     <motion.div
@@ -195,8 +205,8 @@ function StoryViewer({ groups, startGroupIdx, currentUserId, onClose, onDelete }
       >
         <StoryContent story={story} />
 
-        {/* Progress + header overlay */}
-        <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/50 to-transparent pb-6">
+        {/* Progress + header overlay — z-20 so it sits above tap zones */}
+        <div className="absolute inset-x-0 top-0 z-20 bg-gradient-to-b from-black/50 to-transparent pb-6">
           <ProgressBars count={totalStories} active={storyIdx} progress={progress} />
           <div className="flex items-center justify-between px-3 pt-2">
             <div className="flex items-center gap-2">
@@ -233,9 +243,9 @@ function StoryViewer({ groups, startGroupIdx, currentUserId, onClose, onDelete }
           </div>
         </div>
 
-        {/* Tap zones */}
-        <div className="absolute inset-y-0 left-0 w-1/3" onClick={goPrev} />
-        <div className="absolute inset-y-0 right-0 w-1/3" onClick={goNext} />
+        {/* Tap zones — z-10, below header overlay (z-20) */}
+        <div className="absolute inset-y-0 left-0 w-1/3 z-10" onClick={goPrev} />
+        <div className="absolute inset-y-0 right-0 w-1/3 z-10" onClick={goNext} />
       </motion.div>
 
       {/* Prev/Next group arrows */}
@@ -490,9 +500,13 @@ export function StoryStrip({ currentUser }) {
   const handleDelete = async (storyId) => {
     try {
       await storiesApi.delete(storyId);
-      setStories((prev) => prev.filter((s) => s.id !== storyId));
+      setStories((prev) => {
+        const next = prev.filter((s) => s.id !== storyId);
+        // Close viewer if no stories remain at all
+        if (next.length === 0) setViewerOpen(false);
+        return next;
+      });
       toast.success("Story deleted");
-      if (stories.length <= 1) setViewerOpen(false);
     } catch {
       toast.error("Failed to delete story");
     }
