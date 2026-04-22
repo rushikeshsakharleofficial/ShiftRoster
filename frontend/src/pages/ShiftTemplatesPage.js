@@ -305,15 +305,6 @@ export default function ShiftTemplatesPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Required Staff Count</Label>
-              <Input
-                data-testid="template-count-input"
-                type="number" min={1} max={100}
-                value={form.required_count}
-                onChange={(e) => setForm({ ...form, required_count: parseInt(e.target.value, 10) || 1 })}
-              />
-            </div>
 
             <div className="space-y-1.5">
               <Label>Color</Label>
