@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { authApi, orgApi, formatApiError } from "@/lib/api";
+import { authApi, orgApi, slackSsoApi, formatApiError } from "@/lib/api";
 import { CalendarDays, ArrowRight, Loader2, Shield, KeyRound, Eye, EyeOff, Check } from "lucide-react";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 
@@ -42,15 +42,34 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [orgBrand, setOrgBrand] = useState({ name: "ShiftRoster", logo_url: "" });
+  const [orgBrand, setOrgBrand] = useState({ name: "ShiftRoster", logo_url: "", slack_enabled: false });
+  const [slackEnabled, setSlackEnabled] = useState(false);
 
   useEffect(() => {
     orgApi.get().then(({ data }) => {
-      setOrgBrand({ 
-        name: data.brand_name || data.name || "ShiftRoster", 
-        logo_url: data.logo_url || "" 
+      setOrgBrand({
+        name: data.brand_name || data.name || "ShiftRoster",
+        logo_url: data.logo_url || "",
+        slack_enabled: !!data.slack_enabled,
       });
+      setSlackEnabled(!!data.slack_enabled);
     }).catch(() => {});
+    slackSsoApi.getConfig().then(({ data }) => {
+      setSlackEnabled(!!data.enabled);
+    }).catch(() => {});
+
+    // Handle Slack callback errors shown in query params
+    const params = new URLSearchParams(window.location.search);
+    const slackError = params.get("error");
+    if (slackError === "slack_approval_pending") {
+      setError("Your Slack account is pending admin approval. You will be notified when access is granted.");
+    } else if (slackError === "slack_denied") {
+      setError("Slack sign-in was cancelled.");
+    } else if (slackError === "slack_workspace_not_allowed") {
+      setError("Your Slack workspace is not allowed for this organization.");
+    } else if (slackError) {
+      setError("Slack sign-in failed. Please try again or contact your administrator.");
+    }
   }, []);
 
   // MFA state
@@ -531,6 +550,33 @@ export default function LoginPage() {
               }
             </button>
           </form>
+
+          {/* Slack SSO */}
+          {slackEnabled && (
+            <div className="mt-4">
+              <div className="relative flex items-center gap-3 mb-4">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-muted-foreground">or</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+              <a
+                href="/api/auth/slack/login"
+                className={[
+                  "w-full flex items-center justify-center gap-3 py-[0.6875rem] px-4 rounded-lg font-semibold text-[0.9375rem]",
+                  "border border-border bg-card text-foreground",
+                  "hover:bg-muted transition-colors duration-150",
+                ].join(" ")}
+              >
+                <svg width="20" height="20" viewBox="0 0 122.8 122.8" aria-hidden="true">
+                  <path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#E01E5A"/>
+                  <path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#36C5F0"/>
+                  <path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2EB67D"/>
+                  <path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#ECB22E"/>
+                </svg>
+                Sign in with Slack
+              </a>
+            </div>
+          )}
 
           {/* Recovery Dialog (Shared for MFA and Password) */}
           {recoveryOpen && (

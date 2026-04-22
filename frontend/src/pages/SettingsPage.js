@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { orgApi, authApi, usersApi, ldapApi, formatApiError } from "@/lib/api";
+import { orgApi, authApi, usersApi, ldapApi, slackSsoApi, formatApiError } from "@/lib/api";
 import AccessRuleBook from "@/components/AccessRuleBook";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle, ImageIcon, Upload, X, Mail, Server, Eye, EyeOff, Lock, Trash2, Zap, Building2, MessageSquare, BookOpen } from "lucide-react";
+import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle, ImageIcon, Upload, X, Mail, Server, Eye, EyeOff, Lock, Trash2, Zap, Building2, MessageSquare, BookOpen, LogIn } from "lucide-react";
 import { generateMnemonic } from "@/lib/crypto";
 
 export default function SettingsPage() {
@@ -155,6 +155,21 @@ export default function SettingsPage() {
   const [ldapPasswordVisible, setLdapPasswordVisible] = useState(false);
   const [ldapResult, setLdapResult] = useState(null);
 
+  // Slack SSO state
+  const [slackForm, setSlackForm] = useState({
+    enabled: false,
+    client_id: "",
+    client_secret: "",
+    allowed_workspace: "",
+    auto_provision: true,
+    default_role: "employee",
+    trust_slack_as_mfa: false,
+    instance_base_url: "",
+  });
+  const [slackSaving, setSlackSaving] = useState(false);
+  const [slackSecretVisible, setSlackSecretVisible] = useState(false);
+  const [ssoConflictDialog, setSsoConflictDialog] = useState({ open: false, message: "", onConfirm: null });
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -198,6 +213,11 @@ export default function SettingsPage() {
             bind_password: ldapRes.data.bind_password || "",
             mapping: { ...current.mapping, ...(ldapRes.data.mapping || {}) },
           }));
+        } catch {}
+        try {
+          if (data.slack_oidc) {
+            setSlackForm((cur) => ({ ...cur, ...data.slack_oidc }));
+          }
         } catch {}
       } catch {}
       setMfaEnabled(!!user?.mfa_enabled);
@@ -323,6 +343,19 @@ export default function SettingsPage() {
       setLdapResult({ ok: false, msg: formatApiError(e.response?.data?.detail) });
     } finally {
       setLdapSyncing(false);
+    }
+  };
+
+  const handleSlackSave = async () => {
+    setSlackSaving(true);
+    try {
+      const { data } = await slackSsoApi.saveSettings(slackForm);
+      if (data.slack_oidc) setSlackForm((cur) => ({ ...cur, ...data.slack_oidc }));
+      toast.success("Slack SSO settings saved");
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Failed to save Slack SSO settings");
+    } finally {
+      setSlackSaving(false);
     }
   };
 
@@ -470,6 +503,7 @@ export default function SettingsPage() {
     { id: "organization", label: "Organization",  icon: Building2,     show: isAdmin },
     { id: "email",        label: "Email",         icon: Mail,          show: isAdmin },
     { id: "ldap",         label: "LDAP / AD",     icon: Server,        show: isAdmin },
+    { id: "slack_sso",    label: "Slack SSO",     icon: LogIn,         show: isAdmin },
     { id: "security",     label: "Security",      icon: Shield,        show: true },
     { id: "chat",         label: "Chat",          icon: MessageSquare, show: true },
     { id: "access",       label: "Access Rules",  icon: BookOpen,      show: isAdmin || isManager },
@@ -734,7 +768,21 @@ export default function SettingsPage() {
                 <p className="text-sm font-medium">Enable LDAP login</p>
                 <p className="text-xs text-muted-foreground">LDAP-managed users will use their directory password</p>
               </div>
-              <Toggle checked={ldapForm.enabled} onCheckedChange={(v) => setLdapForm(f => ({ ...f, enabled: v }))} />
+              <Toggle checked={ldapForm.enabled} onCheckedChange={(v) => {
+                if (v && slackForm.enabled) {
+                  setSsoConflictDialog({
+                    open: true,
+                    message: "Enabling LDAP login will disable Slack SSO. Only one SSO method can be active at a time.",
+                    onConfirm: () => {
+                      setLdapForm(f => ({ ...f, enabled: true }));
+                      setSlackForm(f => ({ ...f, enabled: false }));
+                      setSsoConflictDialog(d => ({ ...d, open: false }));
+                    },
+                  });
+                } else {
+                  setLdapForm(f => ({ ...f, enabled: v }));
+                }
+              }} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -840,6 +888,171 @@ export default function SettingsPage() {
                 {ldapResult.ok ? "OK" : "Error"}: {ldapResult.msg}
               </p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Slack SSO */}
+      {activeSection === "slack_sso" && isAdmin && (
+        <Card className="border">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <LogIn className="h-5 w-5 text-primary" /> Slack SSO
+            </CardTitle>
+            <CardDescription>
+              Allow users to sign in with their Slack account via OpenID Connect.
+              New Slack users are created as <strong>pending</strong> — an admin must activate them before they can log in.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* Enable toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Enable Slack SSO</p>
+                <p className="text-xs text-muted-foreground">Show "Sign in with Slack" on the login page</p>
+              </div>
+              <Toggle checked={slackForm.enabled} onCheckedChange={(v) => {
+                if (v && ldapForm.enabled) {
+                  setSsoConflictDialog({
+                    open: true,
+                    message: "Enabling Slack SSO will disable LDAP login. Only one SSO method can be active at a time.",
+                    onConfirm: () => {
+                      setSlackForm(f => ({ ...f, enabled: true }));
+                      setLdapForm(f => ({ ...f, enabled: false }));
+                      setSsoConflictDialog(d => ({ ...d, open: false }));
+                    },
+                  });
+                } else {
+                  setSlackForm(f => ({ ...f, enabled: v }));
+                }
+              }} />
+            </div>
+
+            <Separator />
+
+            {/* OAuth credentials */}
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-1.5">
+                <Label>Client ID</Label>
+                <Input
+                  placeholder="Your Slack app's Client ID"
+                  value={slackForm.client_id}
+                  onChange={e => setSlackForm(f => ({ ...f, client_id: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Client Secret</Label>
+                <div className="relative">
+                  <Input
+                    type={slackSecretVisible ? "text" : "password"}
+                    placeholder={slackForm.client_secret === "__KEEP_EXISTING_SLACK_SECRET__" ? "••••••••••••••••" : "Your Slack app's Client Secret"}
+                    value={slackForm.client_secret === "__KEEP_EXISTING_SLACK_SECRET__" ? "" : slackForm.client_secret}
+                    onChange={e => setSlackForm(f => ({ ...f, client_secret: e.target.value }))}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    onClick={() => setSlackSecretVisible(v => !v)}
+                  >
+                    {slackSecretVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {slackForm.client_secret === "__KEEP_EXISTING_SLACK_SECRET__" && (
+                  <p className="text-xs text-muted-foreground">A client secret is already saved. Leave blank to keep it.</p>
+                )}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Instance URL (determines redirect_uri) */}
+            <div className="space-y-1.5">
+              <Label>Instance Base URL</Label>
+              <Input
+                placeholder="https://your-domain.com or http://89.167.44.42:8080"
+                value={slackForm.instance_base_url}
+                onChange={e => setSlackForm(f => ({ ...f, instance_base_url: e.target.value.trim() }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Used to build the OAuth redirect URI. Copy the value below into your Slack app's "Redirect URLs" field.
+              </p>
+              {slackForm.instance_base_url && (
+                <div className="flex items-center gap-2 mt-1 p-2 rounded bg-muted text-xs font-mono break-all">
+                  {slackForm.instance_base_url.replace(/\/$/, "")}/api/auth/slack/callback
+                  <button
+                    type="button"
+                    className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${slackForm.instance_base_url.replace(/\/$/, "")}/api/auth/slack/callback`);
+                      toast.success("Copied redirect URI");
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Workspace restriction */}
+            <div className="space-y-1.5">
+              <Label>Allowed Workspace Domain <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input
+                placeholder="your-company (Slack team domain, without .slack.com)"
+                value={slackForm.allowed_workspace}
+                onChange={e => setSlackForm(f => ({ ...f, allowed_workspace: e.target.value.trim().toLowerCase() }))}
+              />
+              <p className="text-xs text-muted-foreground">Leave blank to allow any Slack workspace.</p>
+            </div>
+
+            <Separator />
+
+            {/* Auto provision + default role */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Auto-provision new users</p>
+                <p className="text-xs text-muted-foreground">
+                  Create an account for unknown emails. New accounts start as <strong>pending</strong> — admin must activate before first login.
+                </p>
+              </div>
+              <Toggle checked={slackForm.auto_provision} onCheckedChange={(v) => setSlackForm(f => ({ ...f, auto_provision: v }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Default role for new users</Label>
+              <Select value={slackForm.default_role} onValueChange={v => setSlackForm(f => ({ ...f, default_role: v }))}>
+                <SelectTrigger className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="readonly">Read-only</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Admin must activate the user and can change the role before approval.</p>
+            </div>
+
+            <Separator />
+
+            {/* MFA trust */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Trust Slack as second factor</p>
+                <p className="text-xs text-muted-foreground">
+                  If disabled, users with TOTP enabled must still complete TOTP after Slack login.
+                </p>
+              </div>
+              <Toggle checked={slackForm.trust_slack_as_mfa} onCheckedChange={(v) => setSlackForm(f => ({ ...f, trust_slack_as_mfa: v }))} />
+            </div>
+
+            <div className="pt-2">
+              <Button onClick={handleSlackSave} disabled={slackSaving} size="sm">
+                {slackSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                Save Slack SSO Settings
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -1463,6 +1676,29 @@ export default function SettingsPage() {
         </div>
       )}
       </div>
+
+      {/* SSO conflict confirmation dialog */}
+      {ssoConflictDialog.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-xl space-y-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-semibold text-sm">Switch SSO Method</p>
+                <p className="text-sm text-muted-foreground mt-1">{ssoConflictDialog.message}</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setSsoConflictDialog(d => ({ ...d, open: false }))}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={ssoConflictDialog.onConfirm}>
+                Proceed
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

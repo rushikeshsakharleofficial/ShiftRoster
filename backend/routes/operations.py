@@ -585,6 +585,9 @@ async def get_organization(request: Request):
     if org.get("ldap_settings"):
         from ldap_service import public_ldap_settings
         org["ldap_settings"] = public_ldap_settings(org.get("ldap_settings"))
+    if org.get("slack_oidc") is not None:
+        from slack_service import public_slack_settings
+        org["slack_oidc"] = public_slack_settings(org.get("slack_oidc"))
     return serialize_doc(org)
 
 
@@ -603,7 +606,7 @@ async def update_organization(request: Request):
                    "attendance_enabled",
                    "smtp_host", "smtp_port", "smtp_username", "smtp_password",
                    "smtp_from_email", "smtp_from_name", "smtp_use_tls", "smtp_enabled",
-                   "chat_features", "purge_policy_days", "password_policy"]
+                   "chat_features", "purge_policy_days", "password_policy", "slack_oidc"]
     else:
         allowed = ["attendance_enabled"]
 
@@ -641,6 +644,18 @@ async def update_organization(request: Request):
 
     if "smtp_password" in body:
         update["smtp_password"] = body["smtp_password"]
+
+    if "slack_oidc" in body and is_admin:
+        from slack_service import normalize_slack_settings
+        existing_org = await db.organizations.find_one({"_id": ObjectId(current.get("org_id"))})
+        update["slack_oidc"] = normalize_slack_settings(
+            body["slack_oidc"],
+            existing=(existing_org or {}).get("slack_oidc"),
+        )
+        # Mutual exclusion: enabling Slack SSO disables LDAP login
+        if update["slack_oidc"].get("enabled"):
+            update["ldap_settings.enabled"] = False
+
     update["updated_at"] = datetime.now(timezone.utc)
 
     await db.organizations.update_one({"_id": ObjectId(current.get("org_id"))}, {"$set": update})

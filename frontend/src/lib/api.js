@@ -311,6 +311,13 @@ export const iamApi = {
 };
 
 // SOPs
+export const slackSsoApi = {
+  getConfig: () => api.get("/auth/slack/config"),
+  loginUrl: () => `${api.defaults.baseURL}/auth/slack/login`,
+  getSettings: () => api.get("/organization").then(r => ({ data: r.data.slack_oidc || {} })),
+  saveSettings: (data) => api.put("/organization", { slack_oidc: data }),
+};
+
 export const sopsApi = {
   list: () => api.get("/sops"),
   create: (data) => api.post("/sops", data),
