@@ -1,0 +1,2 @@
+  warning: could not transcribe frontend/test-results/shiftroster-ShiftRoster-E2E-Tests-Complete-User-Workflow-chromium/video.webm: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+[]
