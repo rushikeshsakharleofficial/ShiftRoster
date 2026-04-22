@@ -138,6 +138,41 @@ export async function aesDecrypt(aesKey, b64) {
   return new TextDecoder().decode(plain);
 }
 
+// Phase 3/4: Per-channel / per-story AES-256 key management
+
+export async function generateChannelKey() {
+  const key = await crypto.subtle.generateKey(
+    { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]
+  );
+  const raw = await crypto.subtle.exportKey("raw", key);
+  return { key, raw: btoa(String.fromCharCode(...new Uint8Array(raw))) };
+}
+
+export async function importChannelKey(rawB64) {
+  const bytes = Uint8Array.from(atob(rawB64), (c) => c.charCodeAt(0));
+  return crypto.subtle.importKey("raw", bytes, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+
+// ECIES wrap: encrypt channelKeyRaw (b64 string) for a member's public key.
+// Returns {wrapped: b64, eph_pub: jwk_string} — store both per member.
+export async function wrapKeyForMember(channelKeyRaw, memberPubKeyJwk) {
+  const eph = await crypto.subtle.generateKey(
+    { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]
+  );
+  const memberPub = await importPublicKey(memberPubKeyJwk);
+  const wrapKey = await deriveSharedKey(eph.privateKey, memberPub);
+  const wrapped = await aesEncrypt(wrapKey, channelKeyRaw);
+  const ephPubJwk = await crypto.subtle.exportKey("jwk", eph.publicKey);
+  return { wrapped, eph_pub: JSON.stringify(ephPubJwk) };
+}
+
+// ECIES unwrap: recover channelKeyRaw (b64 string) using own private key + stored eph_pub.
+export async function unwrapKeyFromMember(wrapped, ephPubJwkStr, myPrivKey) {
+  const ephPub = await importPublicKey(ephPubJwkStr);
+  const wrapKey = await deriveSharedKey(myPrivKey, ephPub);
+  return aesDecrypt(wrapKey, wrapped);
+}
+
 // Phase 2: DM encrypt/decrypt using ECDH-derived shared key
 export async function encryptDM(myPrivKey, theirPubKeyJwk, plaintext) {
   const theirPub = await importPublicKey(theirPubKeyJwk);

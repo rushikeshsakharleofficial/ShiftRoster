@@ -43,7 +43,9 @@ async def create_text_story(request: Request):
     user = await get_current_user(request)
     body = await request.json()
     text = (body.get("text") or "").strip()
-    if not text:
+    ciphertext = body.get("ciphertext")  # encrypted story text (Phase 4 E2EE)
+    e2ee_keys = body.get("e2ee_keys")   # {user_id: {wrapped, eph_pub}}
+    if not text and not ciphertext:
         raise HTTPException(400, "text required")
     bg_color = body.get("bg_color", "#6366f1")
     now = datetime.now(timezone.utc)
@@ -55,6 +57,8 @@ async def create_text_story(request: Request):
         "user_initials": ((user.get("full_name") or user.get("username") or "?")[:2]).upper(),
         "type": "text",
         "text": text,
+        "ciphertext": ciphertext,
+        "e2ee_keys": e2ee_keys or {},
         "bg_color": bg_color,
         "file_url": None,
         "file_type": None,

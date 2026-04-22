@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useChat } from "@/contexts/ChatContext";
-import { chatApi, orgApi, usersApi } from "@/lib/api";
+import { chatApi, orgApi, usersApi, cryptoApi } from "@/lib/api";
 import { getAvatarColor, cn } from "@/lib/utils";
 import { FileCard, getFileFormat } from "@/components/ui/file-card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -158,7 +158,7 @@ const isOnlyEmojis = (text) => {
 
 // Renders a contiguous block of messages from the same author. Avatar + name
 // appear once at the top; subsequent bubbles are tightly stacked.
-function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete, onReply }) {
+function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete, onReply, decryptedCache }) {
   const first = messages[0];
   const cached = userCache?.[first.sender_username] || userCache?.[first.sender_id];
   const displayName =
@@ -174,7 +174,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
 
   const startEdit = (msg) => {
     setEditingId(msg.id);
-    setEditText(msg.text || "");
+    setEditText(decryptedCache?.[msg.id] ?? msg.text ?? "");
   };
 
   const cancelEdit = () => {
@@ -210,7 +210,8 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
           <span className="text-xs font-semibold text-foreground ml-1 mb-0.5 leading-none">{displayName}</span>
         )}
         {messages.map((msg, idx) => {
-          const emojiOnly = isOnlyEmojis(msg.text);
+          const displayText = decryptedCache?.[msg.id] ?? msg.text;
+          const emojiOnly = isOnlyEmojis(displayText);
           const isLast = idx === messages.length - 1;
           const isEditing = editingId === msg.id;
           return (
@@ -236,8 +237,8 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
               ) : (
                 <>
                   <div className={cn("flex items-center gap-1.5 group/msg", isOwn ? "flex-row-reverse" : "flex-row")}>
-                    {msg.text && (emojiOnly && !msg.file_url ? (
-                      <div className="text-4xl leading-none py-0.5">{msg.text}</div>
+                    {displayText && (emojiOnly && !msg.file_url ? (
+                      <div className="text-4xl leading-none py-0.5">{displayText}</div>
                     ) : (
                       <div
                         className={cn(
@@ -248,7 +249,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                             : cn("rounded-2xl", isLast && "rounded-bl-md")
                         )}
                       >
-                        {msg.text}
+                        {displayText}
                         {msg.edited && <span className="text-[10px] opacity-60 ml-1">(edited)</span>}
                       </div>
                     ))}
@@ -262,9 +263,9 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                         className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                         title="Reply"
                       ><Reply className="h-3 w-3" /></button>
-                      {msg.text && (
+                      {displayText && (
                         <button
-                          onClick={() => { navigator.clipboard.writeText(msg.text); toast.success("Copied"); }}
+                          onClick={() => { navigator.clipboard.writeText(displayText); toast.success("Copied"); }}
                           className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                           title="Copy"
                         ><Copy className="h-3 w-3" /></button>
@@ -334,8 +335,11 @@ export default function ChatPage() {
 
   const [inputText, setInputText] = useState("");
   const [isE2EEnabled, setIsE2EEnabled] = useState(false);
-  const [myKeyPair, setMyKeyPair] = useState(null);
   const [orgGifsEnabled, setOrgGifsEnabled] = useState(false);
+  const [myPrivKey, setMyPrivKey] = useState(null);
+  const [peerPubKeyCache, setPeerPubKeyCache] = useState({});    // userId → jwk string
+  const [channelKeyCache, setChannelKeyCache] = useState({});    // channelId → AES CryptoKey
+  const [decryptedCache, setDecryptedCache] = useState({});      // msgId → plaintext
 
   const [pendingFiles, setPendingFiles] = useState([]);
   const [replyTo, setReplyTo] = useState(null);
@@ -493,23 +497,66 @@ export default function ChatPage() {
     }
   }, [activeChannelId, isActiveDM, loadMessages, markRead]);
 
-  // Crypto + features init
+  // Org feature flags
   useEffect(() => {
-    const init = async () => {
-      try {
-        const { data } = await orgApi.get();
-        setIsE2EEnabled(data.chat_features?.encryption_enabled || false);
-        setOrgGifsEnabled(data.chat_features?.gifs_enabled || false);
-        if (data.chat_features?.encryption_enabled && !myKeyPair) {
-          const keys = await crypto.generateKeyPair();
-          setMyKeyPair(keys);
+    orgApi.get().then(({ data }) => {
+      setIsE2EEnabled(data.chat_features?.encryption_enabled || false);
+      setOrgGifsEnabled(data.chat_features?.gifs_enabled || false);
+    }).catch(() => {});
+  }, []);
+
+  // Load own private key from IndexedDB (generated by initCrypto in AuthContext)
+  useEffect(() => {
+    if (!user?.id) return;
+    crypto.getPrivateKey(user.id).then((k) => { if (k) setMyPrivKey(k); }).catch(console.error);
+  }, [user?.id]);
+
+  // Unwrap channel AES key when switching to an E2EE-enabled channel
+  useEffect(() => {
+    if (!activeChannelId || !myPrivKey || isActiveDM) return;
+    if (channelKeyCache[activeChannelId]) return;
+    const ch = channels.find((c) => c.id === activeChannelId);
+    const myEntry = ch?.e2ee_keys?.[user?.id];
+    if (!myEntry) return;
+    crypto.unwrapKeyFromMember(myEntry.wrapped, myEntry.eph_pub, myPrivKey)
+      .then((rawB64) => crypto.importChannelKey(rawB64))
+      .then((key) => setChannelKeyCache((prev) => ({ ...prev, [activeChannelId]: key })))
+      .catch(console.error);
+  }, [activeChannelId, myPrivKey, isActiveDM, channels]);
+
+  // Decrypt incoming encrypted messages
+  useEffect(() => {
+    if (!myPrivKey) return;
+    const allMsgs = Object.values(currentMessages ?? {}).flat();
+    const pending = allMsgs.filter((m) => m.ciphertext && !decryptedCache[m.id]);
+    if (!pending.length) return;
+
+    (async () => {
+      const updates = {};
+      for (const msg of pending) {
+        try {
+          if (isActiveDM) {
+            const activeDM = dms.find((d) => d.id === activeChannelId);
+            const peerId = activeDM?.members?.find((m) => m !== user.id);
+            if (!peerId) { updates[msg.id] = "🔒 Encrypted"; continue; }
+            let peerJwk = peerPubKeyCache[peerId];
+            if (!peerJwk) {
+              const r = await cryptoApi.getPublicKey(peerId);
+              peerJwk = r.data.public_key;
+              setPeerPubKeyCache((prev) => ({ ...prev, [peerId]: peerJwk }));
+            }
+            updates[msg.id] = await crypto.decryptDM(myPrivKey, peerJwk, msg.ciphertext);
+          } else {
+            const chKey = channelKeyCache[activeChannelId];
+            if (chKey) updates[msg.id] = await crypto.aesDecrypt(chKey, msg.ciphertext);
+          }
+        } catch {
+          updates[msg.id] = "🔒 Encrypted";
         }
-      } catch (err) {
-        console.error("Chat init failed:", err);
       }
-    };
-    init();
-  }, [myKeyPair]);
+      if (Object.keys(updates).length) setDecryptedCache((prev) => ({ ...prev, ...updates }));
+    })();
+  }, [currentMessages, myPrivKey, activeChannelId, isActiveDM, channelKeyCache]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -569,18 +616,32 @@ export default function ChatPage() {
       }
 
       let basePayload = { text, is_encrypted: false };
-      if (isE2EEnabled && myKeyPair) {
-        const keyRes = await chatApi.getChannelMembers(activeChannelId);
-        const members = keyRes.data.members || [];
-        const recipientKeys = {};
-        members.forEach((m) => {
-          if (m.public_key) recipientKeys[m.id] = m.public_key;
-        });
-        const myPubKey = await crypto.exportPublicKey(myKeyPair.publicKey);
-        recipientKeys[user.id] = myPubKey;
-        if (Object.keys(recipientKeys).length > 0) {
-          const encrypted = await crypto.encryptMessage(text, recipientKeys);
-          basePayload = { text: encrypted.ciphertext, iv: encrypted.iv, encrypted_keys: encrypted.encryptedKeys, is_encrypted: true };
+      if (myPrivKey && text) {
+        if (isActiveDM) {
+          // Phase 2: ECDH DM encryption
+          const activeDM = dms.find((d) => d.id === activeChannelId);
+          const peerId = activeDM?.members?.find((m) => m !== user.id);
+          if (peerId) {
+            let peerJwk = peerPubKeyCache[peerId];
+            if (!peerJwk) {
+              try {
+                const r = await cryptoApi.getPublicKey(peerId);
+                peerJwk = r.data.public_key;
+                setPeerPubKeyCache((prev) => ({ ...prev, [peerId]: peerJwk }));
+              } catch {}
+            }
+            if (peerJwk) {
+              const ciphertext = await crypto.encryptDM(myPrivKey, peerJwk, text);
+              basePayload = { text: "🔒 Encrypted message", ciphertext, is_encrypted: true };
+            }
+          }
+        } else {
+          // Phase 3: Channel AES key encryption
+          const chKey = channelKeyCache[activeChannelId];
+          if (chKey) {
+            const ciphertext = await crypto.aesEncrypt(chKey, text);
+            basePayload = { text: "🔒 Encrypted message", ciphertext, is_encrypted: true };
+          }
         }
       }
 
@@ -609,7 +670,26 @@ export default function ChatPage() {
     if (!createForm.name.trim()) return toast.error("Channel name is required");
     setCreating(true);
     try {
-      const ch = await createChannel(createForm);
+      let form = { ...createForm };
+      // Phase 3: wrap a channel key for the creator so messages can be encrypted
+      if (myPrivKey) {
+        try {
+          const { raw: channelKeyRaw } = await crypto.generateChannelKey();
+          const myPubJwk = await crypto.getPublicKeyJwk(user.id);
+          if (myPubJwk) {
+            const wrapped = await crypto.wrapKeyForMember(channelKeyRaw, myPubJwk);
+            form = { ...form, e2ee_keys: { [user.id]: wrapped } };
+          }
+        } catch {}
+      }
+      const ch = await createChannel(form);
+      // Cache the channel key locally so we can encrypt immediately
+      if (myPrivKey && ch?.e2ee_keys?.[user.id]) {
+        crypto.unwrapKeyFromMember(ch.e2ee_keys[user.id].wrapped, ch.e2ee_keys[user.id].eph_pub, myPrivKey)
+          .then((rawB64) => crypto.importChannelKey(rawB64))
+          .then((key) => setChannelKeyCache((prev) => ({ ...prev, [ch.id]: key })))
+          .catch(console.error);
+      }
       toast.success(`Channel #${ch.name} created`);
       setShowCreateChannel(false);
       setForm({ name: "", description: "", type: "public" });
@@ -661,6 +741,21 @@ export default function ChatPage() {
     setAddingMember(true);
     try {
       await chatApi.inviteToChannel(activeChannelId, { user_id: userId });
+      // Phase 3: wrap channel key for the new member if we hold it
+      const chKey = channelKeyCache[activeChannelId];
+      if (chKey && myPrivKey) {
+        try {
+          const r = await cryptoApi.getPublicKey(userId);
+          const theirJwk = r.data.public_key;
+          // Export our channel key raw bytes to re-wrap for the new member
+          const myEntry = channels.find((c) => c.id === activeChannelId)?.e2ee_keys?.[user.id];
+          if (myEntry && theirJwk) {
+            const rawB64 = await crypto.unwrapKeyFromMember(myEntry.wrapped, myEntry.eph_pub, myPrivKey);
+            const newWrapped = await crypto.wrapKeyForMember(rawB64, theirJwk);
+            await chatApi.updateChannelE2eeKeys(activeChannelId, { [userId]: newWrapped });
+          }
+        } catch {}
+      }
       toast.success("Member added");
       loadChannels();
       setMemberResults((prev) => prev.filter((u) => u.id !== userId));
@@ -1103,6 +1198,7 @@ export default function ChatPage() {
                       onEdit={editMessage}
                       onDelete={deleteMessage}
                       onReply={(msg) => setReplyTo(msg)}
+                      decryptedCache={decryptedCache}
                     />
                   );
                 })}

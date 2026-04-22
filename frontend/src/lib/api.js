@@ -297,6 +297,9 @@ export const chatApi = {
   uploadFile: (formData) => api.post("/chat/upload", formData, {
     headers: { "Content-Type": undefined },
   }),
+
+  // E2EE key distribution
+  updateChannelE2eeKeys: (channelId, keys) => api.put(`/chat/channels/${channelId}/e2ee-keys`, keys),
 };
 
 // IAM / Access Rule Book

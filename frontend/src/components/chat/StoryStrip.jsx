@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { storiesApi } from "@/lib/api";
+import { storiesApi, chatApi } from "@/lib/api";
+import * as e2ee from "@/lib/crypto";
+import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -66,7 +68,25 @@ function ProgressBars({ count, active, progress }) {
 
 // ── Story Content ─────────────────────────────────────────────────────────────
 
-function StoryContent({ story }) {
+function StoryContent({ story, currentUserId }) {
+  const [displayText, setDisplayText] = useState(story.text || "");
+
+  useEffect(() => {
+    if (!story.ciphertext || !story.e2ee_keys?.[currentUserId] || !currentUserId) return;
+    (async () => {
+      try {
+        const privKey = await e2ee.getPrivateKey(currentUserId);
+        if (!privKey) return;
+        const entry = story.e2ee_keys[currentUserId];
+        const rawB64 = await e2ee.unwrapKeyFromMember(entry.wrapped, entry.eph_pub, privKey);
+        const storyKey = await e2ee.importChannelKey(rawB64);
+        setDisplayText(await e2ee.aesDecrypt(storyKey, story.ciphertext));
+      } catch {
+        setDisplayText("🔒 Encrypted story");
+      }
+    })();
+  }, [story.ciphertext, story.e2ee_keys, currentUserId]);
+
   if (story.type === "image") {
     return (
       <img
@@ -95,7 +115,7 @@ function StoryContent({ story }) {
       style={{ backgroundColor: story.bg_color || "#6366f1" }}
     >
       <p className="text-white text-2xl font-semibold text-center leading-snug break-words max-w-sm whitespace-pre-wrap">
-        {story.text}
+        {displayText}
       </p>
     </div>
   );
@@ -205,7 +225,7 @@ function StoryViewer({ groups, startGroupIdx, currentUserId, onClose, onDelete }
         onPointerUp={() => setPaused(false)}
         onPointerLeave={() => setPaused(false)}
       >
-        <StoryContent story={story} />
+        <StoryContent story={story} currentUserId={currentUserId} />
 
         {/* Progress + header overlay — z-20 so it sits above tap zones */}
         <div className="absolute inset-x-0 top-0 z-20 bg-gradient-to-b from-black/50 to-transparent pb-6">
@@ -273,7 +293,7 @@ function StoryViewer({ groups, startGroupIdx, currentUserId, onClose, onDelete }
 
 // ── Add Story Dialog ──────────────────────────────────────────────────────────
 
-function AddStoryDialog({ onClose, onAdded }) {
+function AddStoryDialog({ onClose, onAdded, currentUserId }) {
   const [mode, setMode] = useState("text"); // text | media
   const [text, setText] = useState("");
   const [bgColor, setBgColor] = useState(BG_COLORS[0]);
@@ -296,7 +316,32 @@ function AddStoryDialog({ onClose, onAdded }) {
     try {
       let story;
       if (mode === "text") {
-        const res = await storiesApi.create({ text: text.trim(), bg_color: bgColor });
+        let payload = { text: text.trim(), bg_color: bgColor };
+        // Phase 4: E2EE — encrypt story text and wrap key for all org members
+        try {
+          const privKey = currentUserId ? await e2ee.getPrivateKey(currentUserId) : null;
+          if (privKey) {
+            const { key: storyKey, raw: storyKeyRaw } = await e2ee.generateChannelKey();
+            const ciphertext = await e2ee.aesEncrypt(storyKey, text.trim());
+            const { data: { users } } = await chatApi.listUsers();
+            const allUsers = [
+              ...(users || []),
+              // include self — fetch own pubkey from IndexedDB
+            ];
+            const myPubJwk = currentUserId ? await e2ee.getPublicKeyJwk(currentUserId) : null;
+            const e2ee_keys = {};
+            if (myPubJwk) {
+              e2ee_keys[currentUserId] = await e2ee.wrapKeyForMember(storyKeyRaw, myPubJwk);
+            }
+            for (const u of allUsers) {
+              if (u.public_key) {
+                e2ee_keys[u.id] = await e2ee.wrapKeyForMember(storyKeyRaw, u.public_key);
+              }
+            }
+            payload = { ...payload, ciphertext, e2ee_keys };
+          }
+        } catch {}
+        const res = await storiesApi.create(payload);
         story = res.data;
       } else {
         const fd = new FormData();
@@ -585,7 +630,7 @@ export function StoryStrip({ currentUser }) {
           />
         )}
         {addOpen && (
-          <AddStoryDialog onClose={() => setAddOpen(false)} onAdded={handleAdded} />
+          <AddStoryDialog onClose={() => setAddOpen(false)} onAdded={handleAdded} currentUserId={currentUser?.id} />
         )}
       </AnimatePresence>
     </>

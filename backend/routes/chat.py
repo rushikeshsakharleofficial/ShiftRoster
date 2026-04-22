@@ -55,6 +55,7 @@ class ChannelCreate(BaseModel):
     name: str
     description: Optional[str] = None
     type: str = "public"  # "public" | "private"
+    e2ee_keys: Optional[dict] = None  # {user_id: {wrapped, eph_pub}}
 
 
 class MessageCreate(BaseModel):
@@ -65,8 +66,7 @@ class MessageCreate(BaseModel):
     file_size: Optional[int] = None
     file_type: Optional[str] = None
     is_encrypted: bool = False
-    encrypted_keys: Optional[dict] = None
-    iv: Optional[str] = None
+    ciphertext: Optional[str] = None  # ECDH-AES-GCM encrypted payload
 
 
 class MessageEdit(BaseModel):
@@ -321,6 +321,7 @@ async def create_channel(data: ChannelCreate, request: Request):
         "created_by": user_id,
         "members": [user_id],
         "admins": [user_id],
+        "e2ee_keys": data.e2ee_keys or {},
         "created_at": now,
         "updated_at": now,
         "last_message_at": now,
@@ -581,6 +582,32 @@ async def get_channel_members(channel_id: str, request: Request):
     return {"members": result}
 
 
+@router.put("/channels/{channel_id}/e2ee-keys")
+async def update_channel_e2ee_keys(channel_id: str, request: Request):
+    """Merge new wrapped key entries into the channel's e2ee_keys map."""
+    user = await get_current_user(request)
+    body = await request.json()  # {user_id: {wrapped, eph_pub}, ...}
+    ch = await db.chat_channels.find_one({
+        "_id": ObjectId(channel_id),
+        "org_id": user["org_id"],
+        "deleted_at": {"$exists": False},
+    })
+    if not ch:
+        raise HTTPException(404, "Channel not found")
+    members = [str(m) for m in ch.get("members", [])]
+    if user["id"] not in members:
+        raise HTTPException(403, "Not a member")
+
+    # Only allow updating keys for actual channel members
+    updates = {f"e2ee_keys.{uid}": val for uid, val in body.items() if uid in members}
+    if updates:
+        await db.chat_channels.update_one(
+            {"_id": ObjectId(channel_id)},
+            {"$set": {**updates, "updated_at": datetime.now(timezone.utc)}},
+        )
+    return {"ok": True}
+
+
 # ── Channel Messages ──
 
 @router.get("/channels/{channel_id}/messages")
@@ -693,8 +720,7 @@ async def send_channel_message(channel_id: str, data: MessageCreate, request: Re
         "reply_to": reply_to,
         "reactions": [],
         "is_encrypted": data.is_encrypted,
-        "encrypted_keys": data.encrypted_keys,
-        "iv": data.iv,
+        "ciphertext": data.ciphertext,
         "created_at": now,
     }
     if expires_at:
@@ -709,7 +735,7 @@ async def send_channel_message(channel_id: str, data: MessageCreate, request: Re
     result = await db.chat_messages.insert_one(msg_doc)
     msg_doc["_id"] = result.inserted_id
 
-    preview = data.file_name or text
+    preview = data.file_name or ("🔒 Encrypted message" if data.ciphertext else text)
     await db.chat_channels.update_one(
         {"_id": ObjectId(channel_id)},
         {
@@ -1115,8 +1141,7 @@ async def send_dm_message(dm_id: str, data: MessageCreate, request: Request):
         "reply_to": reply_to,
         "reactions": [],
         "is_encrypted": data.is_encrypted,
-        "encrypted_keys": data.encrypted_keys,
-        "iv": data.iv,
+        "ciphertext": data.ciphertext,
         "created_at": now,
     }
     if expires_at:
@@ -1131,7 +1156,7 @@ async def send_dm_message(dm_id: str, data: MessageCreate, request: Request):
     result = await db.chat_messages.insert_one(msg_doc)
     msg_doc["_id"] = result.inserted_id
 
-    preview = data.file_name or text
+    preview = data.file_name or ("🔒 Encrypted message" if data.ciphertext else text)
     await db.chat_channels.update_one(
         {"_id": ObjectId(dm_id)},
         {
@@ -1260,6 +1285,7 @@ async def list_chat_users(request: Request, q: Optional[str] = Query(None)):
             "avatar_url": u.get("avatar_url", ""),
             "system_role": u.get("system_role", ""),
             "is_online": uid in online_ids,
+            "public_key": u.get("public_key"),
         })
 
     return {"users": result}
