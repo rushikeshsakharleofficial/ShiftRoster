@@ -43,15 +43,15 @@
   padding: 4px;
 }
 
-/* Outgoing chat bubble — blue gradient */
+/* Outgoing chat bubble */
 .msg-outgoing {
-  background: linear-gradient(180deg, #0058bc 0%, #0070eb 100%);
+  background: hsl(var(--primary));
 }
 
-/* Incoming chat bubble — green */
+/* Incoming chat bubble */
 .msg-incoming {
-  background: linear-gradient(180deg, #059669 0%, #10b981 100%);
-  color: #fff;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
 }
 
 /* Generated channel avatar — stays blue in both light and dark mode */

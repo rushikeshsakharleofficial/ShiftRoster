@@ -684,7 +684,7 @@ export default function ChatPage() {
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
       {/* === LEFT ASIDE — fixed 280px === */}
-      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border bg-card/60">
+      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border bg-card">
         {/* Top: title + quick actions */}
         <div className="h-14 px-4 flex items-center justify-between border-b border-border/60 shrink-0">
           <h2 className="text-base font-semibold tracking-tight">Messages</h2>
@@ -905,7 +905,7 @@ export default function ChatPage() {
       {/* === MAIN — chat surface === */}
       <main className="flex-1 flex flex-col min-w-0 bg-background">
         {/* Header */}
-        <header className="h-14 border-b border-border px-5 flex items-center gap-3 shrink-0 bg-card/40 backdrop-blur-sm">
+        <header className="h-14 border-b border-border px-5 flex items-center gap-3 shrink-0 bg-background">
           {activeChannel ? (
             <>
               {isActiveDM ? (
