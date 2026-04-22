@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { authApi, orgApi, slackSsoApi, formatApiError } from "@/lib/api";
+import { authApi, orgApi, slackSsoApi, googleSsoApi, formatApiError } from "@/lib/api";
 import { CalendarDays, ArrowRight, Loader2, Shield, KeyRound, Eye, EyeOff, Check } from "lucide-react";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 
@@ -42,8 +42,9 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [orgBrand, setOrgBrand] = useState({ name: "ShiftRoster", logo_url: "", slack_enabled: false });
+  const [orgBrand, setOrgBrand] = useState({ name: "ShiftRoster", logo_url: "", slack_enabled: false, google_enabled: false });
   const [slackEnabled, setSlackEnabled] = useState(false);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
 
   useEffect(() => {
     orgApi.get().then(({ data }) => {
@@ -51,11 +52,16 @@ export default function LoginPage() {
         name: data.brand_name || data.name || "ShiftRoster",
         logo_url: data.logo_url || "",
         slack_enabled: !!data.slack_enabled,
+        google_enabled: !!data.google_enabled,
       });
       setSlackEnabled(!!data.slack_enabled);
+      setGoogleEnabled(!!data.google_enabled);
     }).catch(() => {});
     slackSsoApi.getConfig().then(({ data }) => {
       setSlackEnabled(!!data.enabled);
+    }).catch(() => {});
+    googleSsoApi.getConfig().then(({ data }) => {
+      setGoogleEnabled(!!data.enabled);
     }).catch(() => {});
 
     // Handle Slack callback errors shown in query params
@@ -71,6 +77,19 @@ export default function LoginPage() {
       setError("Your Slack workspace is not allowed for this organization.");
     } else if (slackError) {
       setError("Slack sign-in failed. Please try again or contact your administrator.");
+    }
+
+    const googleError = params.get("error");
+    if (googleError === "google_approval_pending") {
+      setError("Your Google account is pending admin approval. You will be notified when access is granted.");
+    } else if (googleError === "google_denied") {
+      setError("Google sign-in was cancelled.");
+    } else if (googleError === "google_domain_not_configured") {
+      setError("Google SSO is not fully configured. Contact your administrator.");
+    } else if (googleError === "google_domain_not_allowed") {
+      setError("Your Google account domain is not allowed for this organization.");
+    } else if (googleError && googleError.startsWith("google_")) {
+      setError("Google sign-in failed. Please try again or contact your administrator.");
     }
   }, []);
 
@@ -553,30 +572,50 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Slack SSO */}
-          {slackEnabled && (
-            <div className="mt-4">
-              <div className="relative flex items-center gap-3 mb-4">
+          {/* SSO Buttons */}
+          {(slackEnabled || googleEnabled) && (
+            <div className="mt-4 space-y-3">
+              <div className="relative flex items-center gap-3">
                 <div className="flex-1 h-px bg-border" />
                 <span className="text-xs text-muted-foreground">or</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
-              <a
-                href="/api/auth/slack/login"
-                className={[
-                  "w-full flex items-center justify-center gap-3 py-[0.6875rem] px-4 rounded-lg font-semibold text-[0.9375rem]",
-                  "border border-border bg-card text-foreground",
-                  "hover:bg-muted transition-colors duration-150",
-                ].join(" ")}
-              >
-                <svg width="20" height="20" viewBox="0 0 122.8 122.8" aria-hidden="true">
-                  <path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#E01E5A"/>
-                  <path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#36C5F0"/>
-                  <path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2EB67D"/>
-                  <path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#ECB22E"/>
-                </svg>
-                Sign in with Slack
-              </a>
+              {slackEnabled && (
+                <a
+                  href="/api/auth/slack/login"
+                  className={[
+                    "w-full flex items-center justify-center gap-3 py-[0.6875rem] px-4 rounded-lg font-semibold text-[0.9375rem]",
+                    "border border-border bg-card text-foreground",
+                    "hover:bg-muted transition-colors duration-150",
+                  ].join(" ")}
+                >
+                  <svg width="20" height="20" viewBox="0 0 122.8 122.8" aria-hidden="true">
+                    <path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#E01E5A"/>
+                    <path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#36C5F0"/>
+                    <path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2EB67D"/>
+                    <path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#ECB22E"/>
+                  </svg>
+                  Sign in with Slack
+                </a>
+              )}
+              {googleEnabled && (
+                <a
+                  href="/api/auth/google/login"
+                  className={[
+                    "w-full flex items-center justify-center gap-3 py-[0.6875rem] px-4 rounded-lg font-semibold text-[0.9375rem]",
+                    "border border-border bg-card text-foreground",
+                    "hover:bg-muted transition-colors duration-150",
+                  ].join(" ")}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                  Sign in with Google
+                </a>
+              )}
             </div>
           )}
 

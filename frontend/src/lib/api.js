@@ -318,6 +318,13 @@ export const slackSsoApi = {
   saveSettings: (data) => api.put("/organization", { slack_oidc: data }),
 };
 
+export const googleSsoApi = {
+  getConfig: () => api.get("/auth/google/config"),
+  loginUrl: () => `${api.defaults.baseURL}/auth/google/login`,
+  getSettings: () => api.get("/organization").then(r => ({ data: r.data.google_oidc || {} })),
+  saveSettings: (data) => api.put("/organization", { google_oidc: data }),
+};
+
 export const sopsApi = {
   list: () => api.get("/sops"),
   create: (data) => api.post("/sops", data),

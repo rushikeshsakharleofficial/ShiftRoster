@@ -130,14 +130,16 @@ async def setup_status():
 async def public_branding():
     """Public branding (brand_name, logo_url) used for favicon + login page.
     Only returns logo_url if admin has uploaded one — no default."""
-    org = await db.organizations.find_one({}, {"brand_name": 1, "name": 1, "logo_url": 1, "slack_oidc": 1})
+    org = await db.organizations.find_one({}, {"brand_name": 1, "name": 1, "logo_url": 1, "slack_oidc": 1, "google_oidc": 1})
     if not org:
-        return {"brand_name": "", "logo_url": "", "slack_enabled": False}
+        return {"brand_name": "", "logo_url": "", "slack_enabled": False, "google_enabled": False}
     slack = org.get("slack_oidc") or {}
+    google = org.get("google_oidc") or {}
     return {
         "brand_name": org.get("brand_name") or org.get("name") or "",
         "logo_url": org.get("logo_url") or "",
         "slack_enabled": bool(slack.get("enabled")),
+        "google_enabled": bool(google.get("enabled")),
     }
 
 
