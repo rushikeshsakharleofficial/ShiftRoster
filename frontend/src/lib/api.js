@@ -341,6 +341,12 @@ export const sopsApi = {
   upload: (formData) => api.post("/sops/upload", formData, { headers: { "Content-Type": undefined } }),
 };
 
+// E2EE key exchange
+export const cryptoApi = {
+  publishKey: (publicKeyJwk) => api.put("/users/me/public-key", { public_key: publicKeyJwk }),
+  getPublicKey: (userId) => api.get(`/users/${userId}/public-key`),
+};
+
 // Stories
 export const storiesApi = {
   list: () => api.get("/stories"),

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { authApi, formatApiError } from "@/lib/api";
+import { authApi, cryptoApi, formatApiError } from "@/lib/api";
+import { initCrypto } from "@/lib/crypto";
 
 const AuthContext = createContext(null);
 
@@ -11,6 +12,9 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await authApi.me();
       setUser(data);
+      if (data?.id) {
+        initCrypto(data.id, (jwk) => cryptoApi.publishKey(jwk)).catch(console.error);
+      }
     } catch {
       setUser(false);
     } finally {
@@ -31,11 +35,17 @@ export function AuthProvider({ children }) {
     }
 
     setUser(data);
+    if (data?.id) {
+      initCrypto(data.id, (jwk) => cryptoApi.publishKey(jwk)).catch(console.error);
+    }
     return data;
   };
 
   const completeMfaLogin = (data) => {
     setUser(data);
+    if (data?.id) {
+      initCrypto(data.id, (jwk) => cryptoApi.publishKey(jwk)).catch(console.error);
+    }
     return data;
   };
 
