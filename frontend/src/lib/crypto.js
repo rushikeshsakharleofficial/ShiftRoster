@@ -173,6 +173,13 @@ export async function unwrapKeyFromMember(wrapped, ephPubJwkStr, myPrivKey) {
   return aesDecrypt(wrapKey, wrapped);
 }
 
+// Mnemonic (used by SettingsPage recovery flow)
+const WORD_LIST = ["alpha","bravo","charlie","delta","echo","foxtrot","golf","hotel","india","juliet","kilo","lima","mike","november","oscar","papa","quebec","romeo","sierra","tango","uniform","victor","whiskey","xray","yankee","zulu"];
+export function generateMnemonic() {
+  const indices = crypto.getRandomValues(new Uint32Array(12));
+  return Array.from(indices).map((i) => WORD_LIST[i % WORD_LIST.length]).join(" ");
+}
+
 // Phase 2: DM encrypt/decrypt using ECDH-derived shared key
 export async function encryptDM(myPrivKey, theirPubKeyJwk, plaintext) {
   const theirPub = await importPublicKey(theirPubKeyJwk);
