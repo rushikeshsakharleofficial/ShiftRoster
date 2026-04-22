@@ -33,6 +33,7 @@ import {
   Reply, Copy, Flag,
 } from "lucide-react";
 import MediaMenu from "@/components/chat/MediaMenu";
+import { StoryStrip } from "@/components/chat/StoryStrip";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import * as crypto from "@/lib/crypto";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -985,6 +986,9 @@ export default function ChatPage() {
             <span className="text-sm text-muted-foreground/70">Select a conversation</span>
           )}
         </header>
+
+        {/* Stories strip */}
+        <StoryStrip currentUser={user} />
 
         {/* Body — discovery / empty / join / messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar">

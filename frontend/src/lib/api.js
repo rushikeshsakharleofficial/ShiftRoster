@@ -341,4 +341,13 @@ export const sopsApi = {
   upload: (formData) => api.post("/sops/upload", formData, { headers: { "Content-Type": undefined } }),
 };
 
+// Stories
+export const storiesApi = {
+  list: () => api.get("/stories"),
+  create: (data) => api.post("/stories", data),
+  upload: (formData) => api.post("/stories/upload", formData, { headers: { "Content-Type": undefined } }),
+  view: (id) => api.post(`/stories/${id}/view`),
+  delete: (id) => api.delete(`/stories/${id}`),
+};
+
 export default api;

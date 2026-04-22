@@ -49,6 +49,7 @@ from routes.announcements import router as announcements_router
 from routes.iam import router as iam_router
 from routes.ldap import router as ldap_router
 from routes.sops import router as sops_router
+from routes.stories import router as stories_router
 from tasks.purging import run_purging_task
 from tasks.due_date_reminders import run_due_date_reminders
 from ldap_service import run_ldap_sync_task
@@ -95,6 +96,7 @@ app.include_router(announcements_router)
 app.include_router(iam_router)
 app.include_router(ldap_router)
 app.include_router(sops_router)
+app.include_router(stories_router)
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -411,6 +413,9 @@ async def startup():
         ),
         # TTL for expiring messages
         db.chat_messages.create_index("expires_at", expireAfterSeconds=0),
+        # Stories — auto-expire after 24 h
+        db.stories.create_index("expires_at", expireAfterSeconds=0),
+        db.stories.create_index([("org_id", 1), ("expires_at", 1)]),
     ]
     await asyncio.gather(*index_tasks)
 
