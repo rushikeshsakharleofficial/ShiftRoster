@@ -4,9 +4,11 @@ import { storiesApi } from "@/lib/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { X, Plus, ChevronLeft, ChevronRight, Trash2, Loader2, ImagePlus, Type } from "lucide-react";
+import { X, Plus, ChevronLeft, ChevronRight, Trash2, Loader2, ImagePlus, Type, Smile } from "lucide-react";
 import { toast } from "sonner";
+import EmojiPicker from "./EmojiPicker";
 
 const BACKEND_URL = import.meta.env.REACT_APP_BACKEND_URL;
 const STORY_DURATION_MS = 5000;
@@ -92,7 +94,7 @@ function StoryContent({ story }) {
       className="w-full h-full flex items-center justify-center p-8"
       style={{ backgroundColor: story.bg_color || "#6366f1" }}
     >
-      <p className="text-white text-2xl font-semibold text-center leading-snug break-words max-w-sm">
+      <p className="text-white text-2xl font-semibold text-center leading-snug break-words max-w-sm whitespace-pre-wrap">
         {story.text}
       </p>
     </div>
@@ -365,19 +367,35 @@ function AddStoryDialog({ onClose, onAdded }) {
                 className="w-full h-40 rounded-xl flex items-center justify-center p-4 transition-colors"
                 style={{ backgroundColor: bgColor }}
               >
-                <p className="text-white text-lg font-semibold text-center break-words leading-snug">
+                <p className="text-white text-lg font-semibold text-center break-words leading-snug whitespace-pre-wrap">
                   {text || <span className="opacity-40">Your story text…</span>}
                 </p>
               </div>
-              <Textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="What's on your mind?"
-                rows={2}
-                maxLength={280}
-                className="resize-none text-sm"
-                autoFocus
-              />
+              <div className="relative">
+                <Textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="What's on your mind?"
+                  rows={3}
+                  maxLength={280}
+                  className="resize-none text-sm pr-10"
+                  autoFocus
+                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="absolute right-2 bottom-2 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      title="Add emoji"
+                    >
+                      <Smile className="h-4 w-4" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[352px] p-0 overflow-hidden rounded-xl border border-border bg-background" align="end" side="top">
+                    <EmojiPicker onEmojiSelect={(emoji) => setText((prev) => prev + emoji)} />
+                  </PopoverContent>
+                </Popover>
+              </div>
               <div className="flex gap-1.5 flex-wrap">
                 {BG_COLORS.map((c) => (
                   <button
