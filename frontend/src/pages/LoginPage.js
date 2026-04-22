@@ -364,7 +364,7 @@ export default function LoginPage() {
           <ul className="space-y-6 mb-14">
             {FEATURES.map((feat, i) => (
               <li key={feat} className="flex items-start gap-4">
-                <span className="font-mono-data text-[11px] text-blue-500/50 pt-0.5 shrink-0 tabular-nums leading-relaxed">
+                <span className="font-mono-data text-[11px] text-blue-500/50 pt-0.5 shrink-0 tabular-nums font-mono-data leading-relaxed">
                   0{i + 1}
                 </span>
                 <span className="text-[0.875rem] leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>

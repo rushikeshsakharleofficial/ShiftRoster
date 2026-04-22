@@ -79,10 +79,10 @@ export default function ReportsPage() {
   ] : [];
 
   return (
-    <div data-testid="reports-page" className="space-y-6">
+    <div data-testid="reports-page" className="space-y-6 dispatch-stagger">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
+          <h1 className="font-display text-[2rem] leading-tight">Reports</h1>
           <p className="text-sm text-muted-foreground">Organization overview and analytics</p>
         </div>
         <div className="flex gap-2 flex-wrap">

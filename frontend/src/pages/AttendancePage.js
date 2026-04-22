@@ -103,10 +103,10 @@ export default function AttendancePage() {
   }
 
   return (
-    <div data-testid="attendance-page" className="space-y-6">
+    <div data-testid="attendance-page" className="space-y-6 dispatch-stagger">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Attendance</h1>
+          <h1 className="font-display text-[2rem] leading-tight">Attendance</h1>
           <p className="text-sm text-muted-foreground">Track your work hours</p>
         </div>
       </div>

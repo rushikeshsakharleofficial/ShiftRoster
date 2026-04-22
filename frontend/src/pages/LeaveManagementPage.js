@@ -90,10 +90,10 @@ export default function LeaveManagementPage() {
   };
 
   return (
-    <div data-testid="leave-management-page" className="space-y-6">
+    <div data-testid="leave-management-page" className="space-y-6 dispatch-stagger">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Leave Management</h1>
+          <h1 className="font-display text-[2rem] leading-tight">Leave Management</h1>
           <p className="text-sm text-muted-foreground">{leaves.length} requests</p>
         </div>
         <div className="flex gap-2">

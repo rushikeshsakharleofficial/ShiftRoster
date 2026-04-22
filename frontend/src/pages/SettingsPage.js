@@ -582,7 +582,7 @@ export default function SettingsPage() {
       {/* Content */}
       <div className="flex-1 min-w-0 space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="font-display text-[2rem] leading-tight">
             {navSections.find(s => s.id === activeSection)?.label || "Settings"}
           </h1>
           <p className="text-sm text-muted-foreground">Manage organization and security settings</p>
@@ -1762,7 +1762,7 @@ export default function SettingsPage() {
           </CardTitle>
           <CardDescription>Manage your personal chat security settings</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 dispatch-stagger">
           <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border border-dashed">
             <div className="space-y-0.5">
               <p className="text-sm font-medium flex items-center gap-1.5">
@@ -1810,7 +1810,7 @@ export default function SettingsPage() {
             </CardTitle>
             <CardDescription>Global controls for chat features and retention</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 dispatch-stagger">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
@@ -1881,7 +1881,7 @@ export default function SettingsPage() {
 
       {/* ── Policy ── */}
       {activeSection === "policy" && user?.system_role === "admin" && (
-        <div className="space-y-6">
+        <div className="space-y-6 dispatch-stagger">
           <Card className="border">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">

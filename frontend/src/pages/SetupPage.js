@@ -120,7 +120,7 @@ export default function SetupPage() {
             Configure your organization and create the SuperAdmin account
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6 dispatch-stagger">
             {/* Step 1: Organization */}
             {step === 1 && (
               <div className="space-y-4 animate-fade-in">
@@ -288,7 +288,7 @@ export default function SetupPage() {
                </span>
             </div>
           )}
-          <h2 className="text-2xl font-semibold tracking-tight mb-3">
+          <h2 className="font-display text-[2rem] leading-tight mb-3">
             Welcome to {form.org_name || "ShiftRoster"}
           </h2>
           <p className="text-muted-foreground text-sm leading-relaxed mb-4">
