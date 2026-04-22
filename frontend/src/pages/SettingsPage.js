@@ -549,8 +549,7 @@ export default function SettingsPage() {
     { id: "organization", label: "Organization",  icon: Building2,     show: isAdmin },
     { id: "email",        label: "Email",         icon: Mail,          show: isAdmin },
     { id: "ldap",         label: "LDAP / AD",     icon: Server,        show: isAdmin },
-    { id: "slack_sso",    label: "Slack SSO",     icon: LogIn,         show: isAdmin },
-    { id: "google_sso",   label: "Google SSO",    icon: LogIn,         show: isAdmin },
+    { id: "sso",          label: "SSO",           icon: LogIn,         show: isAdmin },
     { id: "security",     label: "Security",      icon: Shield,        show: true },
     { id: "chat",         label: "Chat",          icon: MessageSquare, show: true },
     { id: "access",       label: "Access Rules",  icon: BookOpen,      show: isAdmin || isManager },
@@ -939,8 +938,14 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {/* Slack SSO */}
-      {activeSection === "slack_sso" && isAdmin && (
+      {/* SSO — Slack + Google combined */}
+      {activeSection === "sso" && isAdmin && (
+        <div className="space-y-6">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            Only one SSO method can be active at a time. Enabling one will automatically disable the others.
+          </div>
+
         <Card className="border">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -1104,9 +1109,7 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
-      )}
 
-      {activeSection === "google_sso" && isAdmin && (
         <Card className="border">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -1276,6 +1279,7 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       )}
 
       {activeSection === "organization" && isAdmin && <Card className="border">
