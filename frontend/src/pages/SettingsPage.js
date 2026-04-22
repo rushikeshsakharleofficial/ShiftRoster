@@ -709,6 +709,35 @@ export default function SettingsPage() {
               />
             </div>
 
+            {/* Quick-fill presets */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Quick Setup</p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: "Gmail", host: "smtp.gmail.com", port: "587", tls: true, note: "Use an App Password (requires 2FA on your Google account)" },
+                  { label: "Outlook / Office 365", host: "smtp.office365.com", port: "587", tls: true, note: "Use your Microsoft account password or an App Password" },
+                  { label: "SendGrid", host: "smtp.sendgrid.net", port: "587", tls: true, note: "Username must be 'apikey'; password is your SendGrid API key" },
+                  { label: "Mailgun", host: "smtp.mailgun.org", port: "587", tls: true, note: "Use your Mailgun SMTP credentials from the Mailgun dashboard" },
+                  { label: "Amazon SES", host: "email-smtp.us-east-1.amazonaws.com", port: "587", tls: true, note: "Use SES SMTP credentials (IAM user with SES send permissions)" },
+                ].map(p => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => {
+                      setSmtpForm(f => ({ ...f, smtp_host: p.host, smtp_port: p.port, smtp_use_tls: p.tls }));
+                      toast.info(`${p.label}: ${p.note}`);
+                    }}
+                    className="px-3 py-1 rounded-full text-xs font-medium border border-border bg-background hover:bg-muted transition-colors"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">Click a provider to auto-fill host and port. A toast will show provider-specific notes.</p>
+            </div>
+
+            <Separator />
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>SMTP Host</Label>
@@ -763,12 +792,9 @@ export default function SettingsPage() {
               <span className="text-sm">Use STARTTLS (recommended for port 587)</span>
             </div>
 
-            {/* Hint for common providers */}
-            <div className="rounded-lg bg-muted/40 border border-border p-3 text-xs text-muted-foreground space-y-1">
-              <p className="font-medium text-foreground">Common providers:</p>
-              <p>• Gmail: host=smtp.gmail.com, port=587, use App Password (2FA required)</p>
-              <p>• Outlook/Office365: host=smtp.office365.com, port=587</p>
-              <p>• SendGrid: host=smtp.sendgrid.net, port=587, user=apikey</p>
+            <div className="rounded-lg bg-muted/40 border border-border p-3 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground mb-1">Gmail relay note</p>
+              <p>Go to your Google Account → Security → 2-Step Verification → App Passwords. Generate a password for "Mail" and use it as the password above. Your regular Google password will not work.</p>
             </div>
 
             {/* Save button */}
