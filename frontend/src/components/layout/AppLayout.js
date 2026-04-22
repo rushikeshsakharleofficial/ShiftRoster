@@ -17,6 +17,7 @@ import { notificationsApi, orgApi, usersApi } from "@/lib/api";
 import { useChat } from "@/contexts/ChatContext";
 import { getAvatarColor, cn } from "@/lib/utils";
 import FlipClock from "@/components/ui/flip-clock";
+import { UserAvatars } from "@/components/ui/user-avatars";
 import { Toggle, GooeyFilter } from "@/components/ui/liquid-toggle";
 import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
@@ -446,6 +447,8 @@ export default function AppLayout() {
 
           <div className="flex items-center gap-3">
             <FlipClock />
+
+            <UserAvatars users={onlineUsers} max={6} />
 
             {/* Notification Popover */}
             <Popover>

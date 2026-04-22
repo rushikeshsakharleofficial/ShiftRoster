@@ -30,6 +30,7 @@ import {
   LayoutDashboard, Globe, ShieldCheck,
   FileText, Download, Zap, LogIn, Loader2, Paperclip,
   ChevronUp, User2, Settings, SquarePen, Pencil, Trash2, Check,
+  Reply, Copy, Flag,
 } from "lucide-react";
 import MediaMenu from "@/components/chat/MediaMenu";
 import ThemeToggle from "@/components/layout/ThemeToggle";
@@ -156,7 +157,7 @@ const isOnlyEmojis = (text) => {
 
 // Renders a contiguous block of messages from the same author. Avatar + name
 // appear once at the top; subsequent bubbles are tightly stacked.
-function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete }) {
+function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete, onReply }) {
   const first = messages[0];
   const cached = userCache?.[first.sender_username] || userCache?.[first.sender_id];
   const displayName =
@@ -250,24 +251,44 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                         {msg.edited && <span className="text-[10px] opacity-60 ml-1">(edited)</span>}
                       </div>
                     ))}
-                    {isOwn && (
-                      <div className="flex gap-0.5 items-center opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                    {/* Hover action bar */}
+                    <div className={cn(
+                      "flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity shrink-0",
+                      "bg-background border border-border rounded-full px-1 py-0.5 shadow-sm"
+                    )}>
+                      <button
+                        onClick={() => onReply && onReply(msg)}
+                        className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        title="Reply"
+                      ><Reply className="h-3 w-3" /></button>
+                      {msg.text && (
                         <button
-                          onClick={() => startEdit(msg)}
-                          className="p-1 rounded-md bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                          title="Edit"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
+                          onClick={() => { navigator.clipboard.writeText(msg.text); toast.success("Copied"); }}
+                          className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          title="Copy"
+                        ><Copy className="h-3 w-3" /></button>
+                      )}
+                      {isOwn ? (
+                        <>
+                          <button
+                            onClick={() => startEdit(msg)}
+                            className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            title="Edit"
+                          ><Pencil className="h-3 w-3" /></button>
+                          <button
+                            onClick={() => onDelete(msg.id)}
+                            className="p-1 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                            title="Delete"
+                          ><Trash2 className="h-3 w-3" /></button>
+                        </>
+                      ) : (
                         <button
-                          onClick={() => onDelete(msg.id)}
-                          className="p-1 rounded-md bg-muted hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    )}
+                          onClick={() => toast.info("Message reported")}
+                          className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          title="Report"
+                        ><Flag className="h-3 w-3" /></button>
+                      )}
+                    </div>
                   </div>
                   {msg.file_url && (
                     <FileAttachment
@@ -316,6 +337,7 @@ export default function ChatPage() {
   const [orgGifsEnabled, setOrgGifsEnabled] = useState(false);
 
   const [pendingFiles, setPendingFiles] = useState([]);
+  const [replyTo, setReplyTo] = useState(null);
 
   const handleFileSelect = (e) => {
     const MAX_FILES = 10;
@@ -561,19 +583,21 @@ export default function ChatPage() {
         }
       }
 
+      const replyId = replyTo?.id || null;
       if (uploadedFiles.length === 0) {
         // text-only message
-        await sendMessage(activeChannelId, basePayload.text, null, !isActiveDM, null, basePayload);
+        await sendMessage(activeChannelId, basePayload.text, replyId, !isActiveDM, null, basePayload);
       } else {
         // one message per file; text goes on first message only
         for (let i = 0; i < uploadedFiles.length; i++) {
           const msgText = i === 0 ? basePayload.text : "";
-          await sendMessage(activeChannelId, msgText, null, !isActiveDM, uploadedFiles[i], { ...basePayload, text: msgText });
+          await sendMessage(activeChannelId, msgText, i === 0 ? replyId : null, !isActiveDM, uploadedFiles[i], { ...basePayload, text: msgText });
         }
       }
 
       setInputText("");
       setPendingFiles([]);
+      setReplyTo(null);
     } catch (err) {
       console.error("Send failed:", err);
       toast.error("Failed to send — check file size or connection");
@@ -1121,6 +1145,7 @@ export default function ChatPage() {
                       isDM={isActiveDM}
                       onEdit={editMessage}
                       onDelete={deleteMessage}
+                      onReply={(msg) => setReplyTo(msg)}
                     />
                   );
                 })}
@@ -1151,6 +1176,16 @@ export default function ChatPage() {
             )}
           >
             <div className="max-w-3xl mx-auto px-4 py-3">
+              {replyTo && (
+                <div className="mb-2 flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-xl border-l-2 border-primary animate-in slide-in-from-bottom-2">
+                  <Reply className="h-3 w-3 text-primary shrink-0" />
+                  <span className="text-xs text-muted-foreground">Replying to</span>
+                  <span className="text-xs font-medium truncate flex-1">{replyTo.text?.slice(0, 80) || "a message"}</span>
+                  <button onClick={() => setReplyTo(null)} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
               <div className="flex items-end gap-2">
                 <Button
                   variant="ghost"
