@@ -266,12 +266,18 @@ export default function AppLayout() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
       <GooeyFilter />
+      {/* Decorative mesh — provides colour blobs for backdrop-blur to frost against on AMOLED */}
+      <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden" aria-hidden="true">
+        <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vh] rounded-full opacity-0 dark:opacity-100 bg-primary/[0.07] blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-5%] w-[50vw] h-[50vh] rounded-full opacity-0 dark:opacity-100 bg-secondary/[0.05] blur-[100px]" />
+        <div className="absolute top-[35%] left-[25%] w-[40vw] h-[45vh] rounded-full opacity-0 dark:opacity-100 bg-chart-5/[0.04] blur-[140px]" />
+      </div>
       {/* Sidebar */}
       <aside
         data-testid="app-sidebar"
         className={`
-          fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border
-          bg-[hsl(var(--sidebar-bg))] transition-all duration-300
+          fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border/50 dark:border-white/[0.06]
+          bg-[hsl(var(--sidebar-bg))]/80 backdrop-blur-xl transition-all duration-300
           ${sidebarOpen ? "w-64" : "w-16"}
           ${mobileSidebar ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0 lg:static
@@ -422,7 +428,7 @@ export default function AppLayout() {
         {/* Header */}
         <header
           data-testid="app-header"
-          className="h-14 border-b border-border bg-background/80 backdrop-blur-md flex items-center justify-between px-4 shrink-0 z-20"
+          className="h-14 border-b border-border/50 dark:border-white/[0.06] bg-background/60 backdrop-blur-xl flex items-center justify-between px-4 shrink-0 z-20 shadow-sm shadow-black/[0.04]"
         >
           <div className="flex items-center gap-2">
             <Button
