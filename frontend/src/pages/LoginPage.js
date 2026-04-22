@@ -51,8 +51,8 @@ function SubmitBtn({ loading, disabled, children }) {
       disabled={loading || disabled}
       className={[
         "w-full py-[0.7rem] px-4 mt-5 rounded-lg font-semibold text-[0.9375rem] text-white",
-        "bg-gradient-to-r from-primary via-primary to-primary/80",
-        "hover:shadow-lg hover:shadow-primary/25 hover:-translate-y-px",
+        "bg-primary hover:bg-primary/90",
+        "hover:-translate-y-px",
         "flex items-center justify-center gap-2 transition-all duration-200",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
         (loading || disabled) ? "opacity-50 cursor-not-allowed translate-y-0 shadow-none" : "",
@@ -341,7 +341,7 @@ export default function LoginPage() {
         <div className="absolute top-0 right-0 w-[40%] h-[40%] pointer-events-none" aria-hidden="true"
           style={{ background: "radial-gradient(ellipse at 80% 10%, rgba(99,102,241,0.10) 0%, transparent 50%)" }} />
 
-        <div className="relative z-10 px-14 py-16 max-w-[480px] w-full dispatch-stagger">
+        <div className="relative z-10 px-14 py-16 max-w-[480px] w-full">
           {/* Logo */}
           {orgBrand.logo_url && (
             <div className="mb-10 w-14 h-14 rounded-2xl overflow-hidden ring-1 ring-white/10 shadow-xl shadow-blue-500/20 shrink-0">
@@ -392,7 +392,7 @@ export default function LoginPage() {
           <div className="absolute bottom-[-5%] right-[-5%] w-[50vw] h-[50vh] rounded-full opacity-0 dark:opacity-100 bg-secondary/[0.05] blur-[100px]" />
         </div>
 
-        <div className="w-full max-w-[400px] dispatch-stagger">
+        <div className="w-full max-w-[400px]">
           {/* Mobile brand (hidden lg+) */}
           <div className="flex lg:hidden items-center gap-3 mb-8">
             {orgBrand.logo_url && (

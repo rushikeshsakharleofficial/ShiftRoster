@@ -130,7 +130,7 @@ export default function AuditLogPage() {
   };
 
   return (
-    <div data-testid="audit-log-page" className="space-y-6 dispatch-stagger">
+    <div data-testid="audit-log-page" className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Audit Log</h1>

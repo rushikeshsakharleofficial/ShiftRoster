@@ -90,7 +90,7 @@ export default function DepartmentsPage() {
   const colors = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16"];
 
   return (
-    <div data-testid="departments-page" className="space-y-6 dispatch-stagger">
+    <div data-testid="departments-page" className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Departments</h1>

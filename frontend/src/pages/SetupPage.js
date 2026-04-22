@@ -120,7 +120,7 @@ export default function SetupPage() {
             Configure your organization and create the SuperAdmin account
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-6 dispatch-stagger">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Step 1: Organization */}
             {step === 1 && (
               <div className="space-y-4 animate-fade-in">

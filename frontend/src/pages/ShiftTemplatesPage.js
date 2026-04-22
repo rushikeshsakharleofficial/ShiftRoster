@@ -136,7 +136,7 @@ export default function ShiftTemplatesPage() {
   const unassignedCount = templates.filter((t) => !t.department_id).length;
 
   return (
-    <div data-testid="shift-templates-page" className="space-y-6 dispatch-stagger">
+    <div data-testid="shift-templates-page" className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">

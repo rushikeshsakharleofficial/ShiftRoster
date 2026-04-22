@@ -46,7 +46,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div data-testid="notifications-page" className="space-y-6 dispatch-stagger">
+    <div data-testid="notifications-page" className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
