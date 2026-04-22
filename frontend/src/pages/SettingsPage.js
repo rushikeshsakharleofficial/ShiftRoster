@@ -164,7 +164,7 @@ export default function SettingsPage() {
     auto_provision: true,
     default_role: "employee",
     trust_slack_as_mfa: false,
-    instance_base_url: "",
+    instance_base_url: window.location.origin,
   });
   const [slackSaving, setSlackSaving] = useState(false);
   const [slackSecretVisible, setSlackSecretVisible] = useState(false);
@@ -216,7 +216,12 @@ export default function SettingsPage() {
         } catch {}
         try {
           if (data.slack_oidc) {
-            setSlackForm((cur) => ({ ...cur, ...data.slack_oidc }));
+            setSlackForm((cur) => ({
+              ...cur,
+              ...data.slack_oidc,
+              // Fall back to current origin if no URL stored yet
+              instance_base_url: data.slack_oidc.instance_base_url || window.location.origin,
+            }));
           }
         } catch {}
       } catch {}
