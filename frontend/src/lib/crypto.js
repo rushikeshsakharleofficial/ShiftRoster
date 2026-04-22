@@ -68,10 +68,18 @@ async function loadOrCreate(userId) {
 // Called after login/checkAuth. Generates keypair if missing and publishes public key.
 // forcePub=true when the server doesn't have the key yet (check from /auth/me response).
 export async function initCrypto(userId, publishFn, forcePub = false) {
+  if (!crypto?.subtle) {
+    console.warn("[E2EE] crypto.subtle unavailable — E2EE requires HTTPS or localhost");
+    return null;
+  }
   try {
+    console.log("[E2EE] initCrypto start userId=%s forcePub=%s", userId, forcePub);
     const { privateKey, publicKey, pubJwk, isNew } = await loadOrCreate(userId);
+    console.log("[E2EE] keypair ready isNew=%s", isNew);
     if (isNew || forcePub) {
+      console.log("[E2EE] publishing public key...");
       await publishFn(JSON.stringify(pubJwk));
+      console.log("[E2EE] public key published OK");
     }
     return { privateKey, publicKey };
   } catch (err) {

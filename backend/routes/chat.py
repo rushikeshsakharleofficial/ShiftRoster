@@ -5,6 +5,7 @@ from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from db import db
 from auth_utils import get_current_user, create_notification
+from msg_crypto import encrypt_text, decrypt_text
 import uuid
 import os
 from pathlib import Path
@@ -112,6 +113,8 @@ def _serialize_message(msg):
     for key, val in msg.items():
         if key == "_id":
             result["id"] = str(val)
+        elif key == "text":
+            result["text"] = decrypt_text(val) if val else val
         elif key == "reactions":
             serialized_reactions = []
             for r in (val or []):
@@ -689,7 +692,7 @@ async def send_channel_message(channel_id: str, data: MessageCreate, request: Re
                 reply_to = {
                     "id": str(reply_doc["_id"]),
                     "sender_name": reply_doc.get("sender_name", ""),
-                    "text": (reply_doc.get("text", "")[:100] + "...") if len(reply_doc.get("text", "")) > 100 else reply_doc.get("text", ""),
+                    "text": (decrypt_text(reply_doc.get("text", ""))[:100] + "...") if len(decrypt_text(reply_doc.get("text", ""))) > 100 else decrypt_text(reply_doc.get("text", "")),
                 }
         except Exception:
             pass
@@ -715,7 +718,7 @@ async def send_channel_message(channel_id: str, data: MessageCreate, request: Re
         "sender_name": user.get("full_name", ""),
         "sender_initials": _user_initials(user.get("full_name", "")),
         "sender_avatar": user.get("avatar_url", ""),
-        "text": text,
+        "text": encrypt_text(text),
         "type": "file" if data.file_url and not text else "text",
         "reply_to": reply_to,
         "reactions": [],
@@ -818,7 +821,7 @@ async def edit_message(message_id: str, data: MessageEdit, request: Request):
     now = datetime.now(timezone.utc)
     await db.chat_messages.update_one(
         {"_id": ObjectId(message_id)},
-        {"$set": {"text": text, "edited_at": now}},
+        {"$set": {"text": encrypt_text(text), "edited_at": now}},
     )
 
     updated = await db.chat_messages.find_one({"_id": ObjectId(message_id)})
@@ -1110,7 +1113,7 @@ async def send_dm_message(dm_id: str, data: MessageCreate, request: Request):
                 reply_to = {
                     "id": str(reply_doc["_id"]),
                     "sender_name": reply_doc.get("sender_name", ""),
-                    "text": (reply_doc.get("text", "")[:100] + "...") if len(reply_doc.get("text", "")) > 100 else reply_doc.get("text", ""),
+                    "text": (decrypt_text(reply_doc.get("text", ""))[:100] + "...") if len(decrypt_text(reply_doc.get("text", ""))) > 100 else decrypt_text(reply_doc.get("text", "")),
                 }
         except Exception:
             pass
@@ -1136,7 +1139,7 @@ async def send_dm_message(dm_id: str, data: MessageCreate, request: Request):
         "sender_name": user.get("full_name", ""),
         "sender_initials": _user_initials(user.get("full_name", "")),
         "sender_avatar": user.get("avatar_url", ""),
-        "text": text,
+        "text": encrypt_text(text),
         "type": "file" if data.file_url and not text else "text",
         "reply_to": reply_to,
         "reactions": [],
