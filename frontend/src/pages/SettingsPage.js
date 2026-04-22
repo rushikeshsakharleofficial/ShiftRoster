@@ -582,7 +582,7 @@ export default function SettingsPage() {
       {/* Content */}
       <div className="flex-1 min-w-0 space-y-6">
         <div>
-          <h1 className="font-display text-[2rem] leading-tight">
+          <h1 className="text-2xl font-semibold tracking-tight">
             {navSections.find(s => s.id === activeSection)?.label || "Settings"}
           </h1>
           <p className="text-sm text-muted-foreground">Manage organization and security settings</p>

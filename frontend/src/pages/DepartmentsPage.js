@@ -93,7 +93,7 @@ export default function DepartmentsPage() {
     <div data-testid="departments-page" className="space-y-6 dispatch-stagger">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-[2rem] leading-tight">Departments</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Departments</h1>
           <p className="text-sm text-muted-foreground">{departments.length} departments</p>
         </div>
         <Button data-testid="create-dept-btn" onClick={() => setShowCreate(true)}>

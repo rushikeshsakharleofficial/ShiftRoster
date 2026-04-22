@@ -145,7 +145,7 @@ export default function ManagerGroupsPage() {
     <div data-testid="manager-groups-page" className="space-y-6 dispatch-stagger">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display text-[2rem] leading-tight">Manager Groups</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Manager Groups</h1>
           <p className="text-sm text-muted-foreground">{groups.length} groups, {nominations.filter(n => n.status === "pending").length} pending nominations</p>
         </div>
         <div className="flex gap-2 flex-wrap">

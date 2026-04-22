@@ -288,7 +288,7 @@ export default function SetupPage() {
                </span>
             </div>
           )}
-          <h2 className="font-display text-[2rem] leading-tight mb-3">
+          <h2 className="text-2xl font-semibold tracking-tight mb-3">
             Welcome to {form.org_name || "ShiftRoster"}
           </h2>
           <p className="text-muted-foreground text-sm leading-relaxed mb-4">

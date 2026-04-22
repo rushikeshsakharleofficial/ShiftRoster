@@ -184,7 +184,7 @@ export default function EmployeesPage() {
     <div data-testid="employees-page" className="space-y-6 dispatch-stagger">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display text-[2rem] leading-tight">Employees</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Employees</h1>
           <p className="text-sm text-muted-foreground">{total} team members</p>
         </div>
         <Button data-testid="create-employee-btn" onClick={() => setShowCreate(true)}>

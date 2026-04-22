@@ -1,6 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -124,15 +123,6 @@
 
 .font-geist {
   font-family: 'Geist', 'Inter', sans-serif;
-}
-
-.font-display {
-  font-family: 'DM Serif Display', Georgia, serif;
-}
-
-.font-mono-data {
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
-  font-feature-settings: "tnum";
 }
 
 /* Staggered entrance animation helpers */

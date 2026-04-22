@@ -203,7 +203,7 @@ export default function ShiftCalendarPage() {
     <div data-testid="shift-calendar-page" className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="font-display text-[2rem] leading-tight">Shift Calendar</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Shift Calendar</h1>
           <p className="text-sm text-muted-foreground">{shifts.length} shifts{canManage ? " — drag shifts to reschedule" : ""}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

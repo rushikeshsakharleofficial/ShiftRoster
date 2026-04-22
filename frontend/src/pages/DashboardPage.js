@@ -57,7 +57,7 @@ export default function DashboardPage() {
           <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${color.bg} transition-transform duration-200 group-hover:scale-110`}>
             <Icon className={`h-4 w-4 ${color.icon}`} />
           </div>
-          <span className="font-mono-data text-3xl font-medium tabular-nums text-foreground leading-none">
+          <span className="text-3xl font-bold tabular-nums text-foreground leading-none">
             {value ?? "—"}
           </span>
         </div>
@@ -70,7 +70,7 @@ export default function DashboardPage() {
   /* ── Section label ── */
   const SectionLabel = ({ children }) => (
     <div className="flex items-center gap-3 mb-4">
-      <p className="font-mono-data text-[10px] font-medium text-muted-foreground/60 uppercase tracking-[0.18em]">{children}</p>
+      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{children}</p>
       <div className="flex-1 h-px bg-border/40" />
     </div>
   );
@@ -85,20 +85,20 @@ export default function DashboardPage() {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h1 className="font-display text-[2rem] sm:text-[2.25rem] leading-tight text-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight">
             {greeting},&nbsp;
             <span className="italic">{firstName}.</span>
           </h1>
-          <p className="font-mono-data text-[11px] text-muted-foreground/60 mt-2 uppercase tracking-wider">
+          <p className="text-sm text-muted-foreground mt-1">
             {new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Badge variant="outline" className="font-mono-data text-[10px] uppercase tracking-wider">
+          <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
             {user?.system_role}
           </Badge>
           {user?.employee_level && (
-            <Badge variant="secondary" className="font-mono-data text-[10px]">{user.employee_level}</Badge>
+            <Badge variant="secondary" className="text-[10px]">{user.employee_level}</Badge>
           )}
         </div>
       </div>
@@ -121,7 +121,7 @@ export default function DashboardPage() {
               <p className="text-sm font-semibold text-foreground">
                 {clockedIn ? "You're clocked in" : "Ready to start your shift?"}
               </p>
-              <p className="font-mono-data text-[11px] text-muted-foreground/60 mt-0.5 uppercase tracking-wider">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
               </p>
             </div>
@@ -242,7 +242,7 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold truncate">{label}</p>
                     {badge > 0 && (
-                      <Badge variant="destructive" className="h-4 px-1 text-[9px] font-mono-data shrink-0">{badge}</Badge>
+                      <Badge variant="destructive" className="h-4 px-1 text-[9px] shrink-0">{badge}</Badge>
                     )}
                   </div>
                   <p className="text-[11px] text-muted-foreground truncate mt-0.5">{sub}</p>

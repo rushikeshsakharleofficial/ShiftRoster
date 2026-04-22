@@ -43,7 +43,7 @@ export default function SwapRequestsPage() {
   return (
     <div data-testid="swap-requests-page" className="space-y-6 dispatch-stagger">
       <div>
-        <h1 className="font-display text-[2rem] leading-tight">Swap Requests</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Swap Requests</h1>
         <p className="text-sm text-muted-foreground">{swaps.length} requests</p>
       </div>
 

@@ -170,7 +170,7 @@ export default function LoginPage() {
   const RecoveryModal = () => recoveryOpen ? (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-background/70 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-card/90 backdrop-blur-2xl border border-border/60 dark:border-white/[0.08] rounded-2xl p-8 w-full max-w-[420px] shadow-2xl shadow-black/30 animate-in zoom-in-95 duration-200">
-        <h2 className="font-display text-xl text-foreground mb-2">
+        <h2 className="text-xl font-bold text-foreground mb-2">
           {recoveryType === "password" ? "Reset Password" : "Request MFA Reset"}
         </h2>
         <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
@@ -224,7 +224,7 @@ export default function LoginPage() {
             <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-6">
               <Shield size={20} className="text-primary" />
             </div>
-            <h1 className="font-display text-2xl text-foreground mb-2">Two-factor verification</h1>
+            <h1 className="text-2xl font-bold text-foreground mb-2">Two-factor verification</h1>
             <p className="text-sm text-muted-foreground mb-7 leading-relaxed">
               Open your authenticator app and enter the 6-digit code.
             </p>
@@ -238,7 +238,7 @@ export default function LoginPage() {
                   type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6}
                   placeholder="000 000"
                   value={mfaCode} onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
-                  className="text-center text-2xl tracking-[0.4em] font-mono-data"
+                  className="text-center text-2xl tracking-[0.3em] font-mono"
                   autoFocus required
                 />
               </div>
@@ -275,7 +275,7 @@ export default function LoginPage() {
             <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-6">
               <Shield size={20} className="text-primary" />
             </div>
-            <h1 className="font-display text-2xl text-foreground mb-2">Set up authenticator</h1>
+            <h1 className="text-2xl font-bold text-foreground mb-2">Set up authenticator</h1>
             <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
               Your administrator requires MFA. Scan the QR code with Google Authenticator or any TOTP app.
             </p>
@@ -288,7 +288,7 @@ export default function LoginPage() {
                 </div>
                 <div className="mb-5">
                   <span className="block text-xs text-muted-foreground mb-1.5 uppercase tracking-wider">Manual entry key</span>
-                  <code className="block text-xs bg-muted/50 border border-border/50 rounded-lg px-3 py-2 font-mono-data break-all select-all text-muted-foreground">
+                  <code className="block text-xs bg-muted/50 border border-border/50 rounded-lg px-3 py-2 font-mono break-all select-all text-muted-foreground">
                     {mfaSetupData.manual_entry_key}
                   </code>
                 </div>
@@ -301,7 +301,7 @@ export default function LoginPage() {
                       type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6}
                       placeholder="000 000"
                       value={mfaCode} onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
-                      className="text-center text-2xl tracking-[0.4em] font-mono-data"
+                      className="text-center text-2xl tracking-[0.3em] font-mono"
                       autoFocus required
                     />
                   </div>
@@ -350,12 +350,12 @@ export default function LoginPage() {
           )}
 
           {/* Brand headline */}
-          <h1 className="font-display text-[3rem] leading-[1.08] text-white mb-3">
+          <h1 className="text-[2.5rem] font-bold tracking-tight leading-[1.08] text-white mb-3">
             {orgBrand.name}
           </h1>
 
           {/* Italic tagline */}
-          <p className="font-display italic text-[1.25rem] leading-relaxed mb-12"
+          <p className="text-base leading-relaxed mb-12"
             style={{ color: "rgba(147,197,253,0.75)" }}>
             Intelligent shift management<br />for modern teams.
           </p>
@@ -364,7 +364,7 @@ export default function LoginPage() {
           <ul className="space-y-6 mb-14">
             {FEATURES.map((feat, i) => (
               <li key={feat} className="flex items-start gap-4">
-                <span className="font-mono-data text-[11px] text-blue-500/50 pt-0.5 shrink-0 tabular-nums font-mono-data leading-relaxed">
+                <span className="font-mono text-[11px] text-blue-500/50 pt-0.5 shrink-0 tabular-nums leading-relaxed">
                   0{i + 1}
                 </span>
                 <span className="text-[0.875rem] leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>
@@ -377,7 +377,7 @@ export default function LoginPage() {
           {/* Bottom rule */}
           <div className="flex items-center gap-4">
             <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.06)" }} />
-            <span className="font-mono-data text-[9px] uppercase tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.18)" }}>
+            <span className="font-mono text-[9px] uppercase tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.18)" }}>
               Secure · Reliable · Always-on
             </span>
             <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.06)" }} />
@@ -400,12 +400,12 @@ export default function LoginPage() {
                 <img src={orgBrand.logo_url} alt="logo" className="w-full h-full object-cover" />
               </div>
             )}
-            <span className="font-display text-xl text-foreground">{orgBrand.name}</span>
+            <span className="text-xl font-bold text-foreground">{orgBrand.name}</span>
           </div>
 
           {/* ── Glass card ── */}
           <div className="bg-card/80 dark:bg-card/60 backdrop-blur-2xl border border-border/60 dark:border-white/[0.07] rounded-2xl p-8 shadow-2xl shadow-black/10 dark:shadow-black/50">
-            <h2 className="font-display text-[1.875rem] text-foreground mb-1">Welcome back</h2>
+            <h2 className="text-[1.625rem] font-bold tracking-tight text-foreground mb-1">Welcome back</h2>
             <p className="text-sm text-muted-foreground mb-7">Sign in to your workspace</p>
 
             <form onSubmit={handleSubmit}>

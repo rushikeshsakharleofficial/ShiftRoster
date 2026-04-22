@@ -49,7 +49,7 @@ export default function NotificationsPage() {
     <div data-testid="notifications-page" className="space-y-6 dispatch-stagger">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-[2rem] leading-tight">Notifications</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
           <p className="text-sm text-muted-foreground">{unreadCount} unread</p>
         </div>
         {unreadCount > 0 && (
