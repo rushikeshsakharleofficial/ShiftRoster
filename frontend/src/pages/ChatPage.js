@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useChat } from "@/contexts/ChatContext";
@@ -112,6 +113,41 @@ function SystemEvent({ message }) {
   );
 }
 
+function TypingIndicator({ names }) {
+  const label =
+    names.length === 1
+      ? `${names[0]} is typing`
+      : names.length === 2
+      ? `${names[0]} and ${names[1]} are typing`
+      : "Several people are typing";
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 4 }}
+      transition={{ duration: 0.2 }}
+      className="flex items-center gap-3 px-4 py-1"
+    >
+      <div className="w-8 h-8 shrink-0" />
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 px-3 py-2 rounded-2xl rounded-bl-md msg-incoming">
+          <span className="flex gap-0.5 items-center h-3">
+            {[0, 1, 2].map((i) => (
+              <motion.span
+                key={i}
+                className="block w-1.5 h-1.5 rounded-full bg-muted-foreground/50"
+                animate={{ y: [0, -4, 0] }}
+                transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }}
+              />
+            ))}
+          </span>
+        </div>
+        <span className="text-[11px] text-muted-foreground/60">{label}</span>
+      </div>
+    </motion.div>
+  );
+}
+
 const isOnlyEmojis = (text) => {
   if (!text) return false;
   const stripped = text.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Emoji_Component}\uFE0F\u200D\s\n]/gu, '');
@@ -151,7 +187,13 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
   };
 
   return (
-    <div className={cn("group flex gap-3 px-4", isOwn ? "flex-row-reverse" : "flex-row")}>
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+      className={cn("group flex gap-3 px-4", isOwn ? "flex-row-reverse" : "flex-row")}
+    >
       {!isOwn && (
         <Avatar className="h-8 w-8 shrink-0 mt-1">
           <AvatarImage src={`${BACKEND_URL}${first.avatar_url}`} />
@@ -249,7 +291,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
           );
         })}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -1060,27 +1102,42 @@ export default function ChatPage() {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto py-4 space-y-3">
-              {messageBlocks.map((block, idx) => {
-                if (block.kind === "day") {
-                  return <DaySeparator key={`day-${idx}`} date={block.date} />;
-                }
-                if (block.kind === "system") {
-                  return <SystemEvent key={`sys-${block.message.id}`} message={block.message} />;
-                }
-                const isOwn = block.senderId === user.id;
-                return (
-                  <MessageGroup
-                    key={`grp-${block.messages[0].id}`}
-                    messages={block.messages}
-                    isOwn={isOwn}
-                    user={user}
-                    userCache={userCache}
-                    isDM={isActiveDM}
-                    onEdit={editMessage}
-                    onDelete={deleteMessage}
-                  />
+              <AnimatePresence initial={false}>
+                {messageBlocks.map((block, idx) => {
+                  if (block.kind === "day") {
+                    return <DaySeparator key={`day-${idx}`} date={block.date} />;
+                  }
+                  if (block.kind === "system") {
+                    return <SystemEvent key={`sys-${block.message.id}`} message={block.message} />;
+                  }
+                  const isOwn = block.senderId === user.id;
+                  return (
+                    <MessageGroup
+                      key={`grp-${block.messages[0].id}`}
+                      messages={block.messages}
+                      isOwn={isOwn}
+                      user={user}
+                      userCache={userCache}
+                      isDM={isActiveDM}
+                      onEdit={editMessage}
+                      onDelete={deleteMessage}
+                    />
+                  );
+                })}
+              </AnimatePresence>
+              {/* Typing indicator */}
+              {(() => {
+                const typers = (typingUsers[activeChannelId] || []).filter(
+                  (u) => u.user_id !== user?.id
                 );
-              })}
+                return (
+                  <AnimatePresence>
+                    {typers.length > 0 && (
+                      <TypingIndicator names={typers.map((u) => u.user_name)} />
+                    )}
+                  </AnimatePresence>
+                );
+              })()}
             </div>
           )}
         </div>
