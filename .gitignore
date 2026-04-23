@@ -214,16 +214,19 @@ CLAUDE.md
 .agents/
 .augment/
 .bob/
+.claude/
 .codebuddy/
 .commandcode/
 .continue/
 .cortex/
 .crush/
+.cursor/
 .factory/
 .goose/
 .iflow/
 .junie/
 .kilocode/
+.kiro/
 .kode/
 .mcpjam/
 .mux/
@@ -238,13 +241,18 @@ CLAUDE.md
 .vibe/
 .windsurf/
 .zencoder/
+.mcp.json
+.opencode.json
+.cursorrules
+.windsurfrules
+AGENTS.md
 skills/
 skills-lock.json
 
 # Backend
-backend/__pycache__/
-backend/*.pyc
-backend/.pytest_cache/
+**/__pycache__/
+**/*.pyc
+**/pytest_cache/
 backend/.coverage
 backend/htmlcov/
 backend/uploads/
