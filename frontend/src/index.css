@@ -125,6 +125,64 @@
   font-family: 'Geist', 'Inter', sans-serif;
 }
 
+/* Staggered entrance animation helpers */
+@keyframes dispatch-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.dispatch-stagger > * {
+  animation: dispatch-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.dispatch-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.dispatch-stagger > *:nth-child(2) { animation-delay: 60ms; }
+.dispatch-stagger > *:nth-child(3) { animation-delay: 120ms; }
+.dispatch-stagger > *:nth-child(4) { animation-delay: 180ms; }
+.dispatch-stagger > *:nth-child(5) { animation-delay: 240ms; }
+.dispatch-stagger > *:nth-child(6) { animation-delay: 300ms; }
+
+/* ── AUTO CONTRAST: OS high-contrast preference ── */
+@media (prefers-contrast: more) {
+  :root {
+    --foreground: 222 47% 4%;
+    --muted-foreground: 215 20% 22%;
+    --border: 214 32% 58%;
+    --input: 214 32% 58%;
+    --card-foreground: 222 47% 4%;
+    --popover-foreground: 222 47% 4%;
+  }
+  .dark {
+    --foreground: 0 0% 100%;
+    --muted-foreground: 0 0% 85%;
+    --border: 0 0% 38%;
+    --input: 0 0% 22%;
+  }
+}
+
+/* ── AUTO CONTRAST: low-DPI screen (devicePixelRatio < 1.5) ── */
+/* JS sets html.low-dpi on standard/non-Retina monitors */
+html.low-dpi body {
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: auto;
+  font-weight: 500;
+}
+html.low-dpi:not(.dark) {
+  --foreground: 222 47% 7%;
+  --card-foreground: 222 47% 7%;
+  --popover-foreground: 222 47% 7%;
+  --muted-foreground: 215 20% 30%;
+  --border: 214 32% 72%;
+  --input: 214 32% 72%;
+}
+html.low-dpi.dark {
+  --foreground: 0 0% 98%;
+  --card-foreground: 0 0% 98%;
+  --popover-foreground: 0 0% 98%;
+  --muted-foreground: 0 0% 78%;
+  --border: 0 0% 22%;
+  --input: 0 0% 16%;
+}
+
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
@@ -177,4 +235,27 @@ em-emoji-picker {
   --rgb-color: 245, 245, 245;
   --border-color: hsl(var(--border));
   --category-icon-size: 18px;
+}
+
+/* Color input — circular swatch */
+input[type="color"] {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: pointer;
+}
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border-radius: 50%;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+input[type="color"]::-moz-color-swatch {
+  border: none;
+  border-radius: 50%;
 }

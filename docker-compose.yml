@@ -27,6 +27,7 @@ services:
       DB_NAME: shiftroster
       JWT_SECRET: ${JWT_SECRET}
       SECURE_COOKIES: ${SECURE_COOKIES:-false}
+      MSG_ENCRYPT_KEY: ${MSG_ENCRYPT_KEY}
     depends_on:
       mongo:
         condition: service_healthy

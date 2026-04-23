@@ -530,27 +530,59 @@ async def report_overview(request: Request):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     org_id = current.get("org_id")
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    tomorrow_str = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = today_start.replace(day=1)
+
     total_employees = await db.users.count_documents({"org_id": org_id, "system_role": "employee"})
     total_managers = await db.users.count_documents({"org_id": org_id, "system_role": "manager"})
-    active_employees = await db.users.count_documents({"org_id": org_id, "status": "active"})
+    active_users = await db.users.count_documents({"org_id": org_id, "status": "active"})
     pending_leaves = await db.leave_requests.count_documents({"org_id": org_id, "status": "pending"})
-    pending_swaps = await db.swap_requests.count_documents({"status": "pending"})
+    pending_swaps = await db.swap_requests.count_documents({"org_id": org_id, "status": "pending"})
     total_shifts = await db.shifts.count_documents({"org_id": org_id})
     total_departments = await db.departments.count_documents({"org_id": org_id})
+    new_hires_this_month = await db.users.count_documents({"org_id": org_id, "created_at": {"$gte": month_start}})
 
-    # Today's attendance
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    clocked_in_today = await db.attendance_logs.count_documents({"clock_in": {"$gte": today_start}})
+    # Shifts scheduled for today
+    shifts_today = await db.shifts.count_documents({
+        "org_id": org_id,
+        "start_time": {"$gte": today_str, "$lt": tomorrow_str},
+    })
+
+    # Employees on approved leave today
+    on_leave_today = await db.leave_requests.count_documents({
+        "org_id": org_id,
+        "status": "approved",
+        "from_date": {"$lte": today_str},
+        "to_date": {"$gte": today_str},
+    })
+
+    # Clocked in today — unique users in this org (attendance_logs has no org_id)
+    org_user_ids = await db.users.distinct("_id", {"org_id": org_id})
+    org_user_id_strs = [str(uid) for uid in org_user_ids]
+    pipeline = [
+        {"$match": {"user_id": {"$in": org_user_id_strs}, "clock_in": {"$gte": today_start}}},
+        {"$group": {"_id": "$user_id"}},
+        {"$count": "total"},
+    ]
+    result = await db.attendance_logs.aggregate(pipeline).to_list(1)
+    clocked_in_today = result[0]["total"] if result else 0
+    absent_today = max(0, active_users - clocked_in_today)
 
     return {
         "total_employees": total_employees,
         "total_managers": total_managers,
-        "active_employees": active_employees,
+        "active_employees": active_users,
         "pending_leaves": pending_leaves,
         "pending_swaps": pending_swaps,
         "total_shifts": total_shifts,
         "total_departments": total_departments,
         "clocked_in_today": clocked_in_today,
+        "shifts_today": shifts_today,
+        "on_leave_today": on_leave_today,
+        "absent_today": absent_today,
+        "new_hires_this_month": new_hires_this_month,
     }
 
 
@@ -585,6 +617,12 @@ async def get_organization(request: Request):
     if org.get("ldap_settings"):
         from ldap_service import public_ldap_settings
         org["ldap_settings"] = public_ldap_settings(org.get("ldap_settings"))
+    if org.get("slack_oidc") is not None:
+        from slack_service import public_slack_settings
+        org["slack_oidc"] = public_slack_settings(org.get("slack_oidc"))
+    if org.get("google_oidc") is not None:
+        from google_service import public_google_settings
+        org["google_oidc"] = public_google_settings(org.get("google_oidc"))
     return serialize_doc(org)
 
 
@@ -603,7 +641,7 @@ async def update_organization(request: Request):
                    "attendance_enabled",
                    "smtp_host", "smtp_port", "smtp_username", "smtp_password",
                    "smtp_from_email", "smtp_from_name", "smtp_use_tls", "smtp_enabled",
-                   "chat_features", "purge_policy_days", "password_policy"]
+                   "chat_features", "purge_policy_days", "password_policy", "slack_oidc", "google_oidc"]
     else:
         allowed = ["attendance_enabled"]
 
@@ -641,6 +679,31 @@ async def update_organization(request: Request):
 
     if "smtp_password" in body:
         update["smtp_password"] = body["smtp_password"]
+
+    if "slack_oidc" in body and is_admin:
+        from slack_service import normalize_slack_settings
+        existing_org = await db.organizations.find_one({"_id": ObjectId(current.get("org_id"))})
+        update["slack_oidc"] = normalize_slack_settings(
+            body["slack_oidc"],
+            existing=(existing_org or {}).get("slack_oidc"),
+        )
+        # Mutual exclusion: enabling Slack SSO disables LDAP and Google
+        if update["slack_oidc"].get("enabled"):
+            update["ldap_settings.enabled"] = False
+            update["google_oidc.enabled"] = False
+
+    if "google_oidc" in body and is_admin:
+        from google_service import normalize_google_settings
+        existing_org = await db.organizations.find_one({"_id": ObjectId(current.get("org_id"))})
+        update["google_oidc"] = normalize_google_settings(
+            body["google_oidc"],
+            existing=(existing_org or {}).get("google_oidc"),
+        )
+        # Mutual exclusion: enabling Google SSO disables LDAP and Slack
+        if update["google_oidc"].get("enabled"):
+            update["ldap_settings.enabled"] = False
+            update["slack_oidc.enabled"] = False
+
     update["updated_at"] = datetime.now(timezone.utc)
 
     await db.organizations.update_one({"_id": ObjectId(current.get("org_id"))}, {"$set": update})

@@ -52,9 +52,14 @@ async def update_ldap_settings(payload: LdapSettingsPayload, user=Depends(get_cu
 
     settings = normalize_ldap_settings(payload.model_dump(), org.get("ldap_settings") or {})
     now = datetime.now(timezone.utc)
+    db_set = {"ldap_settings": settings, "updated_at": now}
+    # Mutual exclusion: enabling LDAP disables Slack and Google SSO
+    if settings.get("enabled"):
+        db_set["slack_oidc.enabled"] = False
+        db_set["google_oidc.enabled"] = False
     await db.organizations.update_one(
         {"_id": ObjectId(user["org_id"])},
-        {"$set": {"ldap_settings": settings, "updated_at": now}},
+        {"$set": db_set},
     )
     await log_audit(user["org_id"], user["id"], "update_ldap_settings", "organization", user["org_id"])
     return public_ldap_settings(settings)

@@ -23,6 +23,8 @@ import StickyNotesPage from "@/pages/StickyNotesPage";
 import ShiftTemplatesPage from "@/pages/ShiftTemplatesPage";
 import HandoverPage from "@/pages/HandoverPage";
 import TasksPage from "@/pages/TasksPage";
+import SOPsPage from "@/pages/SOPsPage";
+import SOPEditorPage from "@/pages/SOPEditorPage";
 import ChatPage from "@/pages/ChatPage";
 import ChatLayout from "@/components/layout/ChatLayout";
 import { ChatProvider } from "@/contexts/ChatContext";
@@ -71,8 +73,8 @@ function useBrandFavicon() {
       .then((data) => {
         if (!data) return;
         const link = document.getElementById("app-favicon");
-        if (link && data.logo_url) {
-          link.href = data.logo_url;
+        if (link) {
+          link.href = data.logo_url || "data:,";
         }
         if (data.brand_name) {
           document.title = data.brand_name;
@@ -84,6 +86,18 @@ function useBrandFavicon() {
 
 export default function App() {
   useBrandFavicon();
+
+  // Auto contrast: boost CSS vars on low-DPI screens (non-Retina, standard monitors)
+  useEffect(() => {
+    function syncDpi() {
+      document.documentElement.classList.toggle('low-dpi', window.devicePixelRatio < 1.5);
+    }
+    syncDpi();
+    const mql = window.matchMedia('(min-resolution: 1.5dppx)');
+    mql.addEventListener('change', syncDpi);
+    return () => mql.removeEventListener('change', syncDpi);
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -128,6 +142,8 @@ export default function App() {
             <Route path="/shift-templates" element={<ShiftTemplatesPage />} />
             <Route path="/handovers" element={<HandoverPage />} />
             <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/sops" element={<SOPsPage />} />
+            <Route path="/sops/:id" element={<SOPEditorPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/reports" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}><ReportsPage /></Suspense>} />
             <Route path="/audit-log" element={<AuditLogPage />} />

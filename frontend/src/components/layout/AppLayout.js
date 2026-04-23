@@ -17,12 +17,13 @@ import { notificationsApi, orgApi, usersApi } from "@/lib/api";
 import { useChat } from "@/contexts/ChatContext";
 import { getAvatarColor, cn } from "@/lib/utils";
 import FlipClock from "@/components/ui/flip-clock";
+import { UserAvatars } from "@/components/ui/user-avatars";
 import { Toggle, GooeyFilter } from "@/components/ui/liquid-toggle";
 import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
   BarChart3, ScrollText, Settings, LogOut, Menu, X, Check, LayoutTemplate,
-  MessageSquare, Coffee, Plane, CircleDot, UserCircle, Camera, Loader2, ListChecks
+  MessageSquare, Coffee, Plane, CircleDot, UserCircle, Camera, Loader2, ListChecks, FileText
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -233,6 +234,7 @@ export default function AppLayout() {
     { to: "/shift-templates", icon: LayoutTemplate, label: "Shift Templates", show: isAdmin || isManager },
     { to: "/handovers", icon: ClipboardList, label: "Handovers", show: true },
     { to: "/tasks", icon: ListChecks, label: "Tasks", show: true },
+    { to: "/sops", icon: FileText, label: "SOPs", show: true },
     { to: "/sticky-notes", icon: StickyNote, label: "Sticky Notes", show: true },
     { to: "/chat", icon: MessageSquare, label: "Chat", show: true, external: true },
     { to: "/notifications", icon: Bell, label: "Notifications", show: true },
@@ -268,7 +270,7 @@ export default function AppLayout() {
       <aside
         data-testid="app-sidebar"
         className={`
-          fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border
+          fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border/50 dark:border-white/[0.06]
           bg-[hsl(var(--sidebar-bg))] transition-all duration-300
           ${sidebarOpen ? "w-64" : "w-16"}
           ${mobileSidebar ? "translate-x-0" : "-translate-x-full"}
@@ -420,7 +422,7 @@ export default function AppLayout() {
         {/* Header */}
         <header
           data-testid="app-header"
-          className="h-14 border-b border-border bg-background/80 backdrop-blur-md flex items-center justify-between px-4 shrink-0 z-20"
+          className="h-14 border-b border-border/50 dark:border-white/[0.06] bg-background/60 backdrop-blur-xl flex items-center justify-between px-4 shrink-0 z-20 shadow-sm shadow-black/[0.04]"
         >
           <div className="flex items-center gap-2">
             <Button
@@ -445,6 +447,8 @@ export default function AppLayout() {
 
           <div className="flex items-center gap-3">
             <FlipClock />
+
+            <UserAvatars users={onlineUsers} max={6} />
 
             {/* Notification Popover */}
             <Popover>

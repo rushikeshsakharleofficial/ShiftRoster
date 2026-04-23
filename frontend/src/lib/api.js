@@ -297,6 +297,9 @@ export const chatApi = {
   uploadFile: (formData) => api.post("/chat/upload", formData, {
     headers: { "Content-Type": undefined },
   }),
+
+  // E2EE key distribution
+  updateChannelE2eeKeys: (channelId, keys) => api.put(`/chat/channels/${channelId}/e2ee-keys`, keys),
 };
 
 // IAM / Access Rule Book
@@ -308,6 +311,52 @@ export const iamApi = {
   getUserGroups: (userId) => api.get(`/iam/users/${userId}/groups`),
   assignGroups: (userId, groupIds) => api.put(`/iam/users/${userId}/groups`, { group_ids: groupIds }),
   myPermissions: () => api.get("/iam/me/permissions"),
+};
+
+// SOPs
+export const slackSsoApi = {
+  getConfig: () => api.get("/auth/slack/config"),
+  loginUrl: () => `${api.defaults.baseURL}/auth/slack/login`,
+  getSettings: () => api.get("/organization").then(r => ({ data: r.data.slack_oidc || {} })),
+  saveSettings: (data) => api.put("/organization", { slack_oidc: data }),
+};
+
+export const googleSsoApi = {
+  getConfig: () => api.get("/auth/google/config"),
+  loginUrl: () => `${api.defaults.baseURL}/auth/google/login`,
+  getSettings: () => api.get("/organization").then(r => ({ data: r.data.google_oidc || {} })),
+  saveSettings: (data) => api.put("/organization", { google_oidc: data }),
+};
+
+export const sopsApi = {
+  list: () => api.get("/sops"),
+  create: (data) => api.post("/sops", data),
+  get: (id) => api.get(`/sops/${id}`),
+  update: (id, data) => api.put(`/sops/${id}`, data),
+  delete: (id) => api.delete(`/sops/${id}`),
+  approve: (id) => api.put(`/sops/${id}/approve`),
+  reject: (id) => api.put(`/sops/${id}/reject`),
+  acknowledge: (id) => api.post(`/sops/${id}/acknowledge`),
+  transfer: (id, data) => api.post(`/sops/${id}/transfer`, data),
+  versions: (id) => api.get(`/sops/${id}/versions`),
+  revert: (id, versionId) => api.post(`/sops/${id}/revert/${versionId}`),
+  archive: (id) => api.post(`/sops/${id}/archive`),
+  upload: (formData) => api.post("/sops/upload", formData, { headers: { "Content-Type": undefined } }),
+};
+
+// E2EE key exchange
+export const cryptoApi = {
+  publishKey: (publicKeyJwk) => api.put("/users/me/public-key", { public_key: publicKeyJwk }),
+  getPublicKey: (userId) => api.get(`/users/${userId}/public-key`),
+};
+
+// Stories
+export const storiesApi = {
+  list: () => api.get("/stories"),
+  create: (data) => api.post("/stories", data),
+  upload: (formData) => api.post("/stories/upload", formData, { headers: { "Content-Type": undefined } }),
+  view: (id) => api.post(`/stories/${id}/view`),
+  delete: (id) => api.delete(`/stories/${id}`),
 };
 
 export default api;

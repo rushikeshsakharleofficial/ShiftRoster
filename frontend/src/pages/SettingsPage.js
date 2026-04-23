@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
-import { orgApi, authApi, usersApi, ldapApi, formatApiError } from "@/lib/api";
+import { orgApi, authApi, usersApi, ldapApi, slackSsoApi, googleSsoApi, formatApiError } from "@/lib/api";
 import AccessRuleBook from "@/components/AccessRuleBook";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle, ImageIcon, Upload, X, Mail, Server, Eye, EyeOff, Lock, Trash2, Zap, Building2, MessageSquare, BookOpen } from "lucide-react";
+import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle, ImageIcon, Upload, X, Mail, Server, Eye, EyeOff, Lock, Trash2, Zap, Building2, MessageSquare, BookOpen, LogIn } from "lucide-react";
 import { generateMnemonic } from "@/lib/crypto";
 
 export default function SettingsPage() {
@@ -155,6 +156,33 @@ export default function SettingsPage() {
   const [ldapPasswordVisible, setLdapPasswordVisible] = useState(false);
   const [ldapResult, setLdapResult] = useState(null);
 
+  // Slack SSO state
+  const [slackForm, setSlackForm] = useState({
+    enabled: false,
+    client_id: "",
+    client_secret: "",
+    allowed_workspace: "",
+    auto_provision: true,
+    default_role: "employee",
+    trust_slack_as_mfa: false,
+    instance_base_url: window.location.origin,
+  });
+  const [slackSaving, setSlackSaving] = useState(false);
+  const [slackSecretVisible, setSlackSecretVisible] = useState(false);
+  const [googleForm, setGoogleForm] = useState({
+    enabled: false,
+    client_id: "",
+    client_secret: "",
+    allowed_domain: "",
+    auto_provision: true,
+    default_role: "employee",
+    trust_google_as_mfa: false,
+    instance_base_url: window.location.origin,
+  });
+  const [googleSaving, setGoogleSaving] = useState(false);
+  const [googleSecretVisible, setGoogleSecretVisible] = useState(false);
+  const [ssoConflictDialog, setSsoConflictDialog] = useState({ open: false, message: "", onConfirm: null });
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -198,6 +226,24 @@ export default function SettingsPage() {
             bind_password: ldapRes.data.bind_password || "",
             mapping: { ...current.mapping, ...(ldapRes.data.mapping || {}) },
           }));
+        } catch {}
+        try {
+          if (data.slack_oidc) {
+            setSlackForm((cur) => ({
+              ...cur,
+              ...data.slack_oidc,
+              instance_base_url: data.slack_oidc.instance_base_url || window.location.origin,
+            }));
+          }
+        } catch {}
+        try {
+          if (data.google_oidc) {
+            setGoogleForm((cur) => ({
+              ...cur,
+              ...data.google_oidc,
+              instance_base_url: data.google_oidc.instance_base_url || window.location.origin,
+            }));
+          }
         } catch {}
       } catch {}
       setMfaEnabled(!!user?.mfa_enabled);
@@ -323,6 +369,40 @@ export default function SettingsPage() {
       setLdapResult({ ok: false, msg: formatApiError(e.response?.data?.detail) });
     } finally {
       setLdapSyncing(false);
+    }
+  };
+
+  const handleSlackSave = async () => {
+    if (slackForm.enabled && !slackForm.allowed_workspace.trim()) {
+      toast.error("Allowed Workspace Domain is required when Slack SSO is enabled");
+      return;
+    }
+    setSlackSaving(true);
+    try {
+      const { data } = await slackSsoApi.saveSettings(slackForm);
+      if (data.slack_oidc) setSlackForm((cur) => ({ ...cur, ...data.slack_oidc }));
+      toast.success("Slack SSO settings saved");
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Failed to save Slack SSO settings");
+    } finally {
+      setSlackSaving(false);
+    }
+  };
+
+  const handleGoogleSave = async () => {
+    if (googleForm.enabled && !googleForm.allowed_domain.trim()) {
+      toast.error("Allowed Domain is required when Google SSO is enabled");
+      return;
+    }
+    setGoogleSaving(true);
+    try {
+      const { data } = await googleSsoApi.saveSettings(googleForm);
+      if (data.google_oidc) setGoogleForm((cur) => ({ ...cur, ...data.google_oidc }));
+      toast.success("Google SSO settings saved");
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Failed to save Google SSO settings");
+    } finally {
+      setGoogleSaving(false);
     }
   };
 
@@ -470,6 +550,7 @@ export default function SettingsPage() {
     { id: "organization", label: "Organization",  icon: Building2,     show: isAdmin },
     { id: "email",        label: "Email",         icon: Mail,          show: isAdmin },
     { id: "ldap",         label: "LDAP / AD",     icon: Server,        show: isAdmin },
+    { id: "sso",          label: "SSO",           icon: LogIn,         show: isAdmin },
     { id: "security",     label: "Security",      icon: Shield,        show: true },
     { id: "chat",         label: "Chat",          icon: MessageSquare, show: true },
     { id: "access",       label: "Access Rules",  icon: BookOpen,      show: isAdmin || isManager },
@@ -617,7 +698,7 @@ export default function SettingsPage() {
             <CardDescription>Configure a relay server (Gmail, Outlook, or any SMTP) for outbound emails</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Enable toggle */}
+            {/* Enable toggle always visible */}
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Enable SMTP</p>
@@ -629,73 +710,136 @@ export default function SettingsPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>SMTP Host</Label>
-                <Input placeholder="smtp.gmail.com" value={smtpForm.smtp_host}
-                  onChange={e => setSmtpForm(f => ({ ...f, smtp_host: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Port</Label>
-                <Input placeholder="587" value={smtpForm.smtp_port}
-                  onChange={e => setSmtpForm(f => ({ ...f, smtp_port: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Username</Label>
-                <Input placeholder="you@gmail.com" value={smtpForm.smtp_username}
-                  onChange={e => setSmtpForm(f => ({ ...f, smtp_username: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5 relative">
-                <Label>Password / App Password</Label>
-                <div className="relative">
-                  <Input
-                    type={smtpPasswordVisible ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={smtpForm.smtp_password}
-                    onChange={e => setSmtpForm(f => ({ ...f, smtp_password: e.target.value }))}
-                    className="pr-9"
-                  />
-                  <button type="button" onClick={() => setSmtpPasswordVisible(v => !v)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                    {smtpPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+            <Tabs defaultValue="configure">
+              <TabsList variant="line" className="mb-4">
+                <TabsTrigger value="configure">Configure</TabsTrigger>
+                <TabsTrigger value="quicksetup">Quick Setup</TabsTrigger>
+              </TabsList>
+
+              {/* Configure tab */}
+              <TabsContent value="configure" className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>SMTP Host</Label>
+                    <Input placeholder="smtp.gmail.com" value={smtpForm.smtp_host}
+                      onChange={e => setSmtpForm(f => ({ ...f, smtp_host: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Port</Label>
+                    <Input placeholder="587" value={smtpForm.smtp_port}
+                      onChange={e => setSmtpForm(f => ({ ...f, smtp_port: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Username</Label>
+                    <Input placeholder="you@gmail.com" value={smtpForm.smtp_username}
+                      onChange={e => setSmtpForm(f => ({ ...f, smtp_username: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5 relative">
+                    <Label>Password / App Password</Label>
+                    <div className="relative">
+                      <Input
+                        type={smtpPasswordVisible ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={smtpForm.smtp_password}
+                        onChange={e => setSmtpForm(f => ({ ...f, smtp_password: e.target.value }))}
+                        className="pr-9"
+                      />
+                      <button type="button" onClick={() => setSmtpPasswordVisible(v => !v)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        {smtpPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>From Email</Label>
+                    <Input placeholder="noreply@yourcompany.com" value={smtpForm.smtp_from_email}
+                      onChange={e => setSmtpForm(f => ({ ...f, smtp_from_email: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>From Name</Label>
+                    <Input placeholder="ShiftRoster" value={smtpForm.smtp_from_name}
+                      onChange={e => setSmtpForm(f => ({ ...f, smtp_from_name: e.target.value }))} />
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>From Email</Label>
-                <Input placeholder="noreply@yourcompany.com" value={smtpForm.smtp_from_email}
-                  onChange={e => setSmtpForm(f => ({ ...f, smtp_from_email: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>From Name</Label>
-                <Input placeholder="ShiftRoster" value={smtpForm.smtp_from_name}
-                  onChange={e => setSmtpForm(f => ({ ...f, smtp_from_name: e.target.value }))} />
-              </div>
-            </div>
+                <div className="flex items-center gap-3">
+                  <Toggle checked={smtpForm.smtp_use_tls} onCheckedChange={(v) => setSmtpForm(f => ({ ...f, smtp_use_tls: v }))} className="h-6 w-10" />
+                  <span className="text-sm">Use STARTTLS (recommended for port 587)</span>
+                </div>
+                <Button onClick={handleSmtpSave} disabled={smtpSaving} size="sm">
+                  {smtpSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Server className="h-4 w-4 mr-2" />}
+                  Save SMTP Settings
+                </Button>
+              </TabsContent>
 
-            {/* TLS toggle */}
-            <div className="flex items-center gap-3">
-              <Toggle
-                checked={smtpForm.smtp_use_tls}
-                onCheckedChange={(v) => setSmtpForm(f => ({ ...f, smtp_use_tls: v }))}
-                className="h-6 w-10"
-              />
-              <span className="text-sm">Use STARTTLS (recommended for port 587)</span>
-            </div>
-
-            {/* Hint for common providers */}
-            <div className="rounded-lg bg-muted/40 border border-border p-3 text-xs text-muted-foreground space-y-1">
-              <p className="font-medium text-foreground">Common providers:</p>
-              <p>• Gmail: host=smtp.gmail.com, port=587, use App Password (2FA required)</p>
-              <p>• Outlook/Office365: host=smtp.office365.com, port=587</p>
-              <p>• SendGrid: host=smtp.sendgrid.net, port=587, user=apikey</p>
-            </div>
-
-            {/* Save button */}
-            <Button onClick={handleSmtpSave} disabled={smtpSaving} size="sm">
-              {smtpSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Server className="h-4 w-4 mr-2" />}
-              Save SMTP Settings
-            </Button>
+              {/* Quick Setup tab */}
+              <TabsContent value="quicksetup" className="space-y-4">
+                {[
+                  {
+                    label: "Gmail Relay",
+                    host: "smtp.gmail.com", port: "587", tls: true,
+                    steps: [
+                      "Go to myaccount.google.com → Security → 2-Step Verification (must be enabled).",
+                      "Scroll down to App Passwords → create one for Mail.",
+                      "Use your Gmail address as Username and the 16-char app password as Password.",
+                    ],
+                  },
+                  {
+                    label: "Outlook / Office 365",
+                    host: "smtp.office365.com", port: "587", tls: true,
+                    steps: [
+                      "Use your full Microsoft account email as Username.",
+                      "Use your account password or an App Password if MFA is enabled.",
+                      "If using a shared mailbox, set From Email to the shared mailbox address.",
+                    ],
+                  },
+                  {
+                    label: "SendGrid",
+                    host: "smtp.sendgrid.net", port: "587", tls: true,
+                    steps: [
+                      "Username must be the literal string: apikey",
+                      "Password is your SendGrid API key (Settings → API Keys → Full Access).",
+                      "Verify your sender domain in SendGrid before sending.",
+                    ],
+                  },
+                  {
+                    label: "Mailgun",
+                    host: "smtp.mailgun.org", port: "587", tls: true,
+                    steps: [
+                      "Find SMTP credentials in Mailgun → Sending → Domain Settings → SMTP.",
+                      "Username is your Mailgun SMTP login (not your Mailgun account email).",
+                      "Domain must be verified in Mailgun first.",
+                    ],
+                  },
+                  {
+                    label: "Amazon SES",
+                    host: "email-smtp.us-east-1.amazonaws.com", port: "587", tls: true,
+                    steps: [
+                      "Create SMTP credentials in AWS SES Console → SMTP Settings.",
+                      "Use the SMTP username/password shown there (not your AWS access key).",
+                      "Sender domain must be verified in SES. Change region in host if needed.",
+                    ],
+                  },
+                ].map(p => (
+                  <div key={p.label} className="rounded-lg border border-border p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold">{p.label}</p>
+                      <Button size="sm" variant="outline" onClick={() => {
+                        setSmtpForm(f => ({ ...f, smtp_host: p.host, smtp_port: p.port, smtp_use_tls: p.tls }));
+                        toast.success(`${p.label} settings applied. Switch to Configure tab to add credentials.`);
+                      }}>
+                        Use This
+                      </Button>
+                    </div>
+                    <div className="font-mono text-xs text-muted-foreground bg-muted/40 rounded px-2 py-1">
+                      {p.host} : {p.port}
+                    </div>
+                    <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                      {p.steps.map((s, i) => <li key={i}>{s}</li>)}
+                    </ol>
+                  </div>
+                ))}
+              </TabsContent>
+            </Tabs>
 
             {/* Test email */}
             <div className="border-t border-border pt-4 space-y-2">
@@ -734,7 +878,21 @@ export default function SettingsPage() {
                 <p className="text-sm font-medium">Enable LDAP login</p>
                 <p className="text-xs text-muted-foreground">LDAP-managed users will use their directory password</p>
               </div>
-              <Toggle checked={ldapForm.enabled} onCheckedChange={(v) => setLdapForm(f => ({ ...f, enabled: v }))} />
+              <Toggle checked={ldapForm.enabled} onCheckedChange={(v) => {
+                if (v && slackForm.enabled) {
+                  setSsoConflictDialog({
+                    open: true,
+                    message: "Enabling LDAP login will disable Slack SSO. Only one SSO method can be active at a time.",
+                    onConfirm: () => {
+                      setLdapForm(f => ({ ...f, enabled: true }));
+                      setSlackForm(f => ({ ...f, enabled: false }));
+                      setSsoConflictDialog(d => ({ ...d, open: false }));
+                    },
+                  });
+                } else {
+                  setLdapForm(f => ({ ...f, enabled: v }));
+                }
+              }} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -842,6 +1000,379 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* SSO — Slack + Google combined */}
+      {activeSection === "sso" && isAdmin && (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            Only one SSO method can be active at a time. Enabling one will automatically disable the others.
+          </div>
+
+          <Tabs defaultValue="slack">
+            <TabsList variant="button" className="mb-4">
+              <TabsTrigger value="slack" className="gap-2">
+                <svg width="16" height="16" viewBox="0 0 122.8 122.8" aria-hidden="true">
+                  <path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#E01E5A"/>
+                  <path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#36C5F0"/>
+                  <path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2EB67D"/>
+                  <path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#ECB22E"/>
+                </svg>
+                Slack OIDC
+                {slackForm.enabled && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 ml-0.5" />}
+              </TabsTrigger>
+              <TabsTrigger value="google" className="gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Google OIDC
+                {googleForm.enabled && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 ml-0.5" />}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="slack">
+        <Card className="border">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <LogIn className="h-5 w-5 text-primary" /> Slack SSO
+            </CardTitle>
+            <CardDescription>
+              Allow users to sign in with their Slack account via OpenID Connect.
+              New Slack users are created as <strong>pending</strong> — an admin must activate them before they can log in.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* Enable toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Enable Slack SSO</p>
+                <p className="text-xs text-muted-foreground">Show "Sign in with Slack" on the login page</p>
+              </div>
+              <Toggle checked={slackForm.enabled} onCheckedChange={(v) => {
+                if (v && (ldapForm.enabled || googleForm.enabled)) {
+                  const conflict = ldapForm.enabled ? "LDAP" : "Google SSO";
+                  setSsoConflictDialog({
+                    open: true,
+                    message: `Enabling Slack SSO will disable ${conflict}. Only one SSO method can be active at a time.`,
+                    onConfirm: () => {
+                      setSlackForm(f => ({ ...f, enabled: true }));
+                      setLdapForm(f => ({ ...f, enabled: false }));
+                      setGoogleForm(f => ({ ...f, enabled: false }));
+                      setSsoConflictDialog(d => ({ ...d, open: false }));
+                    },
+                  });
+                } else {
+                  setSlackForm(f => ({ ...f, enabled: v }));
+                }
+              }} />
+            </div>
+
+            <Separator />
+
+            {/* OAuth credentials */}
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-1.5">
+                <Label>Client ID</Label>
+                <Input
+                  placeholder="Your Slack app's Client ID"
+                  value={slackForm.client_id}
+                  onChange={e => setSlackForm(f => ({ ...f, client_id: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Client Secret</Label>
+                <div className="relative">
+                  <Input
+                    type={slackSecretVisible ? "text" : "password"}
+                    placeholder={slackForm.client_secret === "__KEEP_EXISTING_SLACK_SECRET__" ? "••••••••••••••••" : "Your Slack app's Client Secret"}
+                    value={slackForm.client_secret === "__KEEP_EXISTING_SLACK_SECRET__" ? "" : slackForm.client_secret}
+                    onChange={e => setSlackForm(f => ({ ...f, client_secret: e.target.value }))}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    onClick={() => setSlackSecretVisible(v => !v)}
+                  >
+                    {slackSecretVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {slackForm.client_secret === "__KEEP_EXISTING_SLACK_SECRET__" && (
+                  <p className="text-xs text-muted-foreground">A client secret is already saved. Leave blank to keep it.</p>
+                )}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Instance URL (determines redirect_uri) */}
+            <div className="space-y-1.5">
+              <Label>Instance Base URL</Label>
+              <Input
+                placeholder="https://your-domain.com or http://89.167.44.42:8080"
+                value={slackForm.instance_base_url}
+                onChange={e => setSlackForm(f => ({ ...f, instance_base_url: e.target.value.trim() }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Used to build the OAuth redirect URI. Copy the value below into your Slack app's "Redirect URLs" field.
+              </p>
+              {slackForm.instance_base_url && (
+                <div className="flex items-center gap-2 mt-1 p-2 rounded bg-muted text-xs font-mono break-all">
+                  {slackForm.instance_base_url.replace(/\/$/, "")}/api/auth/slack/callback
+                  <button
+                    type="button"
+                    className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${slackForm.instance_base_url.replace(/\/$/, "")}/api/auth/slack/callback`);
+                      toast.success("Copied redirect URI");
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Workspace restriction */}
+            <div className="space-y-1.5">
+              <Label>Allowed Workspace Domain <span className="text-destructive">*</span></Label>
+              <Input
+                placeholder="your-company (Slack team domain, without .slack.com)"
+                value={slackForm.allowed_workspace}
+                onChange={e => setSlackForm(f => ({ ...f, allowed_workspace: e.target.value.trim().toLowerCase() }))}
+              />
+              <p className="text-xs text-muted-foreground">Required. Only users from this Slack workspace can log in. Find it in your Slack workspace URL: <code>your-company.slack.com</code>.</p>
+            </div>
+
+            <Separator />
+
+            {/* Auto provision + default role */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Auto-provision new users</p>
+                <p className="text-xs text-muted-foreground">
+                  Create an account for unknown emails. New accounts start as <strong>pending</strong> — admin must activate before first login.
+                </p>
+              </div>
+              <Toggle checked={slackForm.auto_provision} onCheckedChange={(v) => setSlackForm(f => ({ ...f, auto_provision: v }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Default role for new users</Label>
+              <Select value={slackForm.default_role} onValueChange={v => setSlackForm(f => ({ ...f, default_role: v }))}>
+                <SelectTrigger className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="readonly">Read-only</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Admin must activate the user and can change the role before approval.</p>
+            </div>
+
+            <Separator />
+
+            {/* MFA trust */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Trust Slack as second factor</p>
+                <p className="text-xs text-muted-foreground">
+                  If disabled, users with TOTP enabled must still complete TOTP after Slack login.
+                </p>
+              </div>
+              <Toggle checked={slackForm.trust_slack_as_mfa} onCheckedChange={(v) => setSlackForm(f => ({ ...f, trust_slack_as_mfa: v }))} />
+            </div>
+
+            <div className="pt-2">
+              <Button onClick={handleSlackSave} disabled={slackSaving} size="sm">
+                {slackSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                Save Slack SSO Settings
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+            </TabsContent>
+
+            <TabsContent value="google">
+        <Card className="border">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Google SSO
+            </CardTitle>
+            <CardDescription>
+              Allow users to sign in with their Google Workspace account via OpenID Connect.
+              New Google users are created as <strong>pending</strong> — an admin must activate them before they can log in.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* Enable toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Enable Google SSO</p>
+                <p className="text-xs text-muted-foreground">Show "Sign in with Google" on the login page</p>
+              </div>
+              <Toggle checked={googleForm.enabled} onCheckedChange={(v) => {
+                if (v && (ldapForm.enabled || slackForm.enabled)) {
+                  const conflict = ldapForm.enabled ? "LDAP" : "Slack SSO";
+                  setSsoConflictDialog({
+                    open: true,
+                    message: `Enabling Google SSO will disable ${conflict}. Only one SSO method can be active at a time.`,
+                    onConfirm: () => {
+                      setGoogleForm(f => ({ ...f, enabled: true }));
+                      setLdapForm(f => ({ ...f, enabled: false }));
+                      setSlackForm(f => ({ ...f, enabled: false }));
+                      setSsoConflictDialog(d => ({ ...d, open: false }));
+                    },
+                  });
+                } else {
+                  setGoogleForm(f => ({ ...f, enabled: v }));
+                }
+              }} />
+            </div>
+
+            <Separator />
+
+            {/* OAuth credentials */}
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-1.5">
+                <Label>Client ID</Label>
+                <Input
+                  placeholder="Your Google OAuth Client ID"
+                  value={googleForm.client_id}
+                  onChange={e => setGoogleForm(f => ({ ...f, client_id: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Client Secret</Label>
+                <div className="relative">
+                  <Input
+                    type={googleSecretVisible ? "text" : "password"}
+                    placeholder={googleForm.client_secret === "__KEEP_EXISTING_GOOGLE_SECRET__" ? "••••••••••••••••" : "Your Google OAuth Client Secret"}
+                    value={googleForm.client_secret === "__KEEP_EXISTING_GOOGLE_SECRET__" ? "" : googleForm.client_secret}
+                    onChange={e => setGoogleForm(f => ({ ...f, client_secret: e.target.value }))}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    onClick={() => setGoogleSecretVisible(v => !v)}
+                  >
+                    {googleSecretVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {googleForm.client_secret === "__KEEP_EXISTING_GOOGLE_SECRET__" && (
+                  <p className="text-xs text-muted-foreground">A client secret is already saved. Leave blank to keep it.</p>
+                )}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Instance URL */}
+            <div className="space-y-1.5">
+              <Label>Instance Base URL</Label>
+              <Input
+                placeholder="https://your-domain.com or http://89.167.44.42:8080"
+                value={googleForm.instance_base_url}
+                onChange={e => setGoogleForm(f => ({ ...f, instance_base_url: e.target.value.trim() }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Used to build the OAuth redirect URI. Add the value below to your Google Cloud Console "Authorized redirect URIs".
+              </p>
+              {googleForm.instance_base_url && (
+                <div className="flex items-center gap-2 mt-1 p-2 rounded bg-muted text-xs font-mono break-all">
+                  {googleForm.instance_base_url.replace(/\/$/, "")}/api/auth/google/callback
+                  <button
+                    type="button"
+                    className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${googleForm.instance_base_url.replace(/\/$/, "")}/api/auth/google/callback`);
+                      toast.success("Copied redirect URI");
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Domain restriction */}
+            <div className="space-y-1.5">
+              <Label>Allowed Domain <span className="text-destructive">*</span></Label>
+              <Input
+                placeholder="yourcompany.com"
+                value={googleForm.allowed_domain}
+                onChange={e => setGoogleForm(f => ({ ...f, allowed_domain: e.target.value.trim().toLowerCase() }))}
+              />
+              <p className="text-xs text-muted-foreground">Required. Only Google accounts from this domain can log in (e.g. <code>yourcompany.com</code>). Works with Google Workspace and personal Gmail on custom domains.</p>
+            </div>
+
+            <Separator />
+
+            {/* Auto provision + default role */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Auto-provision new users</p>
+                <p className="text-xs text-muted-foreground">
+                  Create an account for unknown emails. New accounts start as <strong>pending</strong> — admin must activate before first login.
+                </p>
+              </div>
+              <Toggle checked={googleForm.auto_provision} onCheckedChange={(v) => setGoogleForm(f => ({ ...f, auto_provision: v }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Default role for new users</Label>
+              <Select value={googleForm.default_role} onValueChange={v => setGoogleForm(f => ({ ...f, default_role: v }))}>
+                <SelectTrigger className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="readonly">Read-only</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Admin must activate the user and can change the role before approval.</p>
+            </div>
+
+            <Separator />
+
+            {/* MFA trust */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Trust Google as second factor</p>
+                <p className="text-xs text-muted-foreground">
+                  If disabled, users with TOTP enabled must still complete TOTP after Google login.
+                </p>
+              </div>
+              <Toggle checked={googleForm.trust_google_as_mfa} onCheckedChange={(v) => setGoogleForm(f => ({ ...f, trust_google_as_mfa: v }))} />
+            </div>
+
+            <div className="pt-2">
+              <Button onClick={handleGoogleSave} disabled={googleSaving} size="sm">
+                {googleSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                Save Google SSO Settings
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       )}
 
       {activeSection === "organization" && isAdmin && <Card className="border">
@@ -1463,6 +1994,29 @@ export default function SettingsPage() {
         </div>
       )}
       </div>
+
+      {/* SSO conflict confirmation dialog */}
+      {ssoConflictDialog.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-xl space-y-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-semibold text-sm">Switch SSO Method</p>
+                <p className="text-sm text-muted-foreground mt-1">{ssoConflictDialog.message}</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setSsoConflictDialog(d => ({ ...d, open: false }))}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={ssoConflictDialog.onConfirm}>
+                Proceed
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

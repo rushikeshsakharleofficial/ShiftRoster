@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useChat } from "@/contexts/ChatContext";
-import { chatApi, orgApi, usersApi } from "@/lib/api";
+import { chatApi, orgApi, usersApi, cryptoApi } from "@/lib/api";
 import { getAvatarColor, cn } from "@/lib/utils";
 import { FileCard, getFileFormat } from "@/components/ui/file-card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -29,8 +30,10 @@ import {
   LayoutDashboard, Globe, ShieldCheck,
   FileText, Download, Zap, LogIn, Loader2, Paperclip,
   ChevronUp, User2, Settings, SquarePen, Pencil, Trash2, Check,
+  Reply, Copy, Flag,
 } from "lucide-react";
 import MediaMenu from "@/components/chat/MediaMenu";
+import { StoryStrip } from "@/components/chat/StoryStrip";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import * as crypto from "@/lib/crypto";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -112,6 +115,41 @@ function SystemEvent({ message }) {
   );
 }
 
+function TypingIndicator({ names }) {
+  const label =
+    names.length === 1
+      ? `${names[0]} is typing`
+      : names.length === 2
+      ? `${names[0]} and ${names[1]} are typing`
+      : "Several people are typing";
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 4 }}
+      transition={{ duration: 0.2 }}
+      className="flex items-center gap-3 px-4 py-1"
+    >
+      <div className="w-8 h-8 shrink-0" />
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 px-3 py-2 rounded-2xl rounded-bl-md msg-incoming">
+          <span className="flex gap-0.5 items-center h-3">
+            {[0, 1, 2].map((i) => (
+              <motion.span
+                key={i}
+                className="block w-1.5 h-1.5 rounded-full bg-muted-foreground/50"
+                animate={{ y: [0, -4, 0] }}
+                transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }}
+              />
+            ))}
+          </span>
+        </div>
+        <span className="text-[11px] text-muted-foreground/60">{label}</span>
+      </div>
+    </motion.div>
+  );
+}
+
 const isOnlyEmojis = (text) => {
   if (!text) return false;
   const stripped = text.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Emoji_Component}\uFE0F\u200D\s\n]/gu, '');
@@ -120,7 +158,7 @@ const isOnlyEmojis = (text) => {
 
 // Renders a contiguous block of messages from the same author. Avatar + name
 // appear once at the top; subsequent bubbles are tightly stacked.
-function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete }) {
+function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete, onReply, decryptedCache }) {
   const first = messages[0];
   const cached = userCache?.[first.sender_username] || userCache?.[first.sender_id];
   const displayName =
@@ -136,7 +174,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
 
   const startEdit = (msg) => {
     setEditingId(msg.id);
-    setEditText(msg.text || "");
+    setEditText(decryptedCache?.[msg.id] ?? msg.text ?? "");
   };
 
   const cancelEdit = () => {
@@ -151,7 +189,13 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
   };
 
   return (
-    <div className={cn("group flex gap-3 px-4", isOwn ? "flex-row-reverse" : "flex-row")}>
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+      className={cn("group flex gap-3 px-4", isOwn ? "flex-row-reverse" : "flex-row")}
+    >
       {!isOwn && (
         <Avatar className="h-8 w-8 shrink-0 mt-1">
           <AvatarImage src={`${BACKEND_URL}${first.avatar_url}`} />
@@ -166,7 +210,9 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
           <span className="text-xs font-semibold text-foreground ml-1 mb-0.5 leading-none">{displayName}</span>
         )}
         {messages.map((msg, idx) => {
-          const emojiOnly = isOnlyEmojis(msg.text);
+          if (msg.deleted_at) return null;
+          const displayText = decryptedCache?.[msg.id] ?? msg.text;
+          const emojiOnly = isOnlyEmojis(displayText);
           const isLast = idx === messages.length - 1;
           const isEditing = editingId === msg.id;
           return (
@@ -192,8 +238,8 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
               ) : (
                 <>
                   <div className={cn("flex items-center gap-1.5 group/msg", isOwn ? "flex-row-reverse" : "flex-row")}>
-                    {msg.text && (emojiOnly && !msg.file_url ? (
-                      <div className="text-4xl leading-none py-0.5">{msg.text}</div>
+                    {displayText && (emojiOnly && !msg.file_url ? (
+                      <div className="text-4xl leading-none py-0.5">{displayText}</div>
                     ) : (
                       <div
                         className={cn(
@@ -204,28 +250,48 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                             : cn("rounded-2xl", isLast && "rounded-bl-md")
                         )}
                       >
-                        {msg.text}
+                        {displayText}
                         {msg.edited && <span className="text-[10px] opacity-60 ml-1">(edited)</span>}
                       </div>
                     ))}
-                    {isOwn && (
-                      <div className="flex gap-0.5 items-center opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                    {/* Hover action bar */}
+                    <div className={cn(
+                      "flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity shrink-0",
+                      "bg-background border border-border rounded-full px-1 py-0.5 shadow-sm"
+                    )}>
+                      <button
+                        onClick={() => onReply && onReply(msg)}
+                        className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        title="Reply"
+                      ><Reply className="h-3 w-3" /></button>
+                      {displayText && (
                         <button
-                          onClick={() => startEdit(msg)}
-                          className="p-1 rounded-md bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                          title="Edit"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
+                          onClick={() => { navigator.clipboard.writeText(displayText); toast.success("Copied"); }}
+                          className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          title="Copy"
+                        ><Copy className="h-3 w-3" /></button>
+                      )}
+                      {isOwn ? (
+                        <>
+                          <button
+                            onClick={() => startEdit(msg)}
+                            className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            title="Edit"
+                          ><Pencil className="h-3 w-3" /></button>
+                          <button
+                            onClick={() => onDelete(msg.id)}
+                            className="p-1 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                            title="Delete"
+                          ><Trash2 className="h-3 w-3" /></button>
+                        </>
+                      ) : (
                         <button
-                          onClick={() => onDelete(msg.id)}
-                          className="p-1 rounded-md bg-muted hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    )}
+                          onClick={() => toast.info("Message reported")}
+                          className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          title="Report"
+                        ><Flag className="h-3 w-3" /></button>
+                      )}
+                    </div>
                   </div>
                   {msg.file_url && (
                     <FileAttachment
@@ -249,7 +315,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
           );
         })}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -270,10 +336,14 @@ export default function ChatPage() {
 
   const [inputText, setInputText] = useState("");
   const [isE2EEnabled, setIsE2EEnabled] = useState(false);
-  const [myKeyPair, setMyKeyPair] = useState(null);
   const [orgGifsEnabled, setOrgGifsEnabled] = useState(false);
+  const [myPrivKey, setMyPrivKey] = useState(null);
+  const [peerPubKeyCache, setPeerPubKeyCache] = useState({});    // userId → jwk string
+  const [channelKeyCache, setChannelKeyCache] = useState({});    // channelId → AES CryptoKey
+  const [decryptedCache, setDecryptedCache] = useState({});      // msgId → plaintext
 
   const [pendingFiles, setPendingFiles] = useState([]);
+  const [replyTo, setReplyTo] = useState(null);
 
   const handleFileSelect = (e) => {
     const MAX_FILES = 10;
@@ -428,23 +498,73 @@ export default function ChatPage() {
     }
   }, [activeChannelId, isActiveDM, loadMessages, markRead]);
 
-  // Crypto + features init
+  // Org feature flags
   useEffect(() => {
-    const init = async () => {
-      try {
-        const { data } = await orgApi.get();
-        setIsE2EEnabled(data.chat_features?.encryption_enabled || false);
-        setOrgGifsEnabled(data.chat_features?.gifs_enabled || false);
-        if (data.chat_features?.encryption_enabled && !myKeyPair) {
-          const keys = await crypto.generateKeyPair();
-          setMyKeyPair(keys);
-        }
-      } catch (err) {
-        console.error("Chat init failed:", err);
+    orgApi.get().then(({ data }) => {
+      setIsE2EEnabled(data.chat_features?.encryption_enabled || false);
+      setOrgGifsEnabled(data.chat_features?.gifs_enabled || false);
+    }).catch(() => {});
+  }, []);
+
+  // Load own private key from IndexedDB; if missing, generate + publish now (AuthContext retry)
+  useEffect(() => {
+    if (!user?.id) return;
+    crypto.getPrivateKey(user.id).then(async (k) => {
+      if (k) {
+        setMyPrivKey(k);
+      } else {
+        const result = await crypto.initCrypto(user.id, (jwk) => cryptoApi.publishKey(jwk), true);
+        if (result?.privateKey) setMyPrivKey(result.privateKey);
       }
-    };
-    init();
-  }, [myKeyPair]);
+    }).catch(console.error);
+  }, [user?.id]);
+
+  // Unwrap channel AES key when switching to an E2EE-enabled channel
+  useEffect(() => {
+    if (!activeChannelId || !myPrivKey || isActiveDM) return;
+    if (channelKeyCache[activeChannelId]) return;
+    const ch = channels.find((c) => c.id === activeChannelId);
+    const myEntry = ch?.e2ee_keys?.[user?.id];
+    if (!myEntry) return;
+    crypto.unwrapKeyFromMember(myEntry.wrapped, myEntry.eph_pub, myPrivKey)
+      .then((rawB64) => crypto.importChannelKey(rawB64))
+      .then((key) => setChannelKeyCache((prev) => ({ ...prev, [activeChannelId]: key })))
+      .catch(console.error);
+  }, [activeChannelId, myPrivKey, isActiveDM, channels]);
+
+  // Decrypt incoming encrypted messages
+  useEffect(() => {
+    if (!myPrivKey) return;
+    const allMsgs = Object.values(currentMessages ?? {}).flat();
+    const pending = allMsgs.filter((m) => m.ciphertext && !decryptedCache[m.id]);
+    if (!pending.length) return;
+
+    (async () => {
+      const updates = {};
+      for (const msg of pending) {
+        try {
+          if (isActiveDM) {
+            const activeDM = dms.find((d) => d.id === activeChannelId);
+            const peerId = activeDM?.members?.find((m) => m !== user.id);
+            if (!peerId) { updates[msg.id] = "🔒 Encrypted"; continue; }
+            let peerJwk = peerPubKeyCache[peerId];
+            if (!peerJwk) {
+              const r = await cryptoApi.getPublicKey(peerId);
+              peerJwk = r.data.public_key;
+              setPeerPubKeyCache((prev) => ({ ...prev, [peerId]: peerJwk }));
+            }
+            updates[msg.id] = await crypto.decryptDM(myPrivKey, peerJwk, msg.ciphertext);
+          } else {
+            const chKey = channelKeyCache[activeChannelId];
+            if (chKey) updates[msg.id] = await crypto.aesDecrypt(chKey, msg.ciphertext);
+          }
+        } catch {
+          updates[msg.id] = "🔒 Encrypted";
+        }
+      }
+      if (Object.keys(updates).length) setDecryptedCache((prev) => ({ ...prev, ...updates }));
+    })();
+  }, [currentMessages, myPrivKey, activeChannelId, isActiveDM, channelKeyCache]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -504,34 +624,50 @@ export default function ChatPage() {
       }
 
       let basePayload = { text, is_encrypted: false };
-      if (isE2EEnabled && myKeyPair) {
-        const keyRes = await chatApi.getChannelMembers(activeChannelId);
-        const members = keyRes.data.members || [];
-        const recipientKeys = {};
-        members.forEach((m) => {
-          if (m.public_key) recipientKeys[m.id] = m.public_key;
-        });
-        const myPubKey = await crypto.exportPublicKey(myKeyPair.publicKey);
-        recipientKeys[user.id] = myPubKey;
-        if (Object.keys(recipientKeys).length > 0) {
-          const encrypted = await crypto.encryptMessage(text, recipientKeys);
-          basePayload = { text: encrypted.ciphertext, iv: encrypted.iv, encrypted_keys: encrypted.encryptedKeys, is_encrypted: true };
+      if (myPrivKey && text) {
+        if (isActiveDM) {
+          // Phase 2: ECDH DM encryption
+          const activeDM = dms.find((d) => d.id === activeChannelId);
+          const peerId = activeDM?.members?.find((m) => m !== user.id);
+          if (peerId) {
+            let peerJwk = peerPubKeyCache[peerId];
+            if (!peerJwk) {
+              try {
+                const r = await cryptoApi.getPublicKey(peerId);
+                peerJwk = r.data.public_key;
+                setPeerPubKeyCache((prev) => ({ ...prev, [peerId]: peerJwk }));
+              } catch {}
+            }
+            if (peerJwk) {
+              const ciphertext = await crypto.encryptDM(myPrivKey, peerJwk, text);
+              basePayload = { text: "🔒 Encrypted message", ciphertext, is_encrypted: true };
+            }
+          }
+        } else {
+          // Phase 3: Channel AES key encryption
+          const chKey = channelKeyCache[activeChannelId];
+          if (chKey) {
+            const ciphertext = await crypto.aesEncrypt(chKey, text);
+            basePayload = { text: "🔒 Encrypted message", ciphertext, is_encrypted: true };
+          }
         }
       }
 
+      const replyId = replyTo?.id || null;
       if (uploadedFiles.length === 0) {
         // text-only message
-        await sendMessage(activeChannelId, basePayload.text, null, !isActiveDM, null, basePayload);
+        await sendMessage(activeChannelId, basePayload.text, replyId, !isActiveDM, null, basePayload);
       } else {
         // one message per file; text goes on first message only
         for (let i = 0; i < uploadedFiles.length; i++) {
           const msgText = i === 0 ? basePayload.text : "";
-          await sendMessage(activeChannelId, msgText, null, !isActiveDM, uploadedFiles[i], { ...basePayload, text: msgText });
+          await sendMessage(activeChannelId, msgText, i === 0 ? replyId : null, !isActiveDM, uploadedFiles[i], { ...basePayload, text: msgText });
         }
       }
 
       setInputText("");
       setPendingFiles([]);
+      setReplyTo(null);
     } catch (err) {
       console.error("Send failed:", err);
       toast.error("Failed to send — check file size or connection");
@@ -542,7 +678,26 @@ export default function ChatPage() {
     if (!createForm.name.trim()) return toast.error("Channel name is required");
     setCreating(true);
     try {
-      const ch = await createChannel(createForm);
+      let form = { ...createForm };
+      // Phase 3: wrap a channel key for the creator so messages can be encrypted
+      if (myPrivKey) {
+        try {
+          const { raw: channelKeyRaw } = await crypto.generateChannelKey();
+          const myPubJwk = await crypto.getPublicKeyJwk(user.id);
+          if (myPubJwk) {
+            const wrapped = await crypto.wrapKeyForMember(channelKeyRaw, myPubJwk);
+            form = { ...form, e2ee_keys: { [user.id]: wrapped } };
+          }
+        } catch {}
+      }
+      const ch = await createChannel(form);
+      // Cache the channel key locally so we can encrypt immediately
+      if (myPrivKey && ch?.e2ee_keys?.[user.id]) {
+        crypto.unwrapKeyFromMember(ch.e2ee_keys[user.id].wrapped, ch.e2ee_keys[user.id].eph_pub, myPrivKey)
+          .then((rawB64) => crypto.importChannelKey(rawB64))
+          .then((key) => setChannelKeyCache((prev) => ({ ...prev, [ch.id]: key })))
+          .catch(console.error);
+      }
       toast.success(`Channel #${ch.name} created`);
       setShowCreateChannel(false);
       setForm({ name: "", description: "", type: "public" });
@@ -594,6 +749,21 @@ export default function ChatPage() {
     setAddingMember(true);
     try {
       await chatApi.inviteToChannel(activeChannelId, { user_id: userId });
+      // Phase 3: wrap channel key for the new member if we hold it
+      const chKey = channelKeyCache[activeChannelId];
+      if (chKey && myPrivKey) {
+        try {
+          const r = await cryptoApi.getPublicKey(userId);
+          const theirJwk = r.data.public_key;
+          // Export our channel key raw bytes to re-wrap for the new member
+          const myEntry = channels.find((c) => c.id === activeChannelId)?.e2ee_keys?.[user.id];
+          if (myEntry && theirJwk) {
+            const rawB64 = await crypto.unwrapKeyFromMember(myEntry.wrapped, myEntry.eph_pub, myPrivKey);
+            const newWrapped = await crypto.wrapKeyForMember(rawB64, theirJwk);
+            await chatApi.updateChannelE2eeKeys(activeChannelId, { [userId]: newWrapped });
+          }
+        } catch {}
+      }
       toast.success("Member added");
       loadChannels();
       setMemberResults((prev) => prev.filter((u) => u.id !== userId));
@@ -617,7 +787,7 @@ export default function ChatPage() {
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
       {/* === LEFT ASIDE — fixed 280px === */}
-      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border bg-card/60">
+      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border bg-card">
         {/* Top: title + quick actions */}
         <div className="h-14 px-4 flex items-center justify-between border-b border-border/60 shrink-0">
           <h2 className="text-base font-semibold tracking-tight">Messages</h2>
@@ -665,149 +835,101 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Tabs: Chats / Groups */}
-        <Tabs defaultValue="groups" className="flex-1 flex flex-col min-h-0">
-          <TabsList className="mx-3 mb-1 grid grid-cols-2 rounded-lg bg-muted/40 p-0.5 h-8 shrink-0">
-            <TabsTrigger
-              value="chats"
-              className="rounded-md text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
-            >
-              Chats
-            </TabsTrigger>
-            <TabsTrigger
-              value="groups"
-              className="rounded-md text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
-            >
-              Groups
-            </TabsTrigger>
-          </TabsList>
+        {/* Chat list — Channels + DMs */}
+        <ScrollArea className="flex-1">
+          {/* Channels */}
+          <div className="pt-3">
+            <div className="flex items-center justify-between px-4 pb-1">
+              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50">Channels</span>
+              <button
+                onClick={() => setShowCreateChannel(true)}
+                className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                title="New channel"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="px-2 space-y-0.5">
+              {filteredChannels.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground/40 px-2 py-2 italic">No channels yet</p>
+              ) : filteredChannels.map((ch) => (
+                <button
+                  key={ch.id}
+                  onClick={() => onChannelClick(ch.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors",
+                    activeChannelId === ch.id
+                      ? "bg-primary/10 text-foreground font-medium"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                >
+                  {ch.type === "private"
+                    ? <Lock className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                    : <Hash className="h-3.5 w-3.5 shrink-0 opacity-50" />}
+                  <span className="flex-1 truncate text-[13px]">{ch.name}</span>
+                  {unreadCounts[ch.id] > 0 && (
+                    <span className="h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-semibold">
+                      {unreadCounts[ch.id]}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Direct messages */}
-          <TabsContent value="chats" className="flex-1 mt-0 min-h-0 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="px-2 pb-3 pt-1 space-y-0.5">
-                {filteredDms.length === 0 ? (
-                  <div className="px-3 py-8 text-center text-[11px] text-muted-foreground/60">
-                    No direct messages
+          <div className="pt-4 pb-3">
+            <div className="flex items-center justify-between px-4 pb-1">
+              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50">Direct Messages</span>
+            </div>
+            <div className="px-2 space-y-0.5">
+              {filteredDms.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground/40 px-2 py-2 italic">No conversations</p>
+              ) : filteredDms.map((dm) => (
+                <button
+                  key={dm.id}
+                  onClick={() => onChannelClick(dm.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors",
+                    activeChannelId === dm.id
+                      ? "bg-primary/10 text-foreground"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                >
+                  <div className="relative shrink-0">
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage src={`${BACKEND_URL}${dm.avatar_url}`} />
+                      <AvatarFallback className={cn("text-[9px] font-bold text-white", getAvatarColor(dm.name))}>
+                        {dm.name?.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    {dm.is_online && (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500 ring-1 ring-card" />
+                    )}
                   </div>
-                ) : (
-                  filteredDms.map((dm) => (
-                    <button
-                      key={dm.id}
-                      onClick={() => onChannelClick(dm.id)}
-                      className={cn(
-                        "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors",
-                        activeChannelId === dm.id
-                          ? "bg-primary/10 text-foreground"
-                          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                      )}
-                    >
-                      <div className="relative shrink-0">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={`${BACKEND_URL}${dm.avatar_url}`} />
-                          <AvatarFallback
-                            className={cn("text-[11px] font-semibold text-white", getAvatarColor(dm.name))}
-                          >
-                            {dm.name?.charAt(0)}
-                          </AvatarFallback>
-                        </Avatar>
-                        {dm.is_online && (
-                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-card" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium truncate leading-tight text-foreground">
-                          {dm.name}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground/70 truncate mt-0.5">
-                          @{dm.username}
-                        </p>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </TabsContent>
-
-          {/* Channels */}
-          <TabsContent value="groups" className="flex-1 mt-0 min-h-0 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="px-2 pb-3 pt-1 space-y-0.5">
-                {filteredChannels.length === 0 ? (
-                  <div className="px-3 py-8 text-center text-[11px] text-muted-foreground/60">
-                    No groups
-                  </div>
-                ) : (
-                  filteredChannels.map((ch) => {
-                    const isGeneral = ch.name?.toLowerCase() === "general";
-                    return (
-                      <button
-                        key={ch.id}
-                        onClick={() => onChannelClick(ch.id)}
-                        className={cn(
-                          "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors",
-                          activeChannelId === ch.id
-                            ? "bg-primary/10 text-foreground"
-                            : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                        )}
-                      >
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 channel-avatar text-sm">
-                          {ch.type === "private" ? (
-                            <Lock className="h-4 w-4" />
-                          ) : (
-                            <Hash className="h-4 w-4" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-[13px] font-medium truncate leading-tight text-foreground">
-                              {ch.name}
-                            </p>
-                            {isGeneral && (
-                              <Badge
-                                variant="outline"
-                                className="h-4 px-1 text-[8px] font-bold uppercase tracking-wide border-primary/40 text-primary/80"
-                              >
-                                Pinned
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-muted-foreground/70 truncate mt-0.5">
-                            {ch.last_message_preview || "No messages yet"}
-                          </p>
-                        </div>
-                        {unreadCounts[ch.id] > 0 && (
-                          <Badge className="bg-primary text-primary-foreground text-[10px] h-4 px-1.5 min-w-[18px] justify-center rounded-full">
-                            {unreadCounts[ch.id]}
-                          </Badge>
-                        )}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            </ScrollArea>
-          </TabsContent>
-        </Tabs>
+                  <span className="flex-1 truncate text-[13px] text-foreground font-medium">{dm.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </ScrollArea>
 
         {/* Footer */}
-        <div className="border-t border-border/60 px-2 py-2 shrink-0 flex flex-col gap-1">
-          <div className="flex items-center gap-1">
-            <ThemeToggle />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9"
-              onClick={() => navigate("/settings")}
-              title="Settings"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          </div>
+        <div className="border-t border-border/60 px-2 py-2 shrink-0 flex items-center gap-1">
+          <ThemeToggle />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            onClick={() => navigate("/settings")}
+            title="Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+          <div className="flex-1 min-w-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full h-9 px-2 gap-2 text-xs font-medium justify-start">
+              <Button variant="ghost" className="w-full h-9 px-2 gap-2 text-xs font-medium justify-start min-w-0">
                 <Avatar className="h-6 w-6">
                   <AvatarFallback
                     className={cn("text-[10px] text-white", getAvatarColor(userName))}
@@ -832,13 +954,14 @@ export default function ChatPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
       </aside>
 
       {/* === MAIN — chat surface === */}
       <main className="flex-1 flex flex-col min-w-0 bg-background">
         {/* Header */}
-        <header className="h-14 border-b border-border px-5 flex items-center gap-3 shrink-0 bg-card/40 backdrop-blur-sm">
+        <header className="h-14 border-b border-border px-5 flex items-center gap-3 shrink-0 bg-background">
           {activeChannel ? (
             <>
               {isActiveDM ? (
@@ -849,11 +972,11 @@ export default function ChatPage() {
                   </AvatarFallback>
                 </Avatar>
               ) : (
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 channel-avatar text-sm">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-primary/10">
                   {activeChannel.type === "private" ? (
-                    <Lock className="h-4 w-4" />
+                    <Lock className="h-4 w-4 text-primary" />
                   ) : (
-                    <Hash className="h-4 w-4" />
+                    <Hash className="h-4 w-4 text-primary" />
                   )}
                 </div>
               )}
@@ -919,6 +1042,9 @@ export default function ChatPage() {
             <span className="text-sm text-muted-foreground/70">Select a conversation</span>
           )}
         </header>
+
+        {/* Stories strip */}
+        <StoryStrip currentUser={user} />
 
         {/* Body — discovery / empty / join / messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar">
@@ -991,11 +1117,11 @@ export default function ChatPage() {
                       className="p-4 bg-card rounded-xl border border-border flex items-center justify-between hover:border-primary/30 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-lg channel-avatar flex items-center justify-center shrink-0 text-sm">
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                           {ch.type === "private" ? (
-                            <Lock className="h-4 w-4" />
+                            <Lock className="h-4 w-4 text-primary" />
                           ) : (
-                            <Hash className="h-4 w-4" />
+                            <Hash className="h-4 w-4 text-primary" />
                           )}
                         </div>
                         <div className="min-w-0">
@@ -1059,28 +1185,45 @@ export default function ChatPage() {
               </p>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto py-4 space-y-3">
-              {messageBlocks.map((block, idx) => {
-                if (block.kind === "day") {
-                  return <DaySeparator key={`day-${idx}`} date={block.date} />;
-                }
-                if (block.kind === "system") {
-                  return <SystemEvent key={`sys-${block.message.id}`} message={block.message} />;
-                }
-                const isOwn = block.senderId === user.id;
-                return (
-                  <MessageGroup
-                    key={`grp-${block.messages[0].id}`}
-                    messages={block.messages}
-                    isOwn={isOwn}
-                    user={user}
-                    userCache={userCache}
-                    isDM={isActiveDM}
-                    onEdit={editMessage}
-                    onDelete={deleteMessage}
-                  />
+            <div className="max-w-2xl mx-auto py-4 space-y-4">
+              <AnimatePresence initial={false}>
+                {messageBlocks.map((block, idx) => {
+                  if (block.kind === "day") {
+                    return <DaySeparator key={`day-${idx}`} date={block.date} />;
+                  }
+                  if (block.kind === "system") {
+                    return <SystemEvent key={`sys-${block.message.id}`} message={block.message} />;
+                  }
+                  const isOwn = block.senderId === user.id;
+                  return (
+                    <MessageGroup
+                      key={`grp-${block.messages[0].id}`}
+                      messages={block.messages}
+                      isOwn={isOwn}
+                      user={user}
+                      userCache={userCache}
+                      isDM={isActiveDM}
+                      onEdit={editMessage}
+                      onDelete={deleteMessage}
+                      onReply={(msg) => setReplyTo(msg)}
+                      decryptedCache={decryptedCache}
+                    />
+                  );
+                })}
+              </AnimatePresence>
+              {/* Typing indicator */}
+              {(() => {
+                const typers = (typingUsers[activeChannelId] || []).filter(
+                  (u) => u.user_id !== user?.id
                 );
-              })}
+                return (
+                  <AnimatePresence>
+                    {typers.length > 0 && (
+                      <TypingIndicator names={typers.map((u) => u.user_name)} />
+                    )}
+                  </AnimatePresence>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -1093,7 +1236,17 @@ export default function ChatPage() {
               inputDisabled && "opacity-60"
             )}
           >
-            <div className="max-w-3xl mx-auto px-4 py-3">
+            <div className="max-w-2xl mx-auto px-4 py-3">
+              {replyTo && (
+                <div className="mb-2 flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-xl border-l-2 border-primary animate-in slide-in-from-bottom-2">
+                  <Reply className="h-3 w-3 text-primary shrink-0" />
+                  <span className="text-xs text-muted-foreground">Replying to</span>
+                  <span className="text-xs font-medium truncate flex-1">{replyTo.text?.slice(0, 80) || "a message"}</span>
+                  <button onClick={() => setReplyTo(null)} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
               <div className="flex items-end gap-2">
                 <Button
                   variant="ghost"
@@ -1113,7 +1266,7 @@ export default function ChatPage() {
                   onChange={handleFileSelect}
                 />
 
-                <div className="flex-1 flex items-end bg-muted/50 rounded-2xl min-h-[40px] focus-within:bg-muted/70 transition-colors">
+                <div className="flex-1 flex items-end bg-muted/40 border border-border/60 rounded-2xl min-h-[40px] focus-within:border-primary/40 transition-colors">
                   <Textarea
                     ref={inputRef}
                     value={inputText}

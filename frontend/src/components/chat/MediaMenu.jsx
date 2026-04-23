@@ -1,8 +1,5 @@
-import React, { useState, useEffect, lazy, Suspense } from "react";
-import data from "@emoji-mart/data";
-const Picker = lazy(() =>
-  import("@emoji-mart/react").then((m) => ({ default: m.default ?? m.Picker }))
-);
+import React, { useState, useEffect } from "react";
+import EmojiPicker from "./EmojiPicker";
 import axios from "axios";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,19 +10,6 @@ import { Smile, Image as ImageIcon, Search, Loader2 } from "lucide-react";
 
 const GIPHY_API_KEY = import.meta.env.REACT_APP_GIPHY_API_KEY;
 
-function useAppTheme() {
-  const [isDark, setIsDark] = useState(() =>
-    document.documentElement.classList.contains("dark")
-  );
-  useEffect(() => {
-    const obs = new MutationObserver(() =>
-      setIsDark(document.documentElement.classList.contains("dark"))
-    );
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-  return isDark ? "dark" : "light";
-}
 
 export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEnabled = true }) {
   const [activeTab, setActiveTab] = useState("emojis");
@@ -33,7 +17,6 @@ export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEn
   const [gifs, setGifs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
-  const pickerTheme = useAppTheme();
 
   useEffect(() => {
     if (!gifsEnabled && activeTab === "gifs") {
@@ -111,21 +94,7 @@ export default function MediaMenu({ onEmojiSelect, onGifSelect, disabled, gifsEn
   };
 
   const renderEmojiPicker = () => (
-    <Suspense fallback={<div className="flex items-center justify-center h-[352px]"><span className="text-xs text-muted-foreground">Loading...</span></div>}>
-      <Picker
-        data={data}
-        onEmojiSelect={handleEmojiClick}
-        theme={pickerTheme}
-        set="native"
-        skinTonePosition="search"
-        previewPosition="none"
-        navPosition="bottom"
-        perLine={8}
-        maxFrequentRows={2}
-        width="100%"
-        autoFocus={true}
-      />
-    </Suspense>
+    <EmojiPicker onEmojiSelect={(emoji) => { onEmojiSelect(emoji); }} />
   );
 
   return (

@@ -48,6 +48,8 @@ from routes.tasks import router as tasks_router
 from routes.announcements import router as announcements_router
 from routes.iam import router as iam_router
 from routes.ldap import router as ldap_router
+from routes.sops import router as sops_router
+from routes.stories import router as stories_router
 from tasks.purging import run_purging_task
 from tasks.due_date_reminders import run_due_date_reminders
 from ldap_service import run_ldap_sync_task
@@ -64,7 +66,7 @@ app = FastAPI(
 # Security: explicit methods/headers instead of wildcards when allow_credentials=True
 _CORS_ORIGINS = os.getenv(
     "CORS_ORIGINS",
-    "https://bot.linuxhardened.com,http://72.62.231.43:8080,http://localhost:8080,http://localhost:3000"
+    "http://localhost:8080,http://localhost:3000"
 ).split(",")
 
 app.add_middleware(
@@ -93,6 +95,8 @@ app.include_router(tasks_router)
 app.include_router(announcements_router)
 app.include_router(iam_router)
 app.include_router(ldap_router)
+app.include_router(sops_router)
+app.include_router(stories_router)
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -128,12 +132,16 @@ async def setup_status():
 async def public_branding():
     """Public branding (brand_name, logo_url) used for favicon + login page.
     Only returns logo_url if admin has uploaded one — no default."""
-    org = await db.organizations.find_one({}, {"brand_name": 1, "name": 1, "logo_url": 1})
+    org = await db.organizations.find_one({}, {"brand_name": 1, "name": 1, "logo_url": 1, "slack_oidc": 1, "google_oidc": 1})
     if not org:
-        return {"brand_name": "", "logo_url": ""}
+        return {"brand_name": "", "logo_url": "", "slack_enabled": False, "google_enabled": False}
+    slack = org.get("slack_oidc") or {}
+    google = org.get("google_oidc") or {}
     return {
         "brand_name": org.get("brand_name") or org.get("name") or "",
         "logo_url": org.get("logo_url") or "",
+        "slack_enabled": bool(slack.get("enabled")),
+        "google_enabled": bool(google.get("enabled")),
     }
 
 
@@ -388,6 +396,10 @@ async def startup():
         db.tasks.create_index([("org_id", 1), ("assigned_to", 1), ("status", 1)]),
         db.tasks.create_index([("status", 1), ("due_date", 1)]),
         db.handovers.create_index([("org_id", 1), ("created_at", -1)]),
+        db.sops.create_index([("org_id", 1), ("created_at", -1)]),
+        db.sops.create_index([("org_id", 1), ("owner", 1)]),
+        db.sops.create_index([("org_id", 1), ("has_pending_edit", 1)]),
+        db.sop_versions.create_index([("sop_id", 1), ("version", -1)]),
         # IAM indexes
         db.iam_groups.create_index([("org_id", 1), ("name", 1)]),
         db.iam_groups.create_index("is_global"),
@@ -401,6 +413,9 @@ async def startup():
         ),
         # TTL for expiring messages
         db.chat_messages.create_index("expires_at", expireAfterSeconds=0),
+        # Stories — auto-expire after 24 h
+        db.stories.create_index("expires_at", expireAfterSeconds=0),
+        db.stories.create_index([("org_id", 1), ("expires_at", 1)]),
     ]
     await asyncio.gather(*index_tasks)
 

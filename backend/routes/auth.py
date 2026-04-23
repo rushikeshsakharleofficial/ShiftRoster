@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone
+from urllib.parse import urlencode
 from bson import ObjectId
 from db import db
 from auth_utils import (
@@ -15,6 +17,11 @@ import jwt
 import secrets
 import hashlib
 import os
+import logging
+import random
+import string
+
+logger = logging.getLogger(__name__)
 
 # Secure cookies over HTTPS — set SECURE_COOKIES=true in production
 _SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
@@ -589,3 +596,409 @@ async def refresh_token(request: Request, response: Response):
         raise HTTPException(status_code=401, detail="Refresh token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+
+# ──────────────────────────────────────────
+# Slack OIDC
+# ──────────────────────────────────────────
+
+@router.get("/slack/config")
+async def slack_config():
+    """Public: whether Slack SSO is enabled and the client_id (no secret)."""
+    org = await db.organizations.find_one({})
+    if not org:
+        return {"enabled": False, "client_id": ""}
+    slack = org.get("slack_oidc") or {}
+    enabled = bool(slack.get("enabled"))
+    return {
+        "enabled": enabled,
+        "client_id": slack.get("client_id", "") if enabled else "",
+    }
+
+
+@router.get("/slack/login")
+async def slack_login():
+    """Redirect to Slack's OIDC authorize endpoint."""
+    import time
+    org = await db.organizations.find_one({})
+    if not org:
+        raise HTTPException(status_code=503, detail="No organization configured")
+    slack = org.get("slack_oidc") or {}
+    if not slack.get("enabled"):
+        raise HTTPException(status_code=400, detail="Slack SSO is not enabled")
+
+    client_id = slack.get("client_id", "").strip()
+    instance_base_url = (slack.get("instance_base_url") or "").rstrip("/")
+    allowed_workspace = (slack.get("allowed_workspace") or "").strip()
+    if not client_id or not instance_base_url:
+        raise HTTPException(status_code=400, detail="Slack SSO missing client_id or instance_base_url")
+    if not allowed_workspace:
+        raise HTTPException(status_code=400, detail="Slack SSO requires Allowed Workspace Domain to be configured before accepting logins")
+
+    redirect_uri = f"{instance_base_url}/api/auth/slack/callback"
+
+    state_payload = {
+        "csrf_nonce": secrets.token_hex(16),
+        "org_id": str(org["_id"]),
+        "exp": int(time.time()) + 300,
+        "type": "slack_state",
+    }
+    state = jwt.encode(state_payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
+
+    params = urlencode({
+        "client_id": client_id,
+        "scope": "openid profile email",
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "state": state,
+    })
+    return RedirectResponse(url=f"https://slack.com/openid/connect/authorize?{params}")
+
+
+@router.get("/slack/callback")
+async def slack_callback(
+    request: Request,
+    code: str = None,
+    state: str = None,
+    error: str = None,
+):
+    """Slack returns here after user grants permission."""
+    import httpx
+
+    def fail(reason: str):
+        return RedirectResponse(url=f"/login?error={reason}")
+
+    if error:
+        return fail("slack_denied")
+    if not code or not state:
+        return fail("slack_invalid")
+
+    # Verify state JWT (CSRF + org_id)
+    try:
+        state_payload = jwt.decode(state, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        if state_payload.get("type") != "slack_state":
+            raise ValueError("wrong type")
+    except Exception:
+        return fail("slack_state_invalid")
+
+    org_id = state_payload.get("org_id")
+    org = await db.organizations.find_one({"_id": ObjectId(org_id)})
+    if not org:
+        return fail("slack_org_not_found")
+
+    slack = org.get("slack_oidc") or {}
+    if not slack.get("enabled"):
+        return fail("slack_disabled")
+
+    client_id = slack.get("client_id", "").strip()
+    instance_base_url = (slack.get("instance_base_url") or "").rstrip("/")
+
+    from slack_service import decrypt_client_secret
+    client_secret = decrypt_client_secret(slack.get("client_secret", ""))
+
+    if not client_id or not client_secret or not instance_base_url:
+        return fail("slack_not_configured")
+
+    redirect_uri = f"{instance_base_url}/api/auth/slack/callback"
+
+    # Exchange code for tokens
+    async with httpx.AsyncClient(timeout=10) as client:
+        token_resp = await client.post(
+            "https://slack.com/api/openid.connect.token",
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+    token_data = token_resp.json()
+    if not token_data.get("ok"):
+        logger.warning("Slack token exchange failed: %s", token_data.get("error"))
+        return fail("slack_token_failed")
+
+    slack_access_token = token_data.get("access_token")
+
+    # Fetch userInfo
+    async with httpx.AsyncClient(timeout=10) as client:
+        userinfo_resp = await client.get(
+            "https://slack.com/api/openid.connect.userInfo",
+            headers={"Authorization": f"Bearer {slack_access_token}"},
+        )
+    userinfo = userinfo_resp.json()
+    if not userinfo.get("ok"):
+        return fail("slack_userinfo_failed")
+
+    email = (userinfo.get("email") or "").lower().strip()
+    name = userinfo.get("name") or userinfo.get("real_name") or email
+    team_domain = (
+        userinfo.get("https://slack.com/team_domain")
+        or userinfo.get("https://slack.com/team_name", "")
+    )
+
+    if not email:
+        return fail("slack_no_email")
+
+    # Workspace restriction
+    allowed_workspace = (slack.get("allowed_workspace") or "").strip().lower()
+    if not allowed_workspace:
+        # Organization must configure workspace restriction before Slack SSO accepts logins
+        return fail("slack_workspace_not_configured")
+    if team_domain.lower() != allowed_workspace:
+        return fail("slack_workspace_not_allowed")
+
+    # Find or provision user
+    user = await db.users.find_one({"email": email, "org_id": org_id})
+    if not user:
+        if not slack.get("auto_provision", True):
+            return fail("slack_user_not_found")
+        rand_pass = "".join(random.choices(string.ascii_letters + string.digits, k=24))
+        new_user = {
+            "org_id": org_id,
+            "email": email,
+            "name": name,
+            "password_hash": hash_password(rand_pass),
+            "system_role": slack.get("default_role", "employee"),
+            # New Slack users start pending — admin must approve before first login
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc),
+            "auth_source": "slack",
+        }
+        result = await db.users.insert_one(new_user)
+        # Notify admins about new pending user
+        try:
+            from auth_utils import create_notification
+            admin_users = db.users.find({"org_id": org_id, "system_role": "admin", "status": "active"})
+            async for admin in admin_users:
+                await create_notification(
+                    str(admin["_id"]),
+                    "slack_user_pending",
+                    str(result.inserted_id),
+                    f"New Slack user {email} is awaiting approval",
+                )
+        except Exception:
+            pass
+        return fail("slack_approval_pending")
+
+    # Existing user must be active — pending = still awaiting admin approval
+    if user.get("status") != "active":
+        return fail("slack_approval_pending")
+
+    # MFA check
+    trust_slack_as_mfa = slack.get("trust_slack_as_mfa", False)
+    if not trust_slack_as_mfa and user.get("mfa_enabled"):
+        mfa_temp = create_mfa_temp_token(str(user["_id"]))
+        return RedirectResponse(url=f"/login?mfa_token={mfa_temp}&slack_mfa=1")
+
+    # Issue session cookies
+    user_id = str(user["_id"])
+    access_token_jwt = create_access_token(user_id, user["email"])
+    refresh_token_jwt = create_refresh_token(user_id)
+
+    resp = RedirectResponse(url=f"{instance_base_url}/")
+    resp.set_cookie("access_token", access_token_jwt, httponly=True, secure=_SECURE_COOKIES, samesite="lax", max_age=3600, path="/")
+    resp.set_cookie("refresh_token", refresh_token_jwt, httponly=True, secure=_SECURE_COOKIES, samesite="lax", max_age=604800, path="/")
+    resp.set_cookie("remember_me", "0", httponly=False, secure=_SECURE_COOKIES, samesite="lax", max_age=604800, path="/")
+    return resp
+
+
+# ──────────────────────────────────────────
+# Google OIDC
+# ──────────────────────────────────────────
+
+@router.get("/google/config")
+async def google_config():
+    """Public: whether Google SSO is enabled (no secret)."""
+    org = await db.organizations.find_one({})
+    if not org:
+        return {"enabled": False, "client_id": ""}
+    google = org.get("google_oidc") or {}
+    enabled = bool(google.get("enabled"))
+    return {
+        "enabled": enabled,
+        "client_id": google.get("client_id", "") if enabled else "",
+    }
+
+
+@router.get("/google/login")
+async def google_login():
+    """Redirect to Google's OIDC authorize endpoint."""
+    import time
+    org = await db.organizations.find_one({})
+    if not org:
+        raise HTTPException(status_code=503, detail="No organization configured")
+    google = org.get("google_oidc") or {}
+    if not google.get("enabled"):
+        raise HTTPException(status_code=400, detail="Google SSO is not enabled")
+
+    client_id = google.get("client_id", "").strip()
+    instance_base_url = (google.get("instance_base_url") or "").rstrip("/")
+    allowed_domain = (google.get("allowed_domain") or "").strip()
+    if not client_id or not instance_base_url:
+        raise HTTPException(status_code=400, detail="Google SSO missing client_id or instance_base_url")
+    if not allowed_domain:
+        raise HTTPException(status_code=400, detail="Google SSO requires Allowed Domain to be configured")
+
+    redirect_uri = f"{instance_base_url}/api/auth/google/callback"
+
+    state_payload = {
+        "csrf_nonce": secrets.token_hex(16),
+        "org_id": str(org["_id"]),
+        "exp": int(time.time()) + 300,
+        "type": "google_state",
+    }
+    state = jwt.encode(state_payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
+
+    params = urlencode({
+        "client_id": client_id,
+        "scope": "openid email profile",
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "state": state,
+        "hd": allowed_domain,
+        "access_type": "online",
+        "prompt": "select_account",
+    })
+    return RedirectResponse(url=f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
+
+
+@router.get("/google/callback")
+async def google_callback(
+    request: Request,
+    code: str = None,
+    state: str = None,
+    error: str = None,
+):
+    """Google returns here after user grants permission."""
+    import httpx
+
+    def fail(reason: str):
+        return RedirectResponse(url=f"/login?error={reason}")
+
+    if error:
+        return fail("google_denied")
+    if not code or not state:
+        return fail("google_invalid")
+
+    # Verify state JWT (CSRF + org_id)
+    try:
+        state_payload = jwt.decode(state, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        if state_payload.get("type") != "google_state":
+            raise ValueError("wrong type")
+    except Exception:
+        return fail("google_state_invalid")
+
+    org_id = state_payload.get("org_id")
+    org = await db.organizations.find_one({"_id": ObjectId(org_id)})
+    if not org:
+        return fail("google_org_not_found")
+
+    google = org.get("google_oidc") or {}
+    if not google.get("enabled"):
+        return fail("google_disabled")
+
+    client_id = google.get("client_id", "").strip()
+    instance_base_url = (google.get("instance_base_url") or "").rstrip("/")
+
+    from google_service import decrypt_client_secret
+    client_secret = decrypt_client_secret(google.get("client_secret", ""))
+
+    if not client_id or not client_secret or not instance_base_url:
+        return fail("google_not_configured")
+
+    redirect_uri = f"{instance_base_url}/api/auth/google/callback"
+
+    # Exchange code for tokens
+    async with httpx.AsyncClient(timeout=10) as client:
+        token_resp = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+    token_data = token_resp.json()
+    if "error" in token_data:
+        logger.warning("Google token exchange failed: %s", token_data.get("error"))
+        return fail("google_token_failed")
+
+    access_token = token_data.get("access_token")
+
+    # Fetch userInfo
+    async with httpx.AsyncClient(timeout=10) as client:
+        userinfo_resp = await client.get(
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    userinfo = userinfo_resp.json()
+
+    email = (userinfo.get("email") or "").lower().strip()
+    if not email:
+        return fail("google_no_email")
+
+    name = userinfo.get("name") or email
+    email_domain = email.split("@")[1] if "@" in email else ""
+
+    # Domain restriction — check hd claim (Google Workspace) or email domain
+    allowed_domain = (google.get("allowed_domain") or "").strip().lower()
+    if not allowed_domain:
+        return fail("google_domain_not_configured")
+    hd = (userinfo.get("hd") or "").lower()
+    domain_ok = (hd == allowed_domain) if hd else (email_domain == allowed_domain)
+    if not domain_ok:
+        return fail("google_domain_not_allowed")
+
+    # Find or provision user
+    user = await db.users.find_one({"email": email, "org_id": org_id})
+    if not user:
+        if not google.get("auto_provision", True):
+            return fail("google_user_not_found")
+        rand_pass = "".join(random.choices(string.ascii_letters + string.digits, k=24))
+        new_user = {
+            "org_id": org_id,
+            "email": email,
+            "full_name": name,
+            "password_hash": hash_password(rand_pass),
+            "system_role": google.get("default_role", "employee"),
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc),
+            "auth_source": "google",
+        }
+        result = await db.users.insert_one(new_user)
+        try:
+            from auth_utils import create_notification
+            admin_users = db.users.find({"org_id": org_id, "system_role": "admin", "status": "active"})
+            async for admin in admin_users:
+                await create_notification(
+                    str(admin["_id"]),
+                    "google_user_pending",
+                    str(result.inserted_id),
+                    f"New Google user {email} is awaiting approval",
+                )
+        except Exception:
+            pass
+        return fail("google_approval_pending")
+
+    if user.get("status") != "active":
+        return fail("google_approval_pending")
+
+    # MFA check
+    trust_google_as_mfa = google.get("trust_google_as_mfa", False)
+    if not trust_google_as_mfa and user.get("mfa_enabled"):
+        mfa_temp = create_mfa_temp_token(str(user["_id"]))
+        return RedirectResponse(url=f"/login?mfa_token={mfa_temp}&google_mfa=1")
+
+    # Issue session cookies
+    user_id = str(user["_id"])
+    access_token_jwt = create_access_token(user_id, user["email"])
+    refresh_token_jwt = create_refresh_token(user_id)
+
+    resp = RedirectResponse(url=f"{instance_base_url}/")
+    resp.set_cookie("access_token", access_token_jwt, httponly=True, secure=_SECURE_COOKIES, samesite="lax", max_age=3600, path="/")
+    resp.set_cookie("refresh_token", refresh_token_jwt, httponly=True, secure=_SECURE_COOKIES, samesite="lax", max_age=604800, path="/")
+    resp.set_cookie("remember_me", "0", httponly=False, secure=_SECURE_COOKIES, samesite="lax", max_age=604800, path="/")
+    return resp

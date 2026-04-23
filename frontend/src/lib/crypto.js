@@ -1,142 +1,202 @@
-/**
- * E2EE Library for ShiftMaster Chat
- * Uses Web Crypto API for client-side encryption.
- */
+// E2EE — Phase 1: P-256 ECDH keypair infrastructure
+// Phase 2+ (DM/Channel/Story encryption) builds on top of these helpers.
 
-// --- Constants & Config ---
-const RSA_ALGO = {
-  name: "RSA-OAEP",
-  modulusLength: 2048,
-  publicExponent: new Uint8Array([1, 0, 1]),
-  hash: "SHA-256",
-};
+const DB_NAME = "shiftroster_e2ee";
+const DB_VERSION = 1;
+const STORE = "keys";
 
-const AES_ALGO = "AES-GCM";
-
-// --- Key Management ---
-
-/**
- * Generates a new RSA-OAEP key pair.
- */
-export async function generateKeyPair() {
-  const keyPair = await window.crypto.subtle.generateKey(
-    RSA_ALGO,
-    true, // extractable
-    ["encrypt", "decrypt"]
-  );
-  return keyPair;
+function openDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => e.target.result.createObjectStore(STORE);
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
 }
 
-/**
- * Exports a key to Base64/SPKI format for storage.
- */
-export async function exportPublicKey(key) {
-  const exported = await window.crypto.subtle.exportKey("spki", key);
-  return btoa(String.fromCharCode(...new Uint8Array(exported)));
+async function dbGet(key) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).get(key);
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror = () => reject(req.error);
+  });
 }
 
-/**
- * Imports a public key from Base64/SPKI.
- */
-export async function importPublicKey(base64Str) {
-  const binaryDer = Uint8Array.from(atob(base64Str), (c) => c.charCodeAt(0));
-  return await window.crypto.subtle.importKey(
-    "spki",
-    binaryDer,
-    RSA_ALGO,
-    true,
-    ["encrypt"]
-  );
+async function dbPut(key, value) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const req = tx.objectStore(STORE).put(value, key);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
 }
 
-// --- Encryption / Decryption ---
+async function loadOrCreate(userId) {
+  const privJwk = await dbGet(`priv_${userId}`);
+  const pubJwk = await dbGet(`pub_${userId}`);
 
-/**
- * Encrypts a message for a set of recipients.
- * Returns: { ciphertext, encryptedKeys: { userId: encryptedSymmetricKey } }
- */
-export async function encryptMessage(text, recipientKeys) {
-  // 1. Generate random symmetric key
-  const aesKey = await window.crypto.subtle.generateKey(
-    { name: AES_ALGO, length: 256 },
-    true,
-    ["encrypt", "decrypt"]
-  );
-
-  // 2. Encrypt text with AES key
-  const iv = window.crypto.getRandomValues(new Uint8Array(12));
-  const encoded = new TextEncoder().encode(text);
-  const ciphertextBuffer = await window.crypto.subtle.encrypt(
-    { name: AES_ALGO, iv },
-    aesKey,
-    encoded
-  );
-
-  // 3. Export AES key to wrap it
-  const rawAesKey = await window.crypto.subtle.exportKey("raw", aesKey);
-
-  // 4. Encrypt AES key for each recipient
-  const encryptedKeys = {};
-  for (const [userId, pubKeyStr] of Object.entries(recipientKeys)) {
-    try {
-      const pubKey = await importPublicKey(pubKeyStr);
-      const wrappedKey = await window.crypto.subtle.encrypt(
-        RSA_ALGO,
-        pubKey,
-        rawAesKey
-      );
-      encryptedKeys[userId] = btoa(String.fromCharCode(...new Uint8Array(wrappedKey)));
-    } catch (e) {
-      console.error(`Failed to encrypt for user ${userId}:`, e);
-    }
+  if (privJwk && pubJwk) {
+    const privateKey = await crypto.subtle.importKey(
+      "jwk", privJwk,
+      { name: "ECDH", namedCurve: "P-256" },
+      true, ["deriveKey", "deriveBits"]
+    );
+    const publicKey = await crypto.subtle.importKey(
+      "jwk", pubJwk,
+      { name: "ECDH", namedCurve: "P-256" },
+      true, []
+    );
+    return { privateKey, publicKey, pubJwk, isNew: false };
   }
 
-  return {
-    ciphertext: btoa(String.fromCharCode(...new Uint8Array(ciphertextBuffer))),
-    iv: btoa(String.fromCharCode(...iv)),
-    encryptedKeys,
-  };
-}
-
-/**
- * Decrypts a message using local private key.
- */
-export async function decryptMessage(payload, privateKey) {
-  const { ciphertext, iv, wrappedKey } = payload;
-  
-  // 1. Unwrap AES key
-  const wrappedKeyBuffer = Uint8Array.from(atob(wrappedKey), (c) => c.charCodeAt(0));
-  const rawAesKey = await window.crypto.subtle.decrypt(
-    RSA_ALGO,
-    privateKey,
-    wrappedKeyBuffer
-  );
-  
-  const aesKey = await window.crypto.subtle.importKey(
-    "raw",
-    rawAesKey,
-    AES_ALGO,
+  const kp = await crypto.subtle.generateKey(
+    { name: "ECDH", namedCurve: "P-256" },
     true,
-    ["decrypt"]
+    ["deriveKey", "deriveBits"]
   );
+  const newPrivJwk = await crypto.subtle.exportKey("jwk", kp.privateKey);
+  const newPubJwk = await crypto.subtle.exportKey("jwk", kp.publicKey);
+  await dbPut(`priv_${userId}`, newPrivJwk);
+  await dbPut(`pub_${userId}`, newPubJwk);
 
-  // 2. Decrypt text
-  const ivBuffer = Uint8Array.from(atob(iv), (c) => c.charCodeAt(0));
-  const ciphertextBuffer = Uint8Array.from(atob(ciphertext), (c) => c.charCodeAt(0));
-  
-  const decrypted = await window.crypto.subtle.decrypt(
-    { name: AES_ALGO, iv: ivBuffer },
-    aesKey,
-    ciphertextBuffer
-  );
-
-  return new TextDecoder().decode(decrypted);
+  return { privateKey: kp.privateKey, publicKey: kp.publicKey, pubJwk: newPubJwk, isNew: true };
 }
 
-// --- Mnemonic (Pseudo-BIP39 for recovery) ---
-const WORD_LIST = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa", "quebec", "romeo", "sierra", "tango", "uniform", "victor", "whiskey", "xray", "yankee", "zulu"];
+// Called after login/checkAuth. Generates keypair if missing and publishes public key.
+// forcePub=true when the server doesn't have the key yet (check from /auth/me response).
+export async function initCrypto(userId, publishFn, forcePub = false) {
+  if (!crypto?.subtle) {
+    console.warn("[E2EE] crypto.subtle unavailable — E2EE requires HTTPS or localhost");
+    return null;
+  }
+  try {
+    console.log("[E2EE] initCrypto start userId=%s forcePub=%s", userId, forcePub);
+    const { privateKey, publicKey, pubJwk, isNew } = await loadOrCreate(userId);
+    console.log("[E2EE] keypair ready isNew=%s", isNew);
+    if (isNew || forcePub) {
+      console.log("[E2EE] publishing public key...");
+      await publishFn(JSON.stringify(pubJwk));
+      console.log("[E2EE] public key published OK");
+    }
+    return { privateKey, publicKey };
+  } catch (err) {
+    console.error("[E2EE] initCrypto failed:", err);
+    return null;
+  }
+}
 
+export async function getPrivateKey(userId) {
+  const jwk = await dbGet(`priv_${userId}`);
+  if (!jwk) return null;
+  return crypto.subtle.importKey(
+    "jwk", jwk,
+    { name: "ECDH", namedCurve: "P-256" },
+    true, ["deriveKey", "deriveBits"]
+  );
+}
+
+export async function getPublicKeyJwk(userId) {
+  return dbGet(`pub_${userId}`);
+}
+
+export async function importPublicKey(jwk) {
+  const parsed = typeof jwk === "string" ? JSON.parse(jwk) : jwk;
+  return crypto.subtle.importKey(
+    "jwk", parsed,
+    { name: "ECDH", namedCurve: "P-256" },
+    true, []
+  );
+}
+
+// Derive shared AES-256-GCM key via ECDH
+export async function deriveSharedKey(myPrivateKey, theirPublicKey) {
+  return crypto.subtle.deriveKey(
+    { name: "ECDH", public: theirPublicKey },
+    myPrivateKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+// AES-256-GCM helpers (used by Phase 2+)
+export async function aesEncrypt(aesKey, plaintext) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const buf = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    aesKey,
+    new TextEncoder().encode(plaintext)
+  );
+  const out = new Uint8Array(12 + buf.byteLength);
+  out.set(iv, 0);
+  out.set(new Uint8Array(buf), 12);
+  return btoa(String.fromCharCode(...out));
+}
+
+export async function aesDecrypt(aesKey, b64) {
+  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  const plain = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: bytes.slice(0, 12) },
+    aesKey,
+    bytes.slice(12)
+  );
+  return new TextDecoder().decode(plain);
+}
+
+// Phase 3/4: Per-channel / per-story AES-256 key management
+
+export async function generateChannelKey() {
+  const key = await crypto.subtle.generateKey(
+    { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]
+  );
+  const raw = await crypto.subtle.exportKey("raw", key);
+  return { key, raw: btoa(String.fromCharCode(...new Uint8Array(raw))) };
+}
+
+export async function importChannelKey(rawB64) {
+  const bytes = Uint8Array.from(atob(rawB64), (c) => c.charCodeAt(0));
+  return crypto.subtle.importKey("raw", bytes, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+
+// ECIES wrap: encrypt channelKeyRaw (b64 string) for a member's public key.
+// Returns {wrapped: b64, eph_pub: jwk_string} — store both per member.
+export async function wrapKeyForMember(channelKeyRaw, memberPubKeyJwk) {
+  const eph = await crypto.subtle.generateKey(
+    { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]
+  );
+  const memberPub = await importPublicKey(memberPubKeyJwk);
+  const wrapKey = await deriveSharedKey(eph.privateKey, memberPub);
+  const wrapped = await aesEncrypt(wrapKey, channelKeyRaw);
+  const ephPubJwk = await crypto.subtle.exportKey("jwk", eph.publicKey);
+  return { wrapped, eph_pub: JSON.stringify(ephPubJwk) };
+}
+
+// ECIES unwrap: recover channelKeyRaw (b64 string) using own private key + stored eph_pub.
+export async function unwrapKeyFromMember(wrapped, ephPubJwkStr, myPrivKey) {
+  const ephPub = await importPublicKey(ephPubJwkStr);
+  const wrapKey = await deriveSharedKey(myPrivKey, ephPub);
+  return aesDecrypt(wrapKey, wrapped);
+}
+
+// Mnemonic (used by SettingsPage recovery flow)
+const WORD_LIST = ["alpha","bravo","charlie","delta","echo","foxtrot","golf","hotel","india","juliet","kilo","lima","mike","november","oscar","papa","quebec","romeo","sierra","tango","uniform","victor","whiskey","xray","yankee","zulu"];
 export function generateMnemonic() {
-  const indices = window.crypto.getRandomValues(new Uint32Array(12));
-  return Array.from(indices).map(i => WORD_LIST[i % WORD_LIST.length]).join(" ");
+  const indices = crypto.getRandomValues(new Uint32Array(12));
+  return Array.from(indices).map((i) => WORD_LIST[i % WORD_LIST.length]).join(" ");
+}
+
+// Phase 2: DM encrypt/decrypt using ECDH-derived shared key
+export async function encryptDM(myPrivKey, theirPubKeyJwk, plaintext) {
+  const theirPub = await importPublicKey(theirPubKeyJwk);
+  const shared = await deriveSharedKey(myPrivKey, theirPub);
+  return aesEncrypt(shared, plaintext);
+}
+
+export async function decryptDM(myPrivKey, theirPubKeyJwk, ciphertext) {
+  const theirPub = await importPublicKey(theirPubKeyJwk);
+  const shared = await deriveSharedKey(myPrivKey, theirPub);
+  return aesDecrypt(shared, ciphertext);
 }

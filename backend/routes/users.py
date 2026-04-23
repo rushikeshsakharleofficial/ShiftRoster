@@ -484,6 +484,34 @@ async def mandate_mfa(data: MandateMfaRequest, request: Request):
     return {"message": f"MFA {action} for {result.modified_count} user(s)"}
 
 
+class PublicKeyRequest(BaseModel):
+    public_key: str
+
+
+@router.put("/me/public-key")
+async def set_my_public_key(data: PublicKeyRequest, request: Request):
+    current = await get_current_user(request)
+    await db.users.update_one(
+        {"_id": ObjectId(current["id"])},
+        {"$set": {"public_key": data.public_key, "updated_at": datetime.now(timezone.utc)}},
+    )
+    return {"ok": True}
+
+
+@router.get("/{user_id}/public-key")
+async def get_user_public_key(user_id: str, request: Request):
+    await get_current_user(request)
+    try:
+        u = await db.users.find_one(
+            {"_id": ObjectId(user_id)}, {"public_key": 1}
+        )
+    except Exception:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not u or not u.get("public_key"):
+        raise HTTPException(status_code=404, detail="Public key not found")
+    return {"public_key": u["public_key"]}
+
+
 @router.post("/{user_id}/avatar")
 async def upload_avatar(user_id: str, request: Request, file: UploadFile = File(...)):
     """Upload or replace a user's avatar image (max 5 MB, images only)."""
