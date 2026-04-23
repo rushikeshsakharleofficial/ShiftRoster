@@ -35,7 +35,24 @@ COMMON_LOCATIONS='
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
+        # $http_host preserves the port — OO uses Host to build its cache URLs
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_read_timeout 86400;
+        client_max_body_size 110m;
+    }
+
+    # OnlyOffice generates /cache/, /doc/, /info/ URLs at root. Proxy those too.
+    location ~ ^/(cache|doc|info|coauthoring|web-apps|sdkjs|sdkjs-plugins|fonts|dictionaries|welcome)/ {
+        proxy_pass '"$ONLYOFFICE_URL"';
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
