@@ -28,6 +28,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       SECURE_COOKIES: ${SECURE_COOKIES:-false}
       MSG_ENCRYPT_KEY: ${MSG_ENCRYPT_KEY}
+      ONLYOFFICE_JWT_SECRET: ${ONLYOFFICE_JWT_SECRET}
     depends_on:
       mongo:
         condition: service_healthy
@@ -73,6 +74,25 @@ services:
     depends_on:
       - frontend
       - backend
+      - onlyoffice
+
+  # OnlyOffice Document Server — SOP rich editor backend
+  onlyoffice:
+    image: onlyoffice/documentserver:latest
+    container_name: shiftroster-onlyoffice
+    restart: unless-stopped
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${ONLYOFFICE_JWT_SECRET}
+      JWT_HEADER: Authorization
+      JWT_PREFIX: Bearer
+    volumes:
+      - onlyoffice_data:/var/www/onlyoffice/Data
+      - onlyoffice_logs:/var/log/onlyoffice
+    deploy:
+      resources:
+        limits:
+          memory: 3G
 
   # GitHub Actions self-hosted runner — auto-registers on first start
   # Needs GITHUB_PAT (repo scope) in .env — never expires, no manual token refresh
@@ -99,4 +119,8 @@ volumes:
   backend_uploads:
     driver: local
   runner_work:
+    driver: local
+  onlyoffice_data:
+    driver: local
+  onlyoffice_logs:
     driver: local

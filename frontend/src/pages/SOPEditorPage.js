@@ -779,6 +779,76 @@ function FileEditor({ sop, onFileUploaded, editable }) {
   );
 }
 
+// ── OnlyOffice editor ──
+
+function OnlyOfficeEditor({ sopId }) {
+  const editorRef = useRef(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+
+    const initEditor = (config) => {
+      if (!alive) return;
+      editorRef.current = new window.DocsAPI.DocEditor("oo-editor", config);
+      if (alive) setLoading(false);
+    };
+
+    sopsApi.getEditorConfig(sopId).then(({ data: config }) => {
+      if (!alive) return;
+      if (window.DocsAPI) {
+        initEditor(config);
+        return;
+      }
+      const existing = document.getElementById("oo-api-js");
+      if (existing) {
+        existing.addEventListener("load", () => initEditor(config));
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "oo-api-js";
+      s.src = "/onlyoffice/web-apps/apps/api/documents/api.js";
+      s.onload = () => initEditor(config);
+      s.onerror = () => { if (alive) { setLoading(false); setError(true); } };
+      document.head.appendChild(s);
+    }).catch(() => {
+      if (alive) { setLoading(false); setError(true); }
+    });
+
+    return () => {
+      alive = false;
+      try { editorRef.current?.destroyEditor?.(); } catch {}
+      editorRef.current = null;
+    };
+  }, [sopId]);
+
+  return (
+    <div className="relative border rounded-lg overflow-hidden" style={{ height: "80vh" }}>
+      <div id="oo-editor" style={{ width: "100%", height: "100%" }} />
+      {loading && !error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+          <div className="text-center space-y-3">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto" />
+            <p className="text-sm text-muted-foreground">Loading document editor…</p>
+          </div>
+        </div>
+      )}
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center space-y-3 p-8">
+            <AlertTriangle className="h-10 w-10 mx-auto text-amber-500" />
+            <p className="font-medium">Document editor unavailable</p>
+            <p className="text-sm text-muted-foreground max-w-sm">
+              The OnlyOffice service may still be initializing. Please wait a moment and refresh.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ──
 
 export default function SOPEditorPage() {
@@ -1013,6 +1083,7 @@ export default function SOPEditorPage() {
   const canEdit = !isArchived;
   const canDirect = canDirectEdit(sop);
   const showPendingBanner = sop.has_pending_edit && (isOwner(sop) || isPrivileged);
+  const isOOType = !!sop.oo_file;
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -1028,9 +1099,9 @@ export default function SOPEditorPage() {
         <Badge variant="outline">v{sop.current_version}</Badge>
         <Badge variant={isArchived ? "secondary" : "default"}>{sop.status}</Badge>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {/* Export / Import */}
-          <Button variant="outline" size="sm" onClick={handleExportPDF}><Download className="h-4 w-4 mr-1" />PDF</Button>
-          {sop.sop_type === "spreadsheet" && (
+          {/* Export / Import — legacy editors only */}
+          {!isOOType && <Button variant="outline" size="sm" onClick={handleExportPDF}><Download className="h-4 w-4 mr-1" />PDF</Button>}
+          {sop.sop_type === "spreadsheet" && !isOOType && (
             <>
               <Button variant="outline" size="sm" onClick={handleExportCSV}><Download className="h-4 w-4 mr-1" />CSV</Button>
               <Button variant="outline" size="sm" onClick={() => csvImportRef.current?.click()}><Upload className="h-4 w-4 mr-1" />Import CSV</Button>
@@ -1045,8 +1116,9 @@ export default function SOPEditorPage() {
           {(isOwner(sop) || isPrivileged) && !isArchived && (
             <Button variant="outline" size="sm" onClick={() => setShowArchiveConfirm(true)}><Archive className="h-4 w-4 mr-1" />Archive</Button>
           )}
-          {canEdit && !isEditing && <Button size="sm" onClick={enterEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>}
-          {canEdit && isEditing && (
+          {/* Edit controls — legacy editors only; OO manages its own save */}
+          {canEdit && !isEditing && !isOOType && <Button size="sm" onClick={enterEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>}
+          {canEdit && isEditing && !isOOType && (
             <>
               <Input placeholder="Change note" value={changeNote} onChange={e => setChangeNote(e.target.value)} className="w-36 h-8 text-sm" />
               <Button size="sm" variant="outline" onClick={cancelEdit}><X className="h-4 w-4 mr-1" />Cancel</Button>
@@ -1090,10 +1162,16 @@ export default function SOPEditorPage() {
           </div>
         </div>
 
-        {sop.sop_type === "document" && <DocumentEditor content={draft} onChange={setDraft} editable={isEditing} sopId={id} />}
-        {sop.sop_type === "spreadsheet" && <SpreadsheetEditor content={draft} onChange={setDraft} editable={isEditing} />}
-        {sop.sop_type === "presentation" && <PresentationEditor content={draft} onChange={setDraft} editable={isEditing} />}
-        {sop.sop_type === "file" && <FileEditor sop={sop} editable={isEditing} onFileUploaded={fileData => setDraft(fd => ({ ...fd, ...fileData }))} />}
+        {isOOType ? (
+          <OnlyOfficeEditor sopId={id} />
+        ) : (
+          <>
+            {sop.sop_type === "document" && <DocumentEditor content={draft} onChange={setDraft} editable={isEditing} sopId={id} />}
+            {sop.sop_type === "spreadsheet" && <SpreadsheetEditor content={draft} onChange={setDraft} editable={isEditing} />}
+            {sop.sop_type === "presentation" && <PresentationEditor content={draft} onChange={setDraft} editable={isEditing} />}
+            {sop.sop_type === "file" && <FileEditor sop={sop} editable={isEditing} onFileUploaded={fileData => setDraft(fd => ({ ...fd, ...fileData }))} />}
+          </>
+        )}
 
         {sop.acknowledged_by?.length > 0 && (
           <div className="border rounded-lg p-4">

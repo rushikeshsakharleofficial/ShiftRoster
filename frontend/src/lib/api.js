@@ -342,6 +342,7 @@ export const sopsApi = {
   revert: (id, versionId) => api.post(`/sops/${id}/revert/${versionId}`),
   archive: (id) => api.post(`/sops/${id}/archive`),
   upload: (formData) => api.post("/sops/upload", formData, { headers: { "Content-Type": undefined } }),
+  getEditorConfig: (id) => api.get(`/sops/${id}/editor-config`),
 };
 
 // E2EE key exchange
