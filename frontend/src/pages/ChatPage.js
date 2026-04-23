@@ -799,10 +799,10 @@ export default function ChatPage() {
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
       {/* === LEFT ASIDE — fixed 280px === */}
-      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border/20 bg-gradient-to-b from-[#0f1117] to-[#141720]">
+      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border/20 bg-card dark:bg-gradient-to-b dark:from-[#0f1117] dark:to-[#141720]">
         {/* Top: title + quick actions */}
-        <div className="h-14 px-4 flex items-center justify-between border-b border-white/5 shrink-0">
-          <h2 className="text-base font-semibold tracking-tight text-white/90">Messages</h2>
+        <div className="h-14 px-4 flex items-center justify-between border-b border-border/20 shrink-0">
+          <h2 className="text-base font-semibold tracking-tight dark:text-white/90">Messages</h2>
           <div className="flex items-center gap-0.5">
             <Button
               variant="ghost"
@@ -842,7 +842,7 @@ export default function ChatPage() {
               placeholder="Search"
               value={chatListFilter}
               onChange={(e) => setChatListFilter(e.target.value)}
-              className="pl-8 h-8 text-xs rounded-lg bg-white/5 border-white/10 text-white/80 placeholder:text-white/30 focus-visible:bg-white/10"
+              className="pl-8 h-8 text-xs rounded-lg bg-muted/40 border-transparent dark:bg-white/5 dark:border-white/10 dark:text-white/80 dark:placeholder:text-white/30 focus-visible:bg-background dark:focus-visible:bg-white/10"
             />
           </div>
         </div>
@@ -852,7 +852,7 @@ export default function ChatPage() {
           {/* Channels */}
           <div className="pt-3">
             <div className="flex items-center justify-between px-4 pb-1">
-              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30">Channels</span>
+              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50 dark:text-white/30">Channels</span>
               <button
                 onClick={() => setShowCreateChannel(true)}
                 className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
@@ -871,13 +871,13 @@ export default function ChatPage() {
                   className={cn(
                     "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150",
                     activeChannelId === ch.id
-                      ? "bg-gradient-to-r from-indigo-500/20 to-purple-500/10 text-white font-semibold ring-1 ring-indigo-500/30"
-                      : "text-white/50 hover:bg-white/5 hover:text-white/80"
+                      ? "bg-primary/10 text-foreground font-semibold dark:bg-gradient-to-r dark:from-indigo-500/20 dark:to-purple-500/10 dark:text-white dark:ring-1 dark:ring-indigo-500/30"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white/80"
                   )}
                 >
                   {ch.type === "private"
-                    ? <Lock className="h-3.5 w-3.5 shrink-0 text-indigo-400/60" />
-                    : <Hash className="h-3.5 w-3.5 shrink-0 text-indigo-400/60" />}
+                    ? <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground dark:text-indigo-400/60" />
+                    : <Hash className="h-3.5 w-3.5 shrink-0 text-muted-foreground dark:text-indigo-400/60" />}
                   <span className="flex-1 truncate text-[13px]">{ch.name}</span>
                   {unreadCounts[ch.id] > 0 && (
                     <span className="h-4 min-w-[16px] px-1 rounded-full bg-indigo-500 text-white text-[10px] flex items-center justify-center font-bold shadow-lg shadow-indigo-500/40">
@@ -892,7 +892,7 @@ export default function ChatPage() {
           {/* Direct messages */}
           <div className="pt-4 pb-3">
             <div className="flex items-center justify-between px-4 pb-1">
-              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30">Direct Messages</span>
+              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50 dark:text-white/30">Direct Messages</span>
             </div>
             <div className="px-2 space-y-0.5">
               {filteredDms.length === 0 ? (
@@ -904,8 +904,8 @@ export default function ChatPage() {
                   className={cn(
                     "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all duration-150",
                     activeChannelId === dm.id
-                      ? "bg-gradient-to-r from-indigo-500/20 to-purple-500/10 text-white font-semibold ring-1 ring-indigo-500/30"
-                      : "text-white/50 hover:bg-white/5 hover:text-white/80"
+                      ? "bg-primary/10 text-foreground font-semibold dark:bg-gradient-to-r dark:from-indigo-500/20 dark:to-purple-500/10 dark:text-white dark:ring-1 dark:ring-indigo-500/30"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white/80"
                   )}
                 >
                   <div className="relative shrink-0">
@@ -927,7 +927,7 @@ export default function ChatPage() {
         </ScrollArea>
 
         {/* Footer */}
-        <div className="border-t border-white/5 px-2 py-2 shrink-0 flex items-center gap-1 bg-black/20 backdrop-blur-sm">
+        <div className="border-t border-border/20 px-2 py-2 shrink-0 flex items-center gap-1 dark:bg-black/20 backdrop-blur-sm">
           <ThemeToggle />
           <Button
             variant="ghost"
@@ -941,7 +941,7 @@ export default function ChatPage() {
           <div className="flex-1 min-w-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full h-9 px-2 gap-2 text-xs font-medium justify-start min-w-0 text-white/70 hover:text-white hover:bg-white/5">
+              <Button variant="ghost" className="w-full h-9 px-2 gap-2 text-xs font-medium justify-start min-w-0 dark:text-white/70 dark:hover:text-white dark:hover:bg-white/5">
                 <Avatar className="h-6 w-6">
                   <AvatarFallback
                     className={cn("text-[10px] text-white", getAvatarColor(userName))}
@@ -971,9 +971,9 @@ export default function ChatPage() {
       </aside>
 
       {/* === MAIN — chat surface === */}
-      <main className="flex-1 flex flex-col min-w-0 bg-[#0e1117]">
+      <main className="flex-1 flex flex-col min-w-0 bg-background dark:bg-[#0e1117]">
         {/* Header */}
-        <header className="h-14 border-b border-white/5 px-5 flex items-center gap-3 shrink-0 bg-[#0e1117]/90 backdrop-blur-md sticky top-0 z-10">
+        <header className="h-14 border-b border-border/40 px-5 flex items-center gap-3 shrink-0 bg-background/90 dark:bg-[#0e1117]/90 backdrop-blur-md sticky top-0 z-10">
           {activeChannel ? (
             <>
               {isActiveDM ? (
@@ -1059,7 +1059,7 @@ export default function ChatPage() {
         <StoryStrip currentUser={user} />
 
         {/* Body — discovery / empty / join / messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar bg-[#0e1117]">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar bg-background dark:bg-[#0e1117]">
           {!activeChannelId && !showDiscovery ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-12">
               <div className="relative mb-8">
@@ -1247,7 +1247,7 @@ export default function ChatPage() {
         {activeChannel && (
           <div
             className={cn(
-              "border-t border-white/5 bg-[#0e1117]/95 backdrop-blur-md shrink-0",
+              "border-t border-border/40 bg-background/95 dark:bg-[#0e1117]/95 backdrop-blur-md shrink-0",
               inputDisabled && "opacity-60"
             )}
           >
@@ -1291,7 +1291,7 @@ export default function ChatPage() {
                   onChange={handleFileSelect}
                 />
 
-                <div className="flex-1 flex items-end bg-white/5 border border-white/10 rounded-2xl min-h-[40px] focus-within:border-indigo-400/50 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all shadow-sm">
+                <div className="flex-1 flex items-end bg-muted/40 border border-border/60 dark:bg-white/5 dark:border-white/10 rounded-2xl min-h-[40px] focus-within:border-indigo-400/50 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all shadow-sm">
                   <Textarea
                     ref={inputRef}
                     value={inputText}
