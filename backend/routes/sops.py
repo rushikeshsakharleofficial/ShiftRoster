@@ -52,10 +52,19 @@ _OO_MIME = {
 }
 
 
-async def _get_or_create_sops_folder(org_id, uid, now):
+def _as_oid(val):
+    """Normalize an org_id that may arrive as a str OR ObjectId."""
+    if val is None:
+        return None
+    if isinstance(val, ObjectId):
+        return val
+    return ObjectId(val)
+
+
+async def _get_or_create_sops_folder(org_oid, uid, now):
     """Return ObjectId of the shared 'SOPs' folder in the file manager, creating it once per org."""
     existing = await db.filemanager_items.find_one({
-        "org_id": org_id,
+        "org_id": org_oid,
         "scope": "shared",
         "parent_id": None,
         "type": "folder",
@@ -64,7 +73,7 @@ async def _get_or_create_sops_folder(org_id, uid, now):
     if existing:
         return existing["_id"]
     doc = {
-        "org_id": org_id,
+        "org_id": org_oid,
         "owner_id": uid,
         "parent_id": None,
         "scope": "shared",
@@ -82,17 +91,18 @@ async def _get_or_create_sops_folder(org_id, uid, now):
 
 async def _register_sop_in_filemanager(sop_oid, title, oo_filename, org_id, uid, now):
     """Insert a filemanager_items row pointing to this SOP's OO file. Idempotent on sop_id."""
+    org_oid = _as_oid(org_id)
     ext = oo_filename.rsplit(".", 1)[-1] if "." in oo_filename else "docx"
     mime = _OO_MIME.get(ext, "application/octet-stream")
     try:
         size = (UPLOADS_DIR / oo_filename).stat().st_size
     except Exception:
         size = 0
-    parent_id = await _get_or_create_sops_folder(org_id, uid, now)
+    parent_id = await _get_or_create_sops_folder(org_oid, uid, now)
     await db.filemanager_items.update_one(
-        {"org_id": org_id, "sop_id": sop_oid},
+        {"org_id": org_oid, "sop_id": sop_oid},
         {"$setOnInsert": {
-            "org_id": org_id,
+            "org_id": org_oid,
             "owner_id": uid,
             "parent_id": parent_id,
             "scope": "shared",
@@ -395,7 +405,7 @@ async def update_sop(sop_id: str, req: SOPUpdate, user=Depends(get_current_user)
     if "title" in updates and sop.get("oo_file"):
         oo_ext = sop["oo_file"].rsplit(".", 1)[-1] if "." in sop["oo_file"] else "docx"
         await db.filemanager_items.update_one(
-            {"org_id": user.get("org_id"), "sop_id": _to_oid(sop_id)},
+            {"org_id": _as_oid(user.get("org_id")), "sop_id": _to_oid(sop_id)},
             {"$set": {"name": f"{updates['title']}.{oo_ext}", "updated_at": now}},
         )
 
@@ -418,7 +428,7 @@ async def delete_sop(sop_id: str, user=Depends(get_current_user)):
     await db.sop_versions.delete_many({"sop_id": _to_oid(sop_id)})
     # Remove the file manager mirror entry
     await db.filemanager_items.delete_one(
-        {"org_id": sop.get("org_id"), "sop_id": _to_oid(sop_id)}
+        {"org_id": _as_oid(sop.get("org_id")), "sop_id": _to_oid(sop_id)}
     )
     await log_audit(user.get("org_id"), user["id"], "delete", "sop", sop_id)
     return {"ok": True}
@@ -905,7 +915,7 @@ async def onlyoffice_callback(sop_id: str, request: Request):
 
         # Refresh the file manager entry's size + timestamp so Files view stays current
         await db.filemanager_items.update_one(
-            {"org_id": sop.get("org_id"), "sop_id": sop["_id"]},
+            {"org_id": _as_oid(sop.get("org_id")), "sop_id": sop["_id"]},
             {"$set": {"size": len(resp.content), "updated_at": now}},
         )
 
