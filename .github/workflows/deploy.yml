@@ -102,6 +102,7 @@ jobs:
     steps:
       - name: Pull latest code
         run: |
+          git config --global --add safe.directory /projects/ShiftRoster
           cd /projects/ShiftRoster
           git pull origin master
 
