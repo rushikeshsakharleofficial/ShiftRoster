@@ -640,7 +640,7 @@ async def serve_sop_file(sop_id: str, t: str):
     if not file_path.exists():
         raise HTTPException(404, "File not found on disk")
 
-    return FileResponse(str(file_path), filename=sop["oo_file"])
+    return FileResponse(str(file_path))
 
 
 @router.post("/{sop_id}/onlyoffice-callback")
