@@ -785,65 +785,41 @@ function OnlyOfficeEditor({ sopId }) {
   const editorRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const [retrying, setRetrying] = useState(false);
-  const retryCountRef = useRef(0);
-  const documentReadyRef = useRef(false); // once true, onError is non-fatal
-
-  // Keep ref in sync so callbacks don't close over stale state
-  useEffect(() => { retryCountRef.current = retryCount; }, [retryCount]);
 
   useEffect(() => {
     let alive = true;
-    documentReadyRef.current = false;
+    let loadingTimeout = null;
 
     const initEditor = (config) => {
       if (!alive) return;
-      // Destroy any previous editor instance before creating a new one
       try { editorRef.current?.destroyEditor?.(); } catch {}
       editorRef.current = null;
+
+      // Hide loading spinner after 3s regardless — OO may render UI before firing onDocumentReady,
+      // or may fire onError silently for non-fatal changesError. Don't block the user.
+      loadingTimeout = setTimeout(() => {
+        if (alive) setLoading(false);
+      }, 3000);
 
       const configWithEvents = {
         ...config,
         events: {
           onDocumentReady: () => {
-            if (alive) {
-              documentReadyRef.current = true;
-              setLoading(false);
-              setRetrying(false);
-            }
+            if (alive) setLoading(false);
           },
           onError: (event) => {
-            if (!alive) return;
-            // If document already loaded successfully, this is a non-fatal background error
-            // (e.g. changesError from OO's change-tracking). Do not retry or show error overlay.
-            if (documentReadyRef.current) {
-              console.warn("OO non-fatal error after document ready:", event?.data);
-              return;
-            }
-            console.error("OO error:", event?.data);
-            if (retryCountRef.current < 3) {
-              setRetrying(true);
-              setTimeout(() => {
-                if (alive) setRetryCount(c => c + 1);
-              }, 3000);
-            } else {
-              setLoading(false);
-              setError(true);
-            }
+            // Log all OO errors but never retry or show error overlay.
+            // OO's changesError crashes are non-fatal — editor stays usable.
+            console.warn("OO event error:", event?.data);
+          },
+          onWarning: (event) => {
+            console.warn("OO warning:", event?.data);
           },
         },
       };
 
       editorRef.current = new window.DocsAPI.DocEditor("oo-editor", configWithEvents);
     };
-
-    // If retrying, force a fresh api.js load by clearing cached DocsAPI
-    if (retryCount > 0) {
-      delete window.DocsAPI;
-      const oldScript = document.getElementById("oo-api-js");
-      if (oldScript) oldScript.remove();
-    }
 
     sopsApi.getEditorConfig(sopId).then(({ data: config }) => {
       if (!alive) return;
@@ -862,33 +838,27 @@ function OnlyOfficeEditor({ sopId }) {
       s.onload = () => initEditor(config);
       s.onerror = () => { if (alive) { setLoading(false); setError(true); } };
       document.head.appendChild(s);
-    }).catch(() => {
+    }).catch((e) => {
+      console.error("editor-config fetch failed:", e);
       if (alive) { setLoading(false); setError(true); }
     });
 
     return () => {
       alive = false;
+      if (loadingTimeout) clearTimeout(loadingTimeout);
       try { editorRef.current?.destroyEditor?.(); } catch {}
       editorRef.current = null;
     };
-  }, [sopId, retryCount]);
+  }, [sopId]);
 
   return (
     <div className="relative border rounded-lg overflow-hidden" style={{ height: "80vh" }}>
       <div id="oo-editor" style={{ width: "100%", height: "100%" }} />
-      {loading && !error && !retrying && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+      {loading && !error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/80 pointer-events-none">
           <div className="text-center space-y-3">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto" />
             <p className="text-sm text-muted-foreground">Loading document editor…</p>
-          </div>
-        </div>
-      )}
-      {retrying && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/80">
-          <div className="text-center space-y-3">
-            <Loader2 className="h-8 w-8 animate-spin text-amber-500 mx-auto" />
-            <p className="text-sm text-muted-foreground">Connection interrupted, retrying… ({retryCount}/3)</p>
           </div>
         </div>
       )}
@@ -898,7 +868,7 @@ function OnlyOfficeEditor({ sopId }) {
             <AlertTriangle className="h-10 w-10 mx-auto text-amber-500" />
             <p className="font-medium">Document editor unavailable</p>
             <p className="text-sm text-muted-foreground max-w-sm">
-              The OnlyOffice service may still be initializing. Please wait a moment and refresh.
+              Failed to load editor configuration. Refresh the page.
             </p>
           </div>
         </div>
