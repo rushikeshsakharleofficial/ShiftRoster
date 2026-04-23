@@ -641,7 +641,8 @@ async def update_organization(request: Request):
                    "attendance_enabled",
                    "smtp_host", "smtp_port", "smtp_username", "smtp_password",
                    "smtp_from_email", "smtp_from_name", "smtp_use_tls", "smtp_enabled",
-                   "chat_features", "purge_policy_days", "password_policy", "slack_oidc", "google_oidc"]
+                   "chat_features", "purge_policy_days", "password_policy", "slack_oidc", "google_oidc",
+                   "file_manager"]
     else:
         allowed = ["attendance_enabled"]
 
@@ -676,6 +677,26 @@ async def update_organization(request: Request):
     # Explicitly handle chat_features if present
     if "chat_features" in body and is_admin:
         update["chat_features"] = body["chat_features"]
+
+    # Validate file_manager settings structure if being updated
+    if "file_manager" in body and is_admin:
+        fm = body["file_manager"]
+        if not isinstance(fm, dict):
+            raise HTTPException(status_code=400, detail="file_manager must be an object")
+        cleaned_fm = {}
+        if "max_file_mb" in fm:
+            try:
+                mb = int(fm["max_file_mb"])
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="max_file_mb must be an integer")
+            if mb < 1 or mb > 10240:
+                raise HTTPException(status_code=400, detail="max_file_mb must be 1-10240")
+            cleaned_fm["max_file_mb"] = mb
+        if "shared_enabled" in fm:
+            if not isinstance(fm["shared_enabled"], bool):
+                raise HTTPException(status_code=400, detail="shared_enabled must be bool")
+            cleaned_fm["shared_enabled"] = fm["shared_enabled"]
+        update["file_manager"] = cleaned_fm
 
     if "smtp_password" in body:
         update["smtp_password"] = body["smtp_password"]
