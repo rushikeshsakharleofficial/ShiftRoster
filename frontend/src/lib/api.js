@@ -357,10 +357,7 @@ export const filesApi = {
       headers: { "Content-Type": "multipart/form-data" },
       onUploadProgress,
     }),
-  downloadUrl: (id) => {
-    const base = api.defaults.baseURL || "";
-    return `${base}/files/${id}/download`;
-  },
+  downloadUrl: (id) => `/api/files/${id}/download`,
   rename: (id, name) => api.put(`/files/${id}`, { name }),
   delete: (id) => api.delete(`/files/${id}`),
   move: (id, data) => api.post(`/files/${id}/move`, data),
