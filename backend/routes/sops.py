@@ -577,7 +577,10 @@ async def get_editor_config(sop_id: str, user=Depends(get_current_user)):
 
     doc_url = f"{_OO_BACKEND_URL}/api/sops/{sop_id}/file?t={file_token}"
     callback_url = f"{_OO_BACKEND_URL}/api/sops/{sop_id}/onlyoffice-callback"
-    doc_key = f"{sop_id}_{sop.get('current_version', 1)}"
+    # Key includes file mtime — changes on every OO save, busts OO's internal document cache
+    _fp = UPLOADS_DIR / sop["oo_file"]
+    _mtime = int(_fp.stat().st_mtime) if _fp.exists() else int(time.time())
+    doc_key = f"{sop_id}_{sop.get('current_version', 1)}_{_mtime}"
 
     is_editor = str(sop.get("owner", "")) == user["id"] or user.get("system_role") in ("admin", "manager")
     can_edit = is_editor and sop.get("status") != "archived"
