@@ -30,10 +30,15 @@ jobs:
           pip install flake8
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
-      - name: Security scan (bandit)
+      - name: Security scan — code (bandit)
         run: |
           pip install bandit
-          bandit -r backend/ -ll --exclude backend/tests -q || true
+          bandit -r backend/ -ll --exclude backend/tests -q
+
+      - name: Security scan — Python deps (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt --desc
 
       # ── Frontend checks ──
       - name: Set up Node 20
@@ -45,6 +50,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: cd frontend && npm ci
+
+      - name: Security scan — Node deps (npm audit)
+        run: cd frontend && npm audit --audit-level=high
 
       - name: Frontend build check
         run: cd frontend && npm run build
