@@ -54,12 +54,12 @@ const BACKEND_URL = import.meta.env.REACT_APP_BACKEND_URL;
 
 function DaySeparator({ date }) {
   return (
-    <div className="flex items-center my-4">
-      <div className="flex-1 h-px bg-border/50" />
-      <span className="mx-3 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-[0.15em]">
-        {format(new Date(date), "EEEE, MMMM do")}
+    <div className="flex items-center my-6 px-4">
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-border/60 to-transparent" />
+      <span className="mx-3 text-[9px] font-mono font-semibold text-muted-foreground/50 uppercase tracking-[0.2em] px-2 py-0.5 rounded border border-border/30 bg-muted/20">
+        {format(new Date(date), "EEE, MMM d")}
       </span>
-      <div className="flex-1 h-px bg-border/50" />
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-border/60 to-transparent" />
     </div>
   );
 }
@@ -95,11 +95,11 @@ function FileAttachment({ fileUrl, fileName, fileSize, fileType }) {
 
 function SystemEvent({ message }) {
   const formatText = (text) => {
-    const parts = text.match(/^([\w\s]+)( (created|joined|left|added|removed|renamed|archived)\b.*)/);
+    const parts = text.match(/^([\w\s]+)( (created|joined|left|added|removed|renamed|archived)\b.*)?/);
     if (parts) {
       return (
         <>
-          <span className="font-medium">{parts[1]}</span>
+          <span className="font-semibold text-foreground/70">{parts[1]}</span>
           {parts[2]}
         </>
       );
@@ -108,8 +108,8 @@ function SystemEvent({ message }) {
   };
 
   return (
-    <div className="flex justify-center py-1">
-      <span className="text-[10px] text-muted-foreground/60 leading-snug">
+    <div className="flex justify-center py-1.5">
+      <span className="text-[10px] font-mono text-muted-foreground/40 bg-muted/20 px-3 py-0.5 rounded-full border border-border/20">
         {formatText(message.text)}
       </span>
     </div>
@@ -240,19 +240,20 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                 <>
                   <div className={cn("flex items-center gap-1.5 group/msg", isOwn ? "flex-row-reverse" : "flex-row")}>
                     {displayText && (emojiOnly && !msg.file_url ? (
-                      <div className="text-4xl leading-none py-0.5">{displayText}</div>
+                      <div className="text-4xl leading-none py-1 select-none">{displayText}</div>
                     ) : (
                       <div
                         className={cn(
-                          "px-4 py-2 text-[14px] leading-snug shadow-sm",
-                          isOwn ? "msg-outgoing text-white" : "msg-incoming",
+                          "px-4 py-2.5 text-[13.5px] leading-relaxed",
                           isOwn
-                            ? cn("rounded-2xl", isLast && "rounded-br-md")
-                            : cn("rounded-2xl", isLast && "rounded-bl-md")
+                            ? cn("bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/20",
+                               "rounded-2xl", isLast && "rounded-br-[4px]")
+                            : cn("bg-muted/70 text-foreground border border-border/30 backdrop-blur-sm",
+                               "rounded-2xl", isLast && "rounded-bl-[4px]")
                         )}
                       >
                         {displayText}
-                        {msg.edited && <span className="text-[10px] opacity-60 ml-1">(edited)</span>}
+                        {msg.edited && <span className="text-[10px] opacity-50 ml-1.5 font-mono">(edited)</span>}
                       </div>
                     ))}
                     {/* Hover action bar */}
@@ -306,10 +307,10 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
               )}
               {isLast && !isEditing && (
                 <span className={cn(
-                  "text-[10px] text-muted-foreground/60 mt-0.5",
-                  isOwn ? "mr-1" : "ml-1"
+                  "text-[10px] font-mono text-muted-foreground/40 mt-1",
+                  isOwn ? "mr-1 text-right" : "ml-1"
                 )}>
-                  {format(new Date(msg.created_at), "h:mm a")}
+                  {format(new Date(msg.created_at), "HH:mm")}
                 </span>
               )}
             </div>
@@ -798,10 +799,10 @@ export default function ChatPage() {
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
       {/* === LEFT ASIDE — fixed 280px === */}
-      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border bg-card">
+      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border/20 bg-gradient-to-b from-[#0f1117] to-[#141720]">
         {/* Top: title + quick actions */}
-        <div className="h-14 px-4 flex items-center justify-between border-b border-border/60 shrink-0">
-          <h2 className="text-base font-semibold tracking-tight">Messages</h2>
+        <div className="h-14 px-4 flex items-center justify-between border-b border-white/5 shrink-0">
+          <h2 className="text-base font-semibold tracking-tight text-white/90">Messages</h2>
           <div className="flex items-center gap-0.5">
             <Button
               variant="ghost"
@@ -841,7 +842,7 @@ export default function ChatPage() {
               placeholder="Search"
               value={chatListFilter}
               onChange={(e) => setChatListFilter(e.target.value)}
-              className="pl-8 h-8 text-xs rounded-lg bg-muted/40 border-transparent focus-visible:bg-background"
+              className="pl-8 h-8 text-xs rounded-lg bg-white/5 border-white/10 text-white/80 placeholder:text-white/30 focus-visible:bg-white/10"
             />
           </div>
         </div>
@@ -851,7 +852,7 @@ export default function ChatPage() {
           {/* Channels */}
           <div className="pt-3">
             <div className="flex items-center justify-between px-4 pb-1">
-              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50">Channels</span>
+              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30">Channels</span>
               <button
                 onClick={() => setShowCreateChannel(true)}
                 className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
@@ -868,18 +869,18 @@ export default function ChatPage() {
                   key={ch.id}
                   onClick={() => onChannelClick(ch.id)}
                   className={cn(
-                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors",
+                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150",
                     activeChannelId === ch.id
-                      ? "bg-primary/10 text-foreground font-medium"
-                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                      ? "bg-gradient-to-r from-indigo-500/20 to-purple-500/10 text-white font-semibold ring-1 ring-indigo-500/30"
+                      : "text-white/50 hover:bg-white/5 hover:text-white/80"
                   )}
                 >
                   {ch.type === "private"
-                    ? <Lock className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                    : <Hash className="h-3.5 w-3.5 shrink-0 opacity-50" />}
+                    ? <Lock className="h-3.5 w-3.5 shrink-0 text-indigo-400/60" />
+                    : <Hash className="h-3.5 w-3.5 shrink-0 text-indigo-400/60" />}
                   <span className="flex-1 truncate text-[13px]">{ch.name}</span>
                   {unreadCounts[ch.id] > 0 && (
-                    <span className="h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-semibold">
+                    <span className="h-4 min-w-[16px] px-1 rounded-full bg-indigo-500 text-white text-[10px] flex items-center justify-center font-bold shadow-lg shadow-indigo-500/40">
                       {unreadCounts[ch.id]}
                     </span>
                   )}
@@ -891,7 +892,7 @@ export default function ChatPage() {
           {/* Direct messages */}
           <div className="pt-4 pb-3">
             <div className="flex items-center justify-between px-4 pb-1">
-              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50">Direct Messages</span>
+              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30">Direct Messages</span>
             </div>
             <div className="px-2 space-y-0.5">
               {filteredDms.length === 0 ? (
@@ -901,10 +902,10 @@ export default function ChatPage() {
                   key={dm.id}
                   onClick={() => onChannelClick(dm.id)}
                   className={cn(
-                    "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors",
+                    "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all duration-150",
                     activeChannelId === dm.id
-                      ? "bg-primary/10 text-foreground"
-                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                      ? "bg-gradient-to-r from-indigo-500/20 to-purple-500/10 text-white font-semibold ring-1 ring-indigo-500/30"
+                      : "text-white/50 hover:bg-white/5 hover:text-white/80"
                   )}
                 >
                   <div className="relative shrink-0">
@@ -918,7 +919,7 @@ export default function ChatPage() {
                       <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500 ring-1 ring-card" />
                     )}
                   </div>
-                  <span className="flex-1 truncate text-[13px] text-foreground font-medium">{dm.name}</span>
+                  <span className="flex-1 truncate text-[13px] font-medium">{dm.name}</span>
                 </button>
               ))}
             </div>
@@ -926,7 +927,7 @@ export default function ChatPage() {
         </ScrollArea>
 
         {/* Footer */}
-        <div className="border-t border-border/60 px-2 py-2 shrink-0 flex items-center gap-1">
+        <div className="border-t border-white/5 px-2 py-2 shrink-0 flex items-center gap-1 bg-black/20 backdrop-blur-sm">
           <ThemeToggle />
           <Button
             variant="ghost"
@@ -940,7 +941,7 @@ export default function ChatPage() {
           <div className="flex-1 min-w-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full h-9 px-2 gap-2 text-xs font-medium justify-start min-w-0">
+              <Button variant="ghost" className="w-full h-9 px-2 gap-2 text-xs font-medium justify-start min-w-0 text-white/70 hover:text-white hover:bg-white/5">
                 <Avatar className="h-6 w-6">
                   <AvatarFallback
                     className={cn("text-[10px] text-white", getAvatarColor(userName))}
@@ -972,7 +973,7 @@ export default function ChatPage() {
       {/* === MAIN — chat surface === */}
       <main className="flex-1 flex flex-col min-w-0 bg-background">
         {/* Header */}
-        <header className="h-14 border-b border-border px-5 flex items-center gap-3 shrink-0 bg-background">
+        <header className="h-14 border-b border-border/40 px-5 flex items-center gap-3 shrink-0 bg-background/80 backdrop-blur-md sticky top-0 z-10">
           {activeChannel ? (
             <>
               {isActiveDM ? (
@@ -1061,26 +1062,29 @@ export default function ChatPage() {
         <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar">
           {!activeChannelId && !showDiscovery ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-12">
-              <div className="w-20 h-20 rounded-full bg-primary/5 flex items-center justify-center mb-5 ring-1 ring-primary/10">
-                <MessageSquare className="h-9 w-9 text-primary/50" />
+              <div className="relative mb-8">
+                <div className="w-20 h-20 rounded-2xl bg-indigo-500/10 flex items-center justify-center ring-1 ring-indigo-500/20">
+                  <MessageSquare className="h-9 w-9 text-indigo-400/60" />
+                </div>
+                <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-indigo-500/30 ring-2 ring-background" />
               </div>
-              <h3 className="text-lg font-semibold mb-1.5 tracking-tight">Pick a conversation</h3>
-              <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mb-6">
-                Choose a group or direct message from the left to get started.
+              <h3 className="text-xl font-semibold mb-2 tracking-tight">No conversation selected</h3>
+              <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mb-8">
+                Pick a channel or start a direct message.
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <Button
                   onClick={() => setShowCreateChannel(true)}
-                  className="rounded-lg h-9 px-4 text-xs font-semibold"
+                  className="rounded-xl h-9 px-5 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white border-0"
                 >
                   <Plus className="h-3.5 w-3.5 mr-1.5" /> New Channel
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setShowDiscovery(true)}
-                  className="rounded-lg h-9 px-4 text-xs font-semibold"
+                  className="rounded-xl h-9 px-5 text-xs font-semibold"
                 >
-                  <Search className="h-3.5 w-3.5 mr-1.5" /> Discover
+                  <Search className="h-3.5 w-3.5 mr-1.5" /> Browse
                 </Button>
               </div>
             </div>
@@ -1243,7 +1247,7 @@ export default function ChatPage() {
         {activeChannel && (
           <div
             className={cn(
-              "border-t border-border bg-background shrink-0",
+              "border-t border-border/40 bg-background/95 backdrop-blur-md shrink-0",
               inputDisabled && "opacity-60"
             )}
           >
@@ -1287,7 +1291,7 @@ export default function ChatPage() {
                   onChange={handleFileSelect}
                 />
 
-                <div className="flex-1 flex items-end bg-muted/40 border border-border/60 rounded-2xl min-h-[40px] focus-within:border-primary/40 transition-colors">
+                <div className="flex-1 flex items-end bg-muted/60 border border-border/60 rounded-2xl min-h-[40px] focus-within:border-indigo-400/50 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all shadow-sm">
                   <Textarea
                     ref={inputRef}
                     value={inputText}
@@ -1321,7 +1325,7 @@ export default function ChatPage() {
                   size="icon"
                   onClick={handleSend}
                   disabled={inputDisabled || (!inputText.trim() && pendingFiles.length === 0)}
-                  className="h-9 w-9 rounded-full shadow-sm shrink-0"
+                  className="h-9 w-9 rounded-full shadow-lg shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 border-0 text-white disabled:opacity-30"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
