@@ -12,9 +12,10 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Plus, Loader2, FileText, Table2, Presentation, Upload,
-  Clock, Trash2, ExternalLink, Check, X
+  Clock, Trash2, ExternalLink, Check, X, History, RotateCcw
 } from "lucide-react";
 import { PREDEFINED_CATEGORIES } from "./SOPEditorPage";
 
@@ -36,6 +37,9 @@ export default function SOPsPage() {
   const [form, setForm] = useState({
     title: "", description: "", category: "", tags: "", sop_type: "document",
   });
+  const [historyDialog, setHistoryDialog] = useState(null); // { sop }
+  const [versions, setVersions] = useState([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
 
   const loadSops = useCallback(async () => {
     setLoading(true);
@@ -103,7 +107,35 @@ export default function SOPsPage() {
   };
 
   const isOwner = (sop) => sop.owner === user?.id;
-  const canDelete = (sop) => ["admin", "manager"].includes(user?.system_role) || isOwner(sop);
+  const isPrivileged = ["admin", "manager"].includes(user?.system_role);
+  const canDelete = (sop) => isPrivileged || isOwner(sop);
+  const canRevert = (sop) => isPrivileged || isOwner(sop);
+
+  const openHistory = async (sop, e) => {
+    e.stopPropagation();
+    setHistoryDialog(sop);
+    setVersions([]);
+    setVersionsLoading(true);
+    try {
+      const { data } = await sopsApi.versions(sop.id);
+      setVersions(data);
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail));
+    }
+    setVersionsLoading(false);
+  };
+
+  const handleRevert = async (versionId) => {
+    if (!historyDialog) return;
+    try {
+      await sopsApi.revert(historyDialog.id, versionId);
+      toast.success("Reverted successfully");
+      setHistoryDialog(null);
+      loadSops();
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail));
+    }
+  };
 
   const filtered = sops.filter(s => {
     if (filterType !== "all" && s.sop_type !== filterType) return false;
@@ -199,6 +231,11 @@ export default function SOPsPage() {
                             <Button size="sm" variant="outline" className="h-7 px-2 text-red-600 border-red-300 hover:bg-red-50" onClick={e => handleReject(sop, e)}><X className="h-3 w-3" /></Button>
                           </>
                         )}
+                        {canRevert(sop) && (
+                          <Button size="sm" variant="ghost" className="h-7 px-2" title="Version history" onClick={e => openHistory(sop, e)}>
+                            <History className="h-3 w-3" />
+                          </Button>
+                        )}
                         <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => navigate(`/sops/${sop.id}`)}><ExternalLink className="h-3 w-3" /></Button>
                         {canDelete(sop) && (
                           <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive hover:text-destructive" onClick={() => setConfirmDelete(sop)}><Trash2 className="h-3 w-3" /></Button>
@@ -264,6 +301,46 @@ export default function SOPsPage() {
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Create & Open Editor
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Version history dialog */}
+      <Dialog open={!!historyDialog} onOpenChange={(open) => { if (!open) setHistoryDialog(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Version History — {historyDialog?.title}</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-96">
+            {versionsLoading ? (
+              <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            ) : versions.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No previous versions saved yet</p>
+            ) : (
+              <div className="space-y-2 pr-2">
+                {versions.map(v => (
+                  <div key={v.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">v{v.version}</Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {v.changed_at ? new Date(v.changed_at).toLocaleString() : ""}
+                        </span>
+                      </div>
+                      {v.change_note && (
+                        <p className="text-xs text-muted-foreground mt-1 truncate">{v.change_note}</p>
+                      )}
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => handleRevert(v.id)}>
+                      <RotateCcw className="h-3 w-3 mr-1" />Revert
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHistoryDialog(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

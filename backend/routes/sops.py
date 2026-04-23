@@ -439,26 +439,14 @@ async def revert_sop(sop_id: str, version_id: str, user=Depends(get_current_user
     now = datetime.now(timezone.utc)
     uid = ObjectId(user["id"])
 
-    await db.sop_versions.insert_one({
-        "sop_id": _to_oid(sop_id),
-        "org_id": user.get("org_id"),
-        "version": sop.get("current_version", 1),
-        "content": sop.get("content", {}),
-        "sop_type": sop.get("sop_type"),
-        "file_url": sop.get("file_url"),
-        "file_name": sop.get("file_name"),
-        "changed_by": uid,
-        "changed_at": now,
-        "change_note": f"Before revert to v{ver['version']}",
-    })
-
+    # Restore old version's content in-place — no new snapshot created,
+    # no version counter bump, so history stays clean.
     await db.sops.update_one(
         {"_id": _to_oid(sop_id)},
         {"$set": {
             "content": ver.get("content", {}),
             "file_url": ver.get("file_url"),
             "file_name": ver.get("file_name"),
-            "current_version": sop.get("current_version", 1) + 1,
             "updated_by": uid,
             "updated_at": now,
             "has_pending_edit": False,

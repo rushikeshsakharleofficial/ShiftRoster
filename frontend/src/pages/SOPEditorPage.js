@@ -1171,6 +1171,7 @@ export default function SOPEditorPage() {
   const [categoryDraft, setCategoryDraft] = useState("");
   const [customCategory, setCustomCategory] = useState("");
   const [saving, setSaving] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editSnapshot, setEditSnapshot] = useState(null);
   const [changeNote, setChangeNote] = useState("");
@@ -1181,6 +1182,7 @@ export default function SOPEditorPage() {
   const [transferTo, setTransferTo] = useState("");
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [acked, setAcked] = useState(false);
+  const autoSaveTimer = useRef(null);
 
   const isOwner = useCallback(s => s && s.owner === user?.id, [user]);
   const isPrivileged = user?.system_role === "admin" || user?.system_role === "manager";
@@ -1219,9 +1221,11 @@ export default function SOPEditorPage() {
     setChangeNote("");
   };
 
-  const handleSave = async () => {
+  const handleSave = async (opts = {}) => {
     if (!sop) return;
-    setSaving(true);
+    const isAuto = opts.auto || false;
+    if (!isAuto) setSaving(true);
+    else setAutoSaving(true);
     try {
       const effectiveCategory = categoryDraft === "Others" ? (customCategory || "Others") : categoryDraft;
       const payload = { content: draft, title: titleDraft, category: effectiveCategory || undefined, change_note: changeNote || undefined };
@@ -1233,12 +1237,26 @@ export default function SOPEditorPage() {
       }
       const { data } = await sopsApi.update(id, payload);
       setSop(data);
-      setChangeNote("");
-      setIsEditing(false);
-      toast.success(canDirectEdit(data) ? `Saved (v${data.current_version})` : "Edit proposed — awaiting owner approval");
-    } catch (err) { toast.error(formatApiError(err?.response?.data?.detail)); }
-    setSaving(false);
+      if (!isAuto) {
+        setChangeNote("");
+        setIsEditing(false);
+        toast.success(canDirectEdit(data) ? `Saved (v${data.current_version})` : "Edit proposed — awaiting owner approval");
+      }
+    } catch (err) {
+      if (!isAuto) toast.error(formatApiError(err?.response?.data?.detail));
+    }
+    if (!isAuto) setSaving(false);
+    else setAutoSaving(false);
   };
+
+  // Auto-save: debounce 1.5s after content/title changes while editing
+  useEffect(() => {
+    if (!isEditing || !sop) return;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => { handleSave({ auto: true }); }, 1500);
+    return () => clearTimeout(autoSaveTimer.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, titleDraft, isEditing]);
 
   const handleCategoryChange = async (val) => {
     setCategoryDraft(val);
@@ -1413,22 +1431,20 @@ export default function SOPEditorPage() {
           <span className="text-base font-semibold max-w-xs truncate">{titleDraft}</span>
         )}
         <Badge variant="outline">v{sop.current_version}</Badge>
-        <Badge variant={isArchived ? "secondary" : "default"}>{sop.status}</Badge>
-        {/* Publish status badge */}
         <Badge
           variant="outline"
           className={
-            (sop.publish_status === "published")
+            isArchived
+              ? "border-gray-400 text-gray-500 bg-gray-50"
+              : sop.status === "published"
               ? "border-green-500 text-green-700 bg-green-50"
-              : (sop.publish_status === "private")
-              ? "border-gray-400 text-gray-600 bg-gray-50"
-              : "border-amber-400 text-amber-700 bg-amber-50"
+              : ""
           }
         >
-          {sop.publish_status === "published" ? "Published" : sop.publish_status === "private" ? "Private" : "Draft"}
+          {sop.status}
         </Badge>
-        {/* Publish status selector — owners/admins/managers only */}
-        {(isOwner(sop) || isPrivileged) && !isArchived && (
+        {/* Publish status — dropdown for owners/privileged, static badge for others */}
+        {(isOwner(sop) || isPrivileged) && !isArchived ? (
           <select
             value={sop.publish_status || "draft"}
             onChange={(e) => handlePublishStatusChange(e.target.value)}
@@ -1438,6 +1454,19 @@ export default function SOPEditorPage() {
             <option value="private">Private</option>
             <option value="published">Published</option>
           </select>
+        ) : (
+          <Badge
+            variant="outline"
+            className={
+              sop.publish_status === "published"
+                ? "border-green-500 text-green-700 bg-green-50"
+                : sop.publish_status === "private"
+                ? "border-gray-400 text-gray-600 bg-gray-50"
+                : "border-amber-400 text-amber-700 bg-amber-50"
+            }
+          >
+            {sop.publish_status === "published" ? "Published" : sop.publish_status === "private" ? "Private" : "Draft"}
+          </Badge>
         )}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {/* Export / Import */}
@@ -1461,9 +1490,10 @@ export default function SOPEditorPage() {
           {canEdit && !isEditing && <Button size="sm" onClick={enterEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>}
           {canEdit && isEditing && (
             <>
-              <Input placeholder="Change note" value={changeNote} onChange={e => setChangeNote(e.target.value)} className="w-36 h-8 text-sm" />
+              {autoSaving && <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />Saving…</span>}
+              <Input placeholder="Change note (optional)" value={changeNote} onChange={e => setChangeNote(e.target.value)} className="w-40 h-8 text-sm" />
               <Button size="sm" variant="outline" onClick={cancelEdit}><X className="h-4 w-4 mr-1" />Cancel</Button>
-              <Button size="sm" onClick={handleSave} disabled={saving}>
+              <Button size="sm" onClick={() => handleSave()} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
                 {canDirect ? "Save" : "Propose Edit"}
               </Button>
