@@ -788,12 +788,14 @@ function OnlyOfficeEditor({ sopId }) {
   const [retryCount, setRetryCount] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const retryCountRef = useRef(0);
+  const documentReadyRef = useRef(false); // once true, onError is non-fatal
 
   // Keep ref in sync so callbacks don't close over stale state
   useEffect(() => { retryCountRef.current = retryCount; }, [retryCount]);
 
   useEffect(() => {
     let alive = true;
+    documentReadyRef.current = false;
 
     const initEditor = (config) => {
       if (!alive) return;
@@ -805,10 +807,20 @@ function OnlyOfficeEditor({ sopId }) {
         ...config,
         events: {
           onDocumentReady: () => {
-            if (alive) { setLoading(false); setRetrying(false); }
+            if (alive) {
+              documentReadyRef.current = true;
+              setLoading(false);
+              setRetrying(false);
+            }
           },
           onError: (event) => {
             if (!alive) return;
+            // If document already loaded successfully, this is a non-fatal background error
+            // (e.g. changesError from OO's change-tracking). Do not retry or show error overlay.
+            if (documentReadyRef.current) {
+              console.warn("OO non-fatal error after document ready:", event?.data);
+              return;
+            }
             console.error("OO error:", event?.data);
             if (retryCountRef.current < 3) {
               setRetrying(true);
