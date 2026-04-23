@@ -86,6 +86,18 @@ function useBrandFavicon() {
 
 export default function App() {
   useBrandFavicon();
+
+  // Auto contrast: boost CSS vars on low-DPI screens (non-Retina, standard monitors)
+  useEffect(() => {
+    function syncDpi() {
+      document.documentElement.classList.toggle('low-dpi', window.devicePixelRatio < 1.5);
+    }
+    syncDpi();
+    const mql = window.matchMedia('(min-resolution: 1.5dppx)');
+    mql.addEventListener('change', syncDpi);
+    return () => mql.removeEventListener('change', syncDpi);
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>
