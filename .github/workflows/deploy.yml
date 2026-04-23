@@ -109,7 +109,9 @@ jobs:
       - name: Rebuild changed containers
         run: |
           cd /projects/ShiftRoster
-          docker compose up -d --build --no-deps backend frontend
+          docker compose up -d --build --no-deps backend frontend nginx
+          # Start OnlyOffice if not already running (first deploy only; no rebuild needed)
+          docker compose up -d --no-build onlyoffice 2>/dev/null || true
 
       - name: Verify healthy
         run: |

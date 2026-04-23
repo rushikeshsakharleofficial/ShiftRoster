@@ -646,16 +646,17 @@ async def onlyoffice_callback(sop_id: str, request: Request):
     """OnlyOffice document server save callback."""
     body = await request.json()
 
-    if _OO_JWT_SECRET:
-        auth_header = request.headers.get("Authorization", "")
-        token = auth_header.removeprefix("Bearer ").strip() or body.get("token", "")
-        if token:
-            try:
-                body = _pyjwt.decode(token, _OO_JWT_SECRET, algorithms=["HS256"])
-            except _pyjwt.PyJWTError:
-                return {"error": 1}
-        else:
-            return {"error": 1}
+    # Always verify JWT — prevents unauthenticated content injection via fake callbacks
+    if not _OO_JWT_SECRET:
+        return {"error": 1}
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.removeprefix("Bearer ").strip() or body.get("token", "")
+    if not token:
+        return {"error": 1}
+    try:
+        body = _pyjwt.decode(token, _OO_JWT_SECRET, algorithms=["HS256"])
+    except _pyjwt.PyJWTError:
+        return {"error": 1}
 
     status = body.get("status")
 
