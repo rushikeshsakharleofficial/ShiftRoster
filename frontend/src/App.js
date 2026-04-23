@@ -73,8 +73,8 @@ function useBrandFavicon() {
       .then((data) => {
         if (!data) return;
         const link = document.getElementById("app-favicon");
-        if (link && data.logo_url) {
-          link.href = data.logo_url;
+        if (link) {
+          link.href = data.logo_url || "data:,";
         }
         if (data.brand_name) {
           document.title = data.brand_name;
