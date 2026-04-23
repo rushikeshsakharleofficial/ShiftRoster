@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { filesApi, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
@@ -19,7 +20,7 @@ import {
 import {
   Folder, FolderOpen, FolderPlus, File, FileText, FileImage, FileVideo, FileAudio,
   Upload, Download, Trash2, Edit2, MoreVertical, Grid3x3, List,
-  ChevronRight, Home, Loader2, Search, Move, X,
+  ChevronRight, Home, Loader2, Search, Move, X, ExternalLink,
 } from "lucide-react";
 
 // Pick icon by mime type
@@ -160,6 +161,7 @@ function MovePickerDialog({ open, onClose, item, onMoved }) {
 
 export default function FileManagerPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [scope, setScope] = useState("private");
   const [path, setPath] = useState([]); // [{id, name}, ...]
   const [items, setItems] = useState([]);
@@ -300,6 +302,15 @@ export default function FileManagerPage() {
     window.open(filesApi.downloadUrl(file.id), "_blank", "noopener,noreferrer");
   };
 
+  // SOP-linked items open inside the SOP editor, not download
+  const handleOpen = (file) => {
+    if (file.sop_id) {
+      navigate(`/sops/${file.sop_id}`);
+    } else {
+      handleDownload(file);
+    }
+  };
+
   const filtered = items.filter((it) => !search || it.name.toLowerCase().includes(search.toLowerCase()));
   const folders = filtered.filter((i) => i.is_folder);
   const files = filtered.filter((i) => !i.is_folder);
@@ -431,7 +442,8 @@ export default function FileManagerPage() {
               <FileCardItem
                 key={f.id}
                 file={f}
-                onDownload={() => handleDownload(f)}
+                onOpen={() => handleOpen(f)}
+                onDownload={f.sop_id ? null : () => handleDownload(f)}
                 onRename={() => { setRenameTarget(f); setRenameValue(f.name); }}
                 onMove={() => setMoveTarget(f)}
                 onDelete={() => setConfirmDelete(f)}
@@ -477,7 +489,7 @@ export default function FileManagerPage() {
                 {files.map((f) => {
                   const Icon = iconForMime(f.mime);
                   return (
-                    <tr key={f.id} className="hover:bg-muted/30">
+                    <tr key={f.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => handleOpen(f)}>
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2">
                           <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -486,13 +498,14 @@ export default function FileManagerPage() {
                       </td>
                       <td className="px-4 py-2 text-muted-foreground">{f.mime || "File"}</td>
                       <td className="px-4 py-2 text-muted-foreground">{formatBytes(f.size)}</td>
-                      <td className="px-4 py-2 text-right">
+                      <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                         <ItemMenu
                           file={f}
-                          onDownload={() => handleDownload(f)}
-                          onRename={() => { setRenameTarget(f); setRenameValue(f.name); }}
-                          onMove={() => setMoveTarget(f)}
-                          onDelete={() => setConfirmDelete(f)}
+                          onOpen={f.sop_id ? () => handleOpen(f) : null}
+                          onDownload={f.sop_id ? null : () => handleDownload(f)}
+                          onRename={f.sop_id ? null : () => { setRenameTarget(f); setRenameValue(f.name); }}
+                          onMove={f.sop_id ? null : () => setMoveTarget(f)}
+                          onDelete={f.sop_id ? null : () => setConfirmDelete(f)}
                         />
                       </td>
                     </tr>
@@ -613,7 +626,7 @@ export default function FileManagerPage() {
   );
 }
 
-function ItemMenu({ file, onDownload, onRename, onMove, onDelete }) {
+function ItemMenu({ file, onOpen, onDownload, onRename, onMove, onDelete }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -621,22 +634,33 @@ function ItemMenu({ file, onDownload, onRename, onMove, onDelete }) {
           <MoreVertical className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
+      <DropdownMenuContent align="end" className="w-44">
+        {onOpen && (
+          <DropdownMenuItem onClick={onOpen}>
+            <ExternalLink className="h-4 w-4 mr-2" /> Open in editor
+          </DropdownMenuItem>
+        )}
         {onDownload && (
           <DropdownMenuItem onClick={onDownload}>
             <Download className="h-4 w-4 mr-2" /> Download
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onClick={onRename}>
-          <Edit2 className="h-4 w-4 mr-2" /> Rename
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={onMove}>
-          <Move className="h-4 w-4 mr-2" /> Move
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-          <Trash2 className="h-4 w-4 mr-2" /> Delete
-        </DropdownMenuItem>
+        {onRename && (
+          <DropdownMenuItem onClick={onRename}>
+            <Edit2 className="h-4 w-4 mr-2" /> Rename
+          </DropdownMenuItem>
+        )}
+        {onMove && (
+          <DropdownMenuItem onClick={onMove}>
+            <Move className="h-4 w-4 mr-2" /> Move
+          </DropdownMenuItem>
+        )}
+        {onDelete && <DropdownMenuSeparator />}
+        {onDelete && (
+          <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+            <Trash2 className="h-4 w-4 mr-2" /> Delete
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -667,17 +691,23 @@ function FolderCard({ folder, onOpen, onRename, onMove, onDelete }) {
   );
 }
 
-function FileCardItem({ file, onDownload, onRename, onMove, onDelete }) {
+function FileCardItem({ file, onOpen, onDownload, onRename, onMove, onDelete }) {
   const Icon = iconForMime(file.mime);
+  const isSop = !!file.sop_id;
+  // SOP files: single click opens editor. Regular files: double click downloads.
+  const cardProps = isSop
+    ? { onClick: onOpen }
+    : { onDoubleClick: onDownload };
   return (
     <Card
       className="group relative p-3 cursor-pointer hover:shadow-md transition-all hover:border-primary/40"
-      onDoubleClick={onDownload}
+      {...cardProps}
     >
       <div className="flex flex-col items-center gap-2">
         <Icon className="h-12 w-12 text-muted-foreground" />
         <p className="text-xs font-medium truncate w-full text-center" title={file.name}>{file.name}</p>
         <p className="text-[10px] text-muted-foreground">{formatBytes(file.size)}</p>
+        {isSop && <p className="text-[9px] uppercase tracking-wide text-primary/70">SOP</p>}
       </div>
       <div
         className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -685,10 +715,11 @@ function FileCardItem({ file, onDownload, onRename, onMove, onDelete }) {
       >
         <ItemMenu
           file={file}
+          onOpen={isSop ? onOpen : null}
           onDownload={onDownload}
-          onRename={onRename}
-          onMove={onMove}
-          onDelete={onDelete}
+          onRename={isSop ? null : onRename}
+          onMove={isSop ? null : onMove}
+          onDelete={isSop ? null : onDelete}
         />
       </div>
     </Card>
