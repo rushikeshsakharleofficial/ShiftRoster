@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useChat } from "@/contexts/ChatContext";
-import { chatApi, orgApi, usersApi, cryptoApi } from "@/lib/api";
+import { chatApi, orgApi, usersApi, cryptoApi, filesApi } from "@/lib/api";
+import FilePickerModal from "@/components/FilePickerModal";
 import { getAvatarColor, cn } from "@/lib/utils";
 import { FileCard, getFileFormat } from "@/components/ui/file-card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -28,7 +29,7 @@ import {
   LogOut, Info, UserPlus,
   UserCircle, Bell, Clock,
   LayoutDashboard, Globe, ShieldCheck,
-  FileText, Download, Zap, LogIn, Loader2, Paperclip,
+  FileText, Download, Zap, LogIn, Loader2, Paperclip, FolderOpen,
   ChevronUp, User2, Settings, SquarePen, Pencil, Trash2, Check,
   Reply, Copy, Flag,
 } from "lucide-react";
@@ -344,6 +345,7 @@ export default function ChatPage() {
 
   const [pendingFiles, setPendingFiles] = useState([]);
   const [replyTo, setReplyTo] = useState(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const handleFileSelect = (e) => {
     const MAX_FILES = 10;
@@ -610,13 +612,22 @@ export default function ChatPage() {
     if (!activeChannelId) return;
 
     try {
-      // Upload all files in parallel
+      // Upload all files in parallel (library references are not re-uploaded)
       let uploadedFiles = [];
       if (pendingFiles.length > 0) {
         uploadedFiles = await Promise.all(
-          pendingFiles.map(async (file) => {
+          pendingFiles.map(async (f) => {
+            if (f.fromLibrary) {
+              // Already in file manager; reference it directly, don't re-upload
+              return {
+                url: f.url,
+                file_name: f.file_name,
+                file_size: f.file_size,
+                file_type: f.file_type,
+              };
+            }
             const fd = new FormData();
-            fd.append("file", file);
+            fd.append("file", f);
             const res = await chatApi.uploadFile(fd);
             return res.data; // { url, file_name, file_size, file_type }
           })
@@ -1258,6 +1269,16 @@ export default function ChatPage() {
                 >
                   <Paperclip className="h-4 w-4" />
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-full text-muted-foreground hover:bg-muted shrink-0"
+                  onClick={() => setPickerOpen(true)}
+                  disabled={inputDisabled}
+                  title="Attach from Files"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                </Button>
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -1308,17 +1329,20 @@ export default function ChatPage() {
 
               {pendingFiles.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2 animate-in slide-in-from-bottom-2">
-                  {pendingFiles.map((file, idx) => (
+                  {pendingFiles.map((file, idx) => {
+                    const displayName = file.fromLibrary ? file.file_name : file.name;
+                    const displaySize = file.fromLibrary ? (file.file_size || 0) : file.size;
+                    return (
                     <div key={idx} className="flex items-center gap-2 px-2.5 py-2 bg-muted/40 rounded-xl border border-border max-w-[200px]">
                       <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                        <FileText className="h-3.5 w-3.5 text-primary" />
+                        {file.fromLibrary ? <FolderOpen className="h-3.5 w-3.5 text-primary" /> : <FileText className="h-3.5 w-3.5 text-primary" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-medium truncate">{file.name}</p>
+                        <p className="text-[11px] font-medium truncate">{displayName}</p>
                         <p className="text-[10px] text-muted-foreground">
-                          {file.size >= 1024 * 1024
-                            ? (file.size / (1024 * 1024)).toFixed(1) + " MB"
-                            : (file.size / 1024).toFixed(0) + " KB"}
+                          {displaySize >= 1024 * 1024
+                            ? (displaySize / (1024 * 1024)).toFixed(1) + " MB"
+                            : (displaySize / 1024).toFixed(0) + " KB"}
                         </p>
                       </div>
                       <Button
@@ -1330,7 +1354,8 @@ export default function ChatPage() {
                         <X className="h-3 w-3" />
                       </Button>
                     </div>
-                  ))}
+                    );
+                  })}
                   <p className="w-full text-[10px] text-muted-foreground/60 mt-0.5">
                     {pendingFiles.length}/10 files · max 50 MB each
                   </p>
@@ -1490,6 +1515,25 @@ export default function ChatPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* File picker: attach refs from Files library */}
+      <FilePickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        multiple
+        onPick={(picked) => {
+          const refs = picked.map((p) => ({
+            fromLibrary: true,
+            id: p.id,
+            url: filesApi.downloadUrl(p.id),
+            file_name: p.name,
+            file_size: p.size,
+            file_type: p.mime,
+          }));
+          setPendingFiles((prev) => [...prev, ...refs]);
+          setPickerOpen(false);
+        }}
+      />
     </div>
   );
 }

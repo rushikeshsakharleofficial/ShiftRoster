@@ -346,6 +346,25 @@ export const sopsApi = {
   setPublishStatus: (id, publish_status) => api.put(`/sops/${id}/publish-status`, { publish_status }),
 };
 
+// File Manager
+export const filesApi = {
+  list: (scope, parentId) => api.get(`/files`, { params: { scope, parent_id: parentId || "" } }),
+  createFolder: (data) => api.post(`/files/folder`, data),
+  upload: (formData, scope, parentId, onUploadProgress) =>
+    api.post(`/files/upload`, formData, {
+      params: { scope, parent_id: parentId || "" },
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress,
+    }),
+  downloadUrl: (id) => {
+    const base = api.defaults.baseURL || "";
+    return `${base}/files/${id}/download`;
+  },
+  rename: (id, name) => api.put(`/files/${id}`, { name }),
+  delete: (id) => api.delete(`/files/${id}`),
+  move: (id, data) => api.post(`/files/${id}/move`, data),
+};
+
 // E2EE key exchange
 export const cryptoApi = {
   publishKey: (publicKeyJwk) => api.put("/users/me/public-key", { public_key: publicKeyJwk }),

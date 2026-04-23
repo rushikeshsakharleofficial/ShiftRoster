@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle, ImageIcon, Upload, X, Mail, Server, Eye, EyeOff, Lock, Trash2, Zap, Building2, MessageSquare, BookOpen, LogIn } from "lucide-react";
+import { Settings as SettingsIcon, Loader2, Save, Shield, ShieldCheck, ShieldOff, QrCode, KeyRound, Clock, Copy, Download, Share2, AlertTriangle, ImageIcon, Upload, X, Mail, Server, Eye, EyeOff, Lock, Trash2, Zap, Building2, MessageSquare, BookOpen, LogIn, FolderOpen } from "lucide-react";
 import { generateMnemonic } from "@/lib/crypto";
 
 export default function SettingsPage() {
@@ -183,6 +183,11 @@ export default function SettingsPage() {
   const [googleSecretVisible, setGoogleSecretVisible] = useState(false);
   const [ssoConflictDialog, setSsoConflictDialog] = useState({ open: false, message: "", onConfirm: null });
 
+  // File Manager state
+  const [fmMaxFileMb, setFmMaxFileMb] = useState(100);
+  const [fmSharedEnabled, setFmSharedEnabled] = useState(true);
+  const [fmSaving, setFmSaving] = useState(false);
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -206,6 +211,8 @@ export default function SettingsPage() {
         });
         setMandateAll(!!data.mfa_org_mandate);
         setPasswordPolicy({ ...DEFAULT_PASSWORD_POLICY, ...(data.password_policy || {}) });
+        setFmMaxFileMb(data.file_manager?.max_file_mb ?? 100);
+        setFmSharedEnabled(data.file_manager?.shared_enabled ?? true);
         setBrandForm({ brand_name: data.brand_name || data.name || "", logo_url: data.logo_url || "" });
         setSmtpForm({
           smtp_host: data.smtp_host || "",
@@ -553,6 +560,7 @@ export default function SettingsPage() {
     { id: "sso",          label: "SSO",           icon: LogIn,         show: isAdmin },
     { id: "security",     label: "Security",      icon: Shield,        show: true },
     { id: "chat",         label: "Chat",          icon: MessageSquare, show: true },
+    { id: "files",        label: "File Manager",  icon: FolderOpen,    show: isAdmin },
     { id: "access",       label: "Access Rules",  icon: BookOpen,      show: isAdmin || isManager },
     { id: "policy",       label: "Policy",        icon: KeyRound,      show: isAdmin },
   ].filter(s => s.show);
@@ -1870,6 +1878,66 @@ export default function SettingsPage() {
               </Select>
               <p className="text-[10px] text-muted-foreground italic">Messages older than this period will be permanently deleted from the server every 24 hours.</p>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── File Manager ── */}
+      {activeSection === "files" && isAdmin && (
+        <Card className="border">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FolderOpen className="h-5 w-5" /> File Manager
+            </CardTitle>
+            <CardDescription>
+              Control upload limits and shared-folder availability for the Files section.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-1.5">
+              <Label htmlFor="fm-max-mb">Maximum file size (MB)</Label>
+              <Input
+                id="fm-max-mb"
+                type="number"
+                min={1}
+                max={10240}
+                value={fmMaxFileMb}
+                onChange={(e) => setFmMaxFileMb(Number(e.target.value) || 0)}
+                className="max-w-[200px]"
+              />
+              <p className="text-xs text-muted-foreground">Applies to every file uploaded via the Files page or the chat picker.</p>
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Enable shared folders</p>
+                <p className="text-xs text-muted-foreground">When off, the "Shared" scope is hidden and users only see private files.</p>
+              </div>
+              <Toggle
+                checked={fmSharedEnabled}
+                onCheckedChange={setFmSharedEnabled}
+              />
+            </div>
+
+            <Button
+              onClick={async () => {
+                setFmSaving(true);
+                try {
+                  await orgApi.update({ file_manager: { max_file_mb: fmMaxFileMb, shared_enabled: fmSharedEnabled } });
+                  toast.success("File Manager settings saved");
+                } catch (err) {
+                  toast.error(formatApiError(err.response?.data?.detail));
+                }
+                setFmSaving(false);
+              }}
+              disabled={fmSaving}
+              className="gap-2"
+            >
+              {fmSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save
+            </Button>
           </CardContent>
         </Card>
       )}
