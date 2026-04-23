@@ -19,8 +19,11 @@ import {
   Plus, Trash2, ChevronLeft, ChevronRight, Eye, EyeOff,
   Upload, Download, Pencil, Link, Image, Video, Bold,
   Italic, Underline, AlignLeft, AlignCenter, AlignRight,
-  List, ListOrdered, Quote, Undo, Redo, Minus,
+  AlignJustify, List, ListOrdered, Quote, Undo, Redo, Minus,
+  Strikethrough, Code, Palette, Highlighter, Table as TableIcon,
+  Maximize, Play, Copy, Snowflake, LayoutGrid, Columns, Rows,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TiptapImage from "@tiptap/extension-image";
@@ -28,6 +31,9 @@ import TiptapLink from "@tiptap/extension-link";
 import TiptapUnderline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Youtube from "@tiptap/extension-youtube";
+import { TextStyle, FontSize, Color as TextColor, FontFamily } from "@tiptap/extension-text-style";
+import { Highlight } from "@tiptap/extension-highlight";
+import { Table, TableRow, TableCell, TableHeader } from "@tiptap/extension-table";
 
 // ── Constants ──
 
@@ -75,6 +81,66 @@ const evalFormula = (formula, getCell) => {
   } catch { return formula; }
 };
 
+// ── Shared small components ──
+
+const FONT_FAMILIES = [
+  { label: "Default", value: "" },
+  { label: "Arial", value: "Arial, sans-serif" },
+  { label: "Calibri", value: "Calibri, sans-serif" },
+  { label: "Times New Roman", value: '"Times New Roman", Times, serif' },
+  { label: "Georgia", value: "Georgia, serif" },
+  { label: "Courier New", value: '"Courier New", Courier, monospace' },
+];
+const FONT_SIZES = [10, 12, 14, 16, 18, 24, 32];
+const ZOOM_LEVELS = [75, 100, 125, 150];
+const SWATCHES = [
+  "#000000", "#374151", "#6b7280", "#ef4444", "#f97316",
+  "#eab308", "#22c55e", "#0ea5e9", "#6366f1", "#a855f7",
+];
+const HIGHLIGHTS = [
+  "#fef08a", "#fed7aa", "#fecaca", "#bbf7d0", "#bfdbfe",
+  "#ddd6fe", "#fbcfe8", "#e5e7eb", "#a7f3d0", "#fde68a",
+];
+
+// Small palette popover used for text color + highlight.
+function ColorSwatchPopover({ title, icon: Icon, colors, current, onPick, onClear, trigger }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        {trigger || (
+          <button type="button" title={title} onMouseDown={(e) => e.preventDefault()}
+            className="h-7 min-w-[28px] px-1 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground relative">
+            {Icon && <Icon className="h-3.5 w-3.5" />}
+            <span className="absolute bottom-0.5 left-1 right-1 h-[2px] rounded" style={{ background: current || "transparent" }} />
+          </button>
+        )}
+      </PopoverTrigger>
+      <PopoverContent className="p-2 w-auto" side="bottom" align="start">
+        <div className="grid grid-cols-5 gap-1 mb-2">
+          {colors.map((c) => (
+            <button key={c} type="button" title={c}
+              className={`w-6 h-6 rounded border transition-transform hover:scale-110 ${current === c ? "ring-2 ring-primary" : "border-border"}`}
+              style={{ background: c }}
+              onMouseDown={(e) => { e.preventDefault(); onPick(c); setOpen(false); }} />
+          ))}
+        </div>
+        <div className="flex items-center gap-1">
+          <input type="color" className="h-6 w-8 cursor-pointer border-none p-0 rounded"
+            value={current || "#000000"}
+            onChange={(e) => onPick(e.target.value)} />
+          {onClear && (
+            <button type="button" className="flex-1 text-xs px-2 py-1 rounded hover:bg-muted text-muted-foreground"
+              onMouseDown={(e) => { e.preventDefault(); onClear(); setOpen(false); }}>
+              Clear
+            </button>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ── Document (TipTap) editor ──
 
 function DocumentEditor({ content, onChange, editable, sopId }) {
@@ -84,15 +150,26 @@ function DocumentEditor({ content, onChange, editable, sopId }) {
   const [linkUrl, setLinkUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [ribbonTab, setRibbonTab] = useState("home");
+  const [zoom, setZoom] = useState(100);
 
   const editor = useEditor({
     extensions: [
       StarterKit,
       TiptapUnderline,
+      TextStyle,
+      FontFamily.configure({ types: ["textStyle"] }),
+      FontSize.configure({ types: ["textStyle"] }),
+      TextColor.configure({ types: ["textStyle"] }),
+      Highlight.configure({ multicolor: true }),
       TiptapImage.configure({ inline: false, allowBase64: true }),
       TiptapLink.configure({ openOnClick: false }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Youtube.configure({ controls: true, width: 640, height: 360 }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: content?.html || "",
     editable,
@@ -134,45 +211,164 @@ function DocumentEditor({ content, onChange, editable, sopId }) {
     setVideoUrl(""); setVideoDialog(false);
   };
 
-  const ToolBtn = ({ onClick, active, disabled, icon: Icon, label, className = "" }) => (
+  const ToolBtn = ({ onClick, active, disabled, icon: Icon, label, className = "", children }) => (
     <button type="button" title={label} onMouseDown={e => { e.preventDefault(); onClick?.(); }} disabled={disabled}
-      className={`h-7 w-7 flex items-center justify-center rounded text-xs transition-colors
+      className={`h-7 min-w-[28px] px-1 flex items-center justify-center rounded text-xs transition-colors
         ${active ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground hover:text-foreground"}
         ${disabled ? "opacity-30 cursor-not-allowed" : ""} ${className}`}>
-      {Icon ? <Icon className="h-3.5 w-3.5" /> : label}
+      {Icon ? <Icon className="h-3.5 w-3.5" /> : (children || label)}
     </button>
   );
 
+  const RibbonTab = ({ id, label }) => (
+    <button type="button" onMouseDown={(e) => { e.preventDefault(); setRibbonTab(id); }}
+      className={`px-3 py-1 text-xs font-medium transition-colors border-b-2
+        ${ribbonTab === id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+      {label}
+    </button>
+  );
+
+  const currentFontFamily = editor?.getAttributes("textStyle").fontFamily || "";
+  const currentFontSize = (editor?.getAttributes("textStyle").fontSize || "").replace("px", "");
+
+  const inTable = editor?.isActive("table");
+
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="border rounded-lg overflow-hidden bg-background">
       {editable && editor && (
-        <div className="flex flex-wrap items-center gap-0.5 p-2 border-b bg-muted/30">
-          <ToolBtn icon={Undo} label="Undo" onClick={() => editor.chain().focus().undo().run()} />
-          <ToolBtn icon={Redo} label="Redo" onClick={() => editor.chain().focus().redo().run()} />
-          <Separator orientation="vertical" className="h-5 mx-1" />
-          <ToolBtn icon={Bold} label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()} />
-          <ToolBtn icon={Italic} label="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()} />
-          <ToolBtn icon={Underline} label="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()} />
-          <Separator orientation="vertical" className="h-5 mx-1" />
-          {[1,2,3].map(l => <ToolBtn key={l} label={`H${l}`} active={editor.isActive("heading",{level:l})} onClick={() => editor.chain().focus().toggleHeading({level:l}).run()} />)}
-          <Separator orientation="vertical" className="h-5 mx-1" />
-          <ToolBtn icon={AlignLeft} label="Align Left" active={editor.isActive({textAlign:"left"})} onClick={() => editor.chain().focus().setTextAlign("left").run()} />
-          <ToolBtn icon={AlignCenter} label="Align Center" active={editor.isActive({textAlign:"center"})} onClick={() => editor.chain().focus().setTextAlign("center").run()} />
-          <ToolBtn icon={AlignRight} label="Align Right" active={editor.isActive({textAlign:"right"})} onClick={() => editor.chain().focus().setTextAlign("right").run()} />
-          <Separator orientation="vertical" className="h-5 mx-1" />
-          <ToolBtn icon={List} label="Bullet List" active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()} />
-          <ToolBtn icon={ListOrdered} label="Ordered List" active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
-          <ToolBtn icon={Quote} label="Blockquote" active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()} />
-          <ToolBtn icon={Minus} label="Divider" onClick={() => editor.chain().focus().setHorizontalRule().run()} />
-          <Separator orientation="vertical" className="h-5 mx-1" />
-          <ToolBtn icon={Link} label="Insert Link" active={editor.isActive("link")} onClick={() => setLinkDialog(true)} />
-          <ToolBtn icon={Image} label="Insert Image" disabled={uploading} onClick={() => fileRef.current?.click()} />
-          <ToolBtn icon={Video} label="Embed Video" onClick={() => setVideoDialog(true)} />
-        </div>
+        <>
+          {/* Ribbon tab strip */}
+          <div className="flex items-center gap-1 px-2 pt-1 border-b bg-muted/40">
+            <RibbonTab id="home" label="Home" />
+            <RibbonTab id="insert" label="Insert" />
+            <RibbonTab id="view" label="View" />
+            <div className="ml-auto flex items-center gap-1 pb-1">
+              <ToolBtn icon={Undo} label="Undo" onClick={() => editor.chain().focus().undo().run()} />
+              <ToolBtn icon={Redo} label="Redo" onClick={() => editor.chain().focus().redo().run()} />
+            </div>
+          </div>
+
+          {/* Ribbon content */}
+          <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-muted/20 min-h-[44px]">
+            {ribbonTab === "home" && (
+              <>
+                <select
+                  className="h-7 text-xs border rounded px-1 bg-background cursor-pointer min-w-[110px]"
+                  value={currentFontFamily}
+                  onChange={(e) => {
+                    if (e.target.value) editor.chain().focus().setFontFamily(e.target.value).run();
+                    else editor.chain().focus().unsetFontFamily().run();
+                  }}>
+                  {FONT_FAMILIES.map((f) => (
+                    <option key={f.label} value={f.value} style={{ fontFamily: f.value || "inherit" }}>{f.label}</option>
+                  ))}
+                </select>
+                <select
+                  className="h-7 text-xs border rounded px-1 bg-background cursor-pointer w-[60px]"
+                  value={currentFontSize || "14"}
+                  onChange={(e) => editor.chain().focus().setFontSize(`${e.target.value}px`).run()}>
+                  {FONT_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <Separator orientation="vertical" className="h-5 mx-1" />
+                <ToolBtn icon={Bold} label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()} />
+                <ToolBtn icon={Italic} label="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()} />
+                <ToolBtn icon={Underline} label="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()} />
+                <ToolBtn icon={Strikethrough} label="Strikethrough" active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()} />
+                <ToolBtn icon={Code} label="Inline code" active={editor.isActive("code")} onClick={() => editor.chain().focus().toggleCode().run()} />
+                <Separator orientation="vertical" className="h-5 mx-1" />
+                <ColorSwatchPopover
+                  title="Text color" icon={Palette} colors={SWATCHES}
+                  current={editor.getAttributes("textStyle").color || ""}
+                  onPick={(c) => editor.chain().focus().setColor(c).run()}
+                  onClear={() => editor.chain().focus().unsetColor().run()} />
+                <ColorSwatchPopover
+                  title="Highlight" icon={Highlighter} colors={HIGHLIGHTS}
+                  current={editor.getAttributes("highlight").color || ""}
+                  onPick={(c) => editor.chain().focus().setHighlight({ color: c }).run()}
+                  onClear={() => editor.chain().focus().unsetHighlight().run()} />
+                <Separator orientation="vertical" className="h-5 mx-1" />
+                <select
+                  className="h-7 text-xs border rounded px-1 bg-background cursor-pointer"
+                  value={[1,2,3].find(l => editor.isActive("heading",{level:l})) || "p"}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "p") editor.chain().focus().setParagraph().run();
+                    else editor.chain().focus().toggleHeading({ level: parseInt(v) }).run();
+                  }}>
+                  <option value="p">Normal</option>
+                  <option value="1">Heading 1</option>
+                  <option value="2">Heading 2</option>
+                  <option value="3">Heading 3</option>
+                </select>
+                <Separator orientation="vertical" className="h-5 mx-1" />
+                <ToolBtn icon={AlignLeft} label="Align Left" active={editor.isActive({textAlign:"left"})} onClick={() => editor.chain().focus().setTextAlign("left").run()} />
+                <ToolBtn icon={AlignCenter} label="Align Center" active={editor.isActive({textAlign:"center"})} onClick={() => editor.chain().focus().setTextAlign("center").run()} />
+                <ToolBtn icon={AlignRight} label="Align Right" active={editor.isActive({textAlign:"right"})} onClick={() => editor.chain().focus().setTextAlign("right").run()} />
+                <ToolBtn icon={AlignJustify} label="Justify" active={editor.isActive({textAlign:"justify"})} onClick={() => editor.chain().focus().setTextAlign("justify").run()} />
+                <Separator orientation="vertical" className="h-5 mx-1" />
+                <ToolBtn icon={List} label="Bullet List" active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()} />
+                <ToolBtn icon={ListOrdered} label="Ordered List" active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
+                <ToolBtn icon={Quote} label="Blockquote" active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()} />
+              </>
+            )}
+
+            {ribbonTab === "insert" && (
+              <>
+                <ToolBtn icon={Image} label="Insert Image" disabled={uploading} onClick={() => fileRef.current?.click()} />
+                <ToolBtn icon={Link} label="Insert Link" active={editor.isActive("link")} onClick={() => setLinkDialog(true)} />
+                <ToolBtn icon={Video} label="Embed Video" onClick={() => setVideoDialog(true)} />
+                <ToolBtn icon={Minus} label="Horizontal Rule" onClick={() => editor.chain().focus().setHorizontalRule().run()} />
+                <Separator orientation="vertical" className="h-5 mx-1" />
+                <ToolBtn icon={TableIcon} label="Insert Table"
+                  onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} />
+                {inTable && (
+                  <>
+                    <ToolBtn label="+Row above" onClick={() => editor.chain().focus().addRowBefore().run()}>+Row</ToolBtn>
+                    <ToolBtn label="+Row below" onClick={() => editor.chain().focus().addRowAfter().run()}>Row+</ToolBtn>
+                    <ToolBtn label="-Row" onClick={() => editor.chain().focus().deleteRow().run()}>−Row</ToolBtn>
+                    <ToolBtn label="+Col left" onClick={() => editor.chain().focus().addColumnBefore().run()}>+Col</ToolBtn>
+                    <ToolBtn label="+Col right" onClick={() => editor.chain().focus().addColumnAfter().run()}>Col+</ToolBtn>
+                    <ToolBtn label="-Col" onClick={() => editor.chain().focus().deleteColumn().run()}>−Col</ToolBtn>
+                    <ToolBtn label="Toggle header" onClick={() => editor.chain().focus().toggleHeaderRow().run()}>Header</ToolBtn>
+                    <ToolBtn label="Delete table" icon={Trash2} onClick={() => editor.chain().focus().deleteTable().run()} />
+                  </>
+                )}
+              </>
+            )}
+
+            {ribbonTab === "view" && (
+              <>
+                <span className="text-xs text-muted-foreground mr-1">Zoom</span>
+                <select className="h-7 text-xs border rounded px-1 bg-background cursor-pointer"
+                  value={zoom} onChange={(e) => setZoom(parseInt(e.target.value))}>
+                  {ZOOM_LEVELS.map((z) => <option key={z} value={z}>{z}%</option>)}
+                </select>
+                <button type="button" onClick={() => setZoom(100)}
+                  className="h-7 px-2 text-xs rounded hover:bg-muted text-muted-foreground">Reset</button>
+              </>
+            )}
+          </div>
+        </>
       )}
-      <div className={`p-4 min-h-[500px] prose prose-sm max-w-none dark:prose-invert focus:outline-none ${!editable ? "select-text cursor-default" : ""}`}>
-        <EditorContent editor={editor} />
+
+      <div className="overflow-auto bg-muted/20" style={{ maxHeight: "70vh" }}>
+        <div
+          className={`mx-auto bg-background shadow-sm my-4 p-8 prose prose-sm max-w-[820px] dark:prose-invert focus:outline-none sop-doc-editor ${!editable ? "select-text cursor-default" : ""}`}
+          style={{ transform: `scale(${zoom/100})`, transformOrigin: "top center", minHeight: 600 }}>
+          <EditorContent editor={editor} />
+        </div>
       </div>
+
+      {/* Table + placeholder CSS */}
+      <style>{`
+        .sop-doc-editor table { border-collapse: collapse; table-layout: fixed; width: 100%; margin: 0.5em 0; overflow: hidden; }
+        .sop-doc-editor table td, .sop-doc-editor table th { border: 1px solid hsl(var(--border)); padding: 6px 8px; vertical-align: top; min-width: 60px; position: relative; }
+        .sop-doc-editor table th { background: hsl(var(--muted)); font-weight: 600; }
+        .sop-doc-editor table .selectedCell:after { content: ""; position: absolute; inset: 0; background: rgba(99,102,241,0.15); pointer-events: none; }
+        .sop-doc-editor table .column-resize-handle { position: absolute; right: -2px; top: 0; bottom: -2px; width: 4px; background: hsl(var(--primary) / 0.5); cursor: col-resize; }
+        .sop-doc-editor .tableWrapper { overflow-x: auto; }
+      `}</style>
+
       <input ref={fileRef} type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
       <Dialog open={linkDialog} onOpenChange={setLinkDialog}>
         <DialogContent className="max-w-sm">
@@ -223,6 +419,7 @@ function SpreadsheetEditor({ content, onChange, editable }) {
   const [editVal, setEditVal] = useState("");
   const [colWidths, setColWidths] = useState(() => content?.colWidths || {});
   const [clipboard, setClipboard] = useState(null);
+  const [freeze, setFreeze] = useState(() => !!content?.freeze);
   const inputRef = useRef();
   const gridRef = useRef();
   const lastContent = useRef(content);
@@ -244,13 +441,14 @@ function SpreadsheetEditor({ content, onChange, editable }) {
       if (content.numRows) setNumRows(Math.max(content.numRows, 100));
       if (content.numCols) setNumCols(Math.max(content.numCols, 26));
       if (content.colWidths) setColWidths(content.colWidths || {});
+      if (content.freeze !== undefined) setFreeze(!!content.freeze);
     }
   }, [content]);
 
-  const emit = useCallback((nc, nr, ncol, nw) => {
+  const emit = useCallback((nc, nr, ncol, nw, nf) => {
     if (!editable) return;
-    onChange({ cells: nc ?? cells, numRows: nr ?? numRows, numCols: ncol ?? numCols, colWidths: nw ?? colWidths });
-  }, [editable, cells, numRows, numCols, colWidths, onChange]);
+    onChange({ cells: nc ?? cells, numRows: nr ?? numRows, numCols: ncol ?? numCols, colWidths: nw ?? colWidths, freeze: nf !== undefined ? nf : freeze });
+  }, [editable, cells, numRows, numCols, colWidths, freeze, onChange]);
 
   const setCell = useCallback((r, c, updates) => {
     if (!editable) return;
@@ -295,6 +493,55 @@ function SpreadsheetEditor({ content, onChange, editable }) {
   const s = selCell.s || {};
   const applyFmt = (fk, val) => setCell(sel.r, sel.c, { s: { ...s, [fk]: val } });
   const toggleFmt = (fk) => applyFmt(fk, !s[fk]);
+
+  // Row / col operations. Shift cell keys in the sparse map.
+  const shiftCells = useCallback((predicate, shifter) => {
+    const next = {};
+    Object.entries(cells).forEach(([k, v]) => {
+      const [r, c] = k.split(",").map(Number);
+      if (predicate(r, c) === "drop") return;
+      const [nr, nc] = shifter(r, c);
+      next[`${nr},${nc}`] = v;
+    });
+    return next;
+  }, [cells]);
+
+  const insertRow = useCallback((atRow, where = "above") => {
+    if (!editable) return;
+    const target = where === "above" ? atRow : atRow + 1;
+    const next = shiftCells(() => null, (r, c) => [r >= target ? r + 1 : r, c]);
+    const nr = numRows + 1;
+    setCells(next); setNumRows(nr); emit(next, nr);
+  }, [editable, numRows, shiftCells, emit]);
+
+  const insertCol = useCallback((atCol, where = "left") => {
+    if (!editable) return;
+    const target = where === "left" ? atCol : atCol + 1;
+    const next = shiftCells(() => null, (r, c) => [r, c >= target ? c + 1 : c]);
+    const nc = numCols + 1;
+    setCells(next); setNumCols(nc); emit(next, undefined, nc);
+  }, [editable, numCols, shiftCells, emit]);
+
+  const deleteRow = useCallback((atRow) => {
+    if (!editable || numRows <= 1) return;
+    const next = shiftCells((r) => r === atRow ? "drop" : null, (r, c) => [r > atRow ? r - 1 : r, c]);
+    const nr = Math.max(1, numRows - 1);
+    setCells(next); setNumRows(nr); emit(next, nr);
+    setSel((s) => ({ r: Math.min(s.r, nr - 1), c: s.c }));
+  }, [editable, numRows, shiftCells, emit]);
+
+  const deleteCol = useCallback((atCol) => {
+    if (!editable || numCols <= 1) return;
+    const next = shiftCells((r, c) => c === atCol ? "drop" : null, (r, c) => [r, c > atCol ? c - 1 : c]);
+    const nc = Math.max(1, numCols - 1);
+    setCells(next); setNumCols(nc); emit(next, undefined, nc);
+    setSel((s) => ({ r: s.r, c: Math.min(s.c, nc - 1) }));
+  }, [editable, numCols, shiftCells, emit]);
+
+  const toggleFreeze = useCallback(() => {
+    const nf = !freeze;
+    setFreeze(nf); emit(undefined, undefined, undefined, undefined, nf);
+  }, [freeze, emit]);
 
   const handleGridKey = (e) => {
     if (editing) return;
@@ -369,8 +616,18 @@ function SpreadsheetEditor({ content, onChange, editable }) {
             <input type="color" className="h-4 w-5 cursor-pointer border-none p-0" value={s.bg || "#ffffff"} onChange={e => applyFmt("bg", e.target.value)} />
           </label>
           <div className="h-4 w-px bg-border mx-1" />
+          <TB act={false} onClick={() => insertRow(sel.r, "above")} title="Insert row above"><Rows className="h-3 w-3 rotate-180" /></TB>
+          <TB act={false} onClick={() => insertRow(sel.r, "below")} title="Insert row below"><Rows className="h-3 w-3" /></TB>
+          <TB act={false} onClick={() => deleteRow(sel.r)} title="Delete current row">−Row</TB>
+          <div className="h-4 w-px bg-border mx-1" />
+          <TB act={false} onClick={() => insertCol(sel.c, "left")} title="Insert column left"><Columns className="h-3 w-3 rotate-180" /></TB>
+          <TB act={false} onClick={() => insertCol(sel.c, "right")} title="Insert column right"><Columns className="h-3 w-3" /></TB>
+          <TB act={false} onClick={() => deleteCol(sel.c)} title="Delete current column">−Col</TB>
+          <div className="h-4 w-px bg-border mx-1" />
           <TB act={false} onClick={() => { const r = numRows + 100; setNumRows(r); emit(undefined, r); }} title="Add 100 rows">+100 rows</TB>
           <TB act={false} onClick={() => { const c = numCols + 26; setNumCols(c); emit(undefined, undefined, c); }} title="Add 26 cols">+26 cols</TB>
+          <div className="h-4 w-px bg-border mx-1" />
+          <TB act={freeze} onClick={toggleFreeze} title="Freeze top row + left column"><Snowflake className="h-3 w-3" /></TB>
         </div>
       )}
       {/* Formula bar */}
@@ -407,19 +664,29 @@ function SpreadsheetEditor({ content, onChange, editable }) {
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: numRows }, (_, r) => (
+            {Array.from({ length: numRows }, (_, r) => {
+              const freezeRow = freeze && r === 0;
+              return (
               <tr key={r}>
                 <td className="sticky left-0 z-10 bg-muted border border-border text-center text-muted-foreground"
-                  style={{ width: 44, minWidth: 44, userSelect: "none" }}>{r + 1}</td>
+                  style={{ width: 44, minWidth: 44, userSelect: "none", top: freezeRow ? 24 : undefined, zIndex: freezeRow ? 25 : 10, position: "sticky" }}>{r + 1}</td>
                 {Array.from({ length: numCols }, (_, c) => {
                   const cell = getCell(r, c);
                   const cs = cell.s || {};
                   const isSel = sel.r === r && sel.c === c;
                   const isEdit = isSel && editing;
+                  const freezeCol = freeze && c === 0;
+                  const stickyStyle = freezeRow || freezeCol ? {
+                    position: "sticky",
+                    top: freezeRow ? 24 : undefined,
+                    left: freezeCol ? 44 : undefined,
+                    zIndex: (freezeRow && freezeCol) ? 22 : (freezeRow || freezeCol ? 15 : undefined),
+                    background: cs.bg || "hsl(var(--background))",
+                  } : {};
                   return (
                     <td key={c}
                       className={`border border-border p-0 relative ${isSel && !isEdit ? "outline outline-2 -outline-offset-1 outline-primary z-10" : ""}`}
-                      style={{ width: colW(c), minWidth: colW(c), backgroundColor: cs.bg || "transparent" }}
+                      style={{ width: colW(c), minWidth: colW(c), backgroundColor: cs.bg || "transparent", ...stickyStyle }}
                       onClick={() => {
                         if (editing) commitEdit(sel.r, sel.c, editVal);
                         setSel({ r, c });
@@ -446,7 +713,8 @@ function SpreadsheetEditor({ content, onChange, editable }) {
                   );
                 })}
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </div>
@@ -465,10 +733,33 @@ const isLightBg = (hex) => {
   return (r*299+g*587+b*114)/1000 > 128;
 };
 
+// Slide layout presets — each returns initial body HTML for a new slide.
+const LAYOUT_TEMPLATES = {
+  title: {
+    label: "Title",
+    body: "",
+    getBody: () => "",
+  },
+  title_content: {
+    label: "Title + Content",
+    getBody: () => "<p>Click to add content…</p>",
+  },
+  two_column: {
+    label: "Two Column",
+    getBody: () =>
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">' +
+      '<div><h3>Column 1</h3><p>Add content…</p></div>' +
+      '<div><h3>Column 2</h3><p>Add content…</p></div>' +
+      '</div>',
+  },
+};
+
 function PresentationEditor({ content, onChange, editable }) {
-  const slides = content?.slides || [{ id: 1, title: "Slide 1", body: "", bg: "#1e293b" }];
+  const slides = content?.slides || [{ id: 1, title: "Slide 1", body: "", bg: "#1e293b", layout: "title" }];
   const [activeIdx, setActiveIdx] = useState(0);
   const [preview, setPreview] = useState(false);
+  const [layoutPicker, setLayoutPicker] = useState(false);
+  const containerRef = useRef();
   const idx = Math.min(activeIdx, slides.length - 1);
   const active = slides[idx];
 
@@ -477,11 +768,28 @@ function PresentationEditor({ content, onChange, editable }) {
     onChange({ slides: slides.map((s, i) => i === idx ? { ...s, [field]: val } : s) });
   };
 
-  const addSlide = () => {
+  const addSlideWithLayout = (layout) => {
     if (!editable) return;
-    const next = { id: Date.now(), title: `Slide ${slides.length + 1}`, body: "", bg: "#1e293b" };
+    const tpl = LAYOUT_TEMPLATES[layout] || LAYOUT_TEMPLATES.title;
+    const next = {
+      id: Date.now(),
+      title: `Slide ${slides.length + 1}`,
+      body: tpl.getBody(),
+      bg: active?.bg || "#1e293b",
+      layout,
+    };
     onChange({ slides: [...slides, next] });
     setActiveIdx(slides.length);
+    setLayoutPicker(false);
+  };
+
+  const duplicateSlide = (i) => {
+    if (!editable) return;
+    const src = slides[i];
+    const copy = { ...src, id: Date.now(), title: `${src.title} (copy)` };
+    const updated = [...slides.slice(0, i + 1), copy, ...slides.slice(i + 1)];
+    onChange({ slides: updated });
+    setActiveIdx(i + 1);
   };
 
   const deleteSlide = (i) => {
@@ -560,6 +868,50 @@ function PresentationEditor({ content, onChange, editable }) {
   const light = isLightBg(active?.bg);
   const textColor = light ? "text-gray-900" : "text-white";
 
+  // Present mode — true fullscreen via Fullscreen API + keyboard nav.
+  const startPresent = useCallback(async () => {
+    setPreview(true);
+    // Defer: wait for the preview DOM to mount, then request fullscreen.
+    setTimeout(async () => {
+      try {
+        if (containerRef.current?.requestFullscreen) {
+          await containerRef.current.requestFullscreen();
+        }
+      } catch {/* browser may block; preview still works inline */}
+    }, 50);
+  }, []);
+
+  const exitPresent = useCallback(() => {
+    setPreview(false);
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!preview) return;
+    const onKey = (e) => {
+      if (e.key === "ArrowRight" || e.key === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        setActiveIdx((i) => Math.min(i + 1, slides.length - 1));
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setActiveIdx((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Escape") {
+        exitPresent();
+      }
+    };
+    const onFsChange = () => {
+      if (!document.fullscreenElement) setPreview(false);
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("fullscreenchange", onFsChange);
+    };
+  }, [preview, slides.length, exitPresent]);
+
   const STB = ({ act, onClick, children, title }) => (
     <button type="button" title={title} onMouseDown={e => { e.preventDefault(); onClick(); }}
       className={`h-6 min-w-[24px] px-1 flex items-center justify-center rounded text-xs transition-colors
@@ -570,21 +922,28 @@ function PresentationEditor({ content, onChange, editable }) {
 
   if (preview) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
+      <div ref={containerRef} className="bg-black text-white min-h-screen flex flex-col">
+        <div className="flex items-center justify-between p-3 bg-black/80 border-b border-white/10">
           <div className="flex gap-2 items-center">
-            <Button size="sm" variant="outline" disabled={idx === 0} onClick={() => setActiveIdx(i => i - 1)}><ChevronLeft className="h-4 w-4" /></Button>
-            <span className="text-sm text-muted-foreground">{idx + 1} / {slides.length}</span>
-            <Button size="sm" variant="outline" disabled={idx === slides.length - 1} onClick={() => setActiveIdx(i => i + 1)}><ChevronRight className="h-4 w-4" /></Button>
+            <Button size="sm" variant="outline" className="bg-transparent text-white border-white/30 hover:bg-white/10"
+              disabled={idx === 0} onClick={() => setActiveIdx(i => i - 1)}><ChevronLeft className="h-4 w-4" /></Button>
+            <span className="text-sm text-white/80">{idx + 1} / {slides.length}</span>
+            <Button size="sm" variant="outline" className="bg-transparent text-white border-white/30 hover:bg-white/10"
+              disabled={idx === slides.length - 1} onClick={() => setActiveIdx(i => i + 1)}><ChevronRight className="h-4 w-4" /></Button>
+            <span className="text-xs text-white/40 ml-3">← → / Space · Esc to exit</span>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setPreview(false)}><EyeOff className="h-4 w-4 mr-1" />Exit Preview</Button>
+          <Button variant="outline" size="sm" className="bg-transparent text-white border-white/30 hover:bg-white/10"
+            onClick={exitPresent}><EyeOff className="h-4 w-4 mr-1" />Exit</Button>
         </div>
-        <div className="rounded-xl overflow-hidden shadow-2xl" style={{ aspectRatio: "16/9", backgroundColor: active?.bg || "#1e293b" }}>
+        <div className="flex-1 flex items-center justify-center p-6" style={{ backgroundColor: "#000" }}>
+        <div className="rounded-xl overflow-hidden shadow-2xl w-full max-w-[min(90vw,1600px)]"
+          style={{ aspectRatio: "16/9", backgroundColor: active?.bg || "#1e293b" }}>
           <div className={`h-full flex flex-col p-16 ${textColor}`}>
             <h1 className="text-5xl font-bold mb-8 leading-tight">{active?.title}</h1>
             <div className={`flex-1 overflow-auto text-xl prose max-w-none ${light ? "" : "prose-invert"}`}
               dangerouslySetInnerHTML={{ __html: active?.body || "" }} />
           </div>
+        </div>
         </div>
       </div>
     );
@@ -615,6 +974,8 @@ function PresentationEditor({ content, onChange, editable }) {
                     className="disabled:opacity-30 hover:text-primary p-0.5"><ChevronLeft className="h-3 w-3" /></button>
                   <button title="Move down" disabled={i === slides.length-1} onClick={e => { e.stopPropagation(); moveSlide(i,1); }}
                     className="disabled:opacity-30 hover:text-primary p-0.5"><ChevronRight className="h-3 w-3" /></button>
+                  <button title="Duplicate" onClick={e => { e.stopPropagation(); duplicateSlide(i); }}
+                    className="hover:text-primary p-0.5"><Copy className="h-3 w-3" /></button>
                   {slides.length > 1 && (
                     <button title="Delete" onClick={e => { e.stopPropagation(); deleteSlide(i); }}
                       className="text-destructive hover:text-destructive/80 p-0.5"><Trash2 className="h-3 w-3" /></button>
@@ -625,9 +986,26 @@ function PresentationEditor({ content, onChange, editable }) {
           ))}
         </ScrollArea>
         {editable && (
-          <Button size="sm" variant="outline" className="w-full" onClick={addSlide}>
-            <Plus className="h-3 w-3 mr-1" />Add Slide
-          </Button>
+          <Popover open={layoutPicker} onOpenChange={setLayoutPicker}>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" className="w-full">
+                <Plus className="h-3 w-3 mr-1" />Add Slide
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="p-2 w-56" side="right" align="start">
+              <p className="text-xs text-muted-foreground mb-2 px-1">Pick a layout</p>
+              <div className="space-y-1">
+                {Object.entries(LAYOUT_TEMPLATES).map(([key, tpl]) => (
+                  <button key={key} type="button"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted text-left"
+                    onClick={() => addSlideWithLayout(key)}>
+                    <LayoutGrid className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    <span className="text-xs">{tpl.label}</span>
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         )}
       </div>
 
@@ -637,7 +1015,8 @@ function PresentationEditor({ content, onChange, editable }) {
         <div className="flex items-center gap-2">
           <Input placeholder="Slide title" value={active?.title || ""} onChange={e => updateSlide("title", e.target.value)}
             disabled={!editable} className="flex-1 text-base font-semibold" />
-          <Button variant="outline" size="sm" onClick={() => setPreview(true)}><Eye className="h-4 w-4 mr-1" />Preview</Button>
+          <Button variant="outline" size="sm" onClick={() => { setPreview(true); }}><Eye className="h-4 w-4 mr-1" />Preview</Button>
+          <Button size="sm" onClick={startPresent}><Play className="h-4 w-4 mr-1" />Present</Button>
         </div>
 
         {/* Background picker */}
