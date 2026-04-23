@@ -118,6 +118,10 @@ class SOPTransfer(BaseModel):
     new_owner_id: str
 
 
+class SOPPublish(BaseModel):
+    publish_status: str  # "draft" | "private" | "published"
+
+
 # ── File upload ──
 
 @router.post("/upload")
@@ -178,6 +182,7 @@ async def create_sop(req: SOPCreate, user=Depends(get_current_user)):
         "file_type": req.file_type,
         "current_version": 1,
         "status": "published",
+        "publish_status": "draft",
         "has_pending_edit": False,
         "pending_content": None,
         "pending_edit_by": None,
@@ -223,7 +228,17 @@ async def create_sop(req: SOPCreate, user=Depends(get_current_user)):
 @router.get("", response_model=List[dict])
 @router.get("/", response_model=List[dict])
 async def list_sops(user=Depends(get_current_user)):
-    docs = await db.sops.find({"org_id": user.get("org_id")}).sort("created_at", -1).to_list(200)
+    # Build filter: org_id required; exclude draft/private from non-owners/non-admins
+    is_privileged = user.get("system_role") in ("admin", "manager")
+    if is_privileged:
+        q = {"org_id": user.get("org_id")}
+    else:
+        q = {"org_id": user.get("org_id"), "$or": [
+            {"publish_status": "published"},
+            {"publish_status": {"$exists": False}},  # legacy SOPs without field
+            {"owner": ObjectId(user["id"])},  # own drafts/private
+        ]}
+    docs = await db.sops.find(q).sort("created_at", -1).to_list(200)
     return serialize_list(docs)
 
 
@@ -555,6 +570,31 @@ async def archive_sop(sop_id: str, user=Depends(get_current_user)):
     return serialize_doc(updated)
 
 
+# ── Publish status ──
+
+@router.put("/{sop_id}/publish-status", response_model=dict)
+async def update_publish_status(sop_id: str, req: SOPPublish, user=Depends(get_current_user)):
+    if req.publish_status not in ("draft", "private", "published"):
+        raise HTTPException(400, "publish_status must be 'draft', 'private', or 'published'")
+
+    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
+    if not sop:
+        raise HTTPException(404, "SOP not found")
+    if not (str(sop["owner"]) == user["id"] or user.get("system_role") in ("admin", "manager")):
+        raise HTTPException(403, "Only the SOP owner, admin, or manager can change publish status")
+
+    now = datetime.now(timezone.utc)
+    uid = ObjectId(user["id"])
+    await db.sops.update_one(
+        {"_id": _to_oid(sop_id)},
+        {"$set": {"publish_status": req.publish_status, "updated_at": now, "updated_by": uid}},
+    )
+
+    await log_audit(user.get("org_id"), user["id"], "update_publish_status", "sop", sop_id, diff={"publish_status": req.publish_status})
+    updated = await db.sops.find_one({"_id": _to_oid(sop_id)})
+    return serialize_doc(updated)
+
+
 # ── OnlyOffice editor integration ──
 
 @router.get("/{sop_id}/editor-config")
@@ -579,6 +619,15 @@ async def get_editor_config(sop_id: str, user=Depends(get_current_user)):
     callback_url = f"{_OO_BACKEND_URL}/api/sops/{sop_id}/onlyoffice-callback"
     # Key includes file mtime — changes on every OO save, busts OO's internal document cache
     _fp = UPLOADS_DIR / sop["oo_file"]
+    if not _fp.exists():
+        new_oo = _create_oo_file(sop_id, sop.get("sop_type"))
+        if new_oo:
+            await db.sops.update_one(
+                {"_id": _to_oid(sop_id)},
+                {"$set": {"oo_file": new_oo}},
+            )
+            sop["oo_file"] = new_oo
+            _fp = UPLOADS_DIR / new_oo
     _mtime = int(_fp.stat().st_mtime) if _fp.exists() else int(time.time())
     doc_key = f"{sop_id}_{sop.get('current_version', 1)}_{_mtime}"
 
