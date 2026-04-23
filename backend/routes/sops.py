@@ -140,6 +140,46 @@ def _create_oo_file(sop_id: str, sop_type: str) -> Optional[str]:
         return None
 
 
+def _extract_plain_text(oo_filename: str) -> str:
+    """Read text content out of a saved OO file for the read-only preview."""
+    file_path = UPLOADS_DIR / oo_filename
+    if not file_path.exists():
+        return ""
+    ext = oo_filename.rsplit(".", 1)[-1].lower() if "." in oo_filename else ""
+    try:
+        if ext == "docx":
+            doc = _DocxDoc(str(file_path))
+            return "\n\n".join(p.text for p in doc.paragraphs if p.text)
+        if ext == "xlsx":
+            from openpyxl import load_workbook
+            wb = load_workbook(str(file_path), data_only=True, read_only=True)
+            lines = []
+            for sheet in wb.worksheets:
+                lines.append(f"# {sheet.title}")
+                for row in sheet.iter_rows(values_only=True):
+                    cells = ["" if v is None else str(v) for v in row]
+                    if any(cells):
+                        lines.append(" | ".join(cells))
+                lines.append("")
+            wb.close()
+            return "\n".join(lines)
+        if ext == "pptx":
+            pres = _Presentation(str(file_path))
+            lines = []
+            for i, slide in enumerate(pres.slides, 1):
+                lines.append(f"# Slide {i}")
+                for shape in slide.shapes:
+                    if shape.has_text_frame:
+                        for para in shape.text_frame.paragraphs:
+                            if para.text:
+                                lines.append(para.text)
+                lines.append("")
+            return "\n".join(lines)
+    except Exception:
+        return ""
+    return ""
+
+
 async def _is_readonly_user(user: dict) -> bool:
     """True when user's IAM groups grant only read actions across all resources."""
     if user.get("system_role") in ("admin", "manager"):
@@ -908,9 +948,16 @@ async def onlyoffice_callback(sop_id: str, request: Request):
             "change_note": "Auto-saved via OnlyOffice",
         })
 
+        # Extract a plain-text preview for the read-only view mode
+        plain_text = _extract_plain_text(sop["oo_file"])
+
         await db.sops.update_one(
             {"_id": sop["_id"]},
-            {"$set": {"current_version": new_version, "updated_at": now}},
+            {"$set": {
+                "current_version": new_version,
+                "updated_at": now,
+                "plain_text": plain_text,
+            }},
         )
 
         # Refresh the file manager entry's size + timestamp so Files view stays current

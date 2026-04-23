@@ -19,7 +19,8 @@ import {
   Plus, Trash2, ChevronLeft, ChevronRight, Eye, EyeOff,
   Upload, Download, Pencil, Link, Image, Video, Bold,
   Italic, Underline, AlignLeft, AlignCenter, AlignRight,
-  List, ListOrdered, Quote, Undo, Redo, Minus
+  List, ListOrdered, Quote, Undo, Redo, Minus,
+  Maximize2, Minimize2, FileText
 } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -781,13 +782,57 @@ function FileEditor({ sop, onFileUploaded, editable }) {
 
 // ── OnlyOffice editor ──
 
+// Read-only markdown-ish preview shown until user clicks Edit.
+function PlainTextView({ sop, canEdit, onEdit }) {
+  const text = sop?.plain_text || "";
+  return (
+    <div className="relative border rounded-lg bg-muted/20" style={{ minHeight: "60vh" }}>
+      <div className="flex items-center gap-2 px-4 py-2 border-b bg-background/50">
+        <FileText className="h-4 w-4 text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">Read-only preview</span>
+        {canEdit && (
+          <Button size="sm" className="ml-auto" onClick={onEdit}>
+            <Pencil className="h-4 w-4 mr-1" />Edit
+          </Button>
+        )}
+      </div>
+      <div className="px-6 py-5">
+        {text ? (
+          <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-foreground">{text}</pre>
+        ) : (
+          <p className="text-sm text-muted-foreground italic">No content yet. Click Edit to start writing.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function OnlyOfficeEditor({ sopId }) {
   const editorRef = useRef(null);
+  const containerRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [fullscreen, setFullscreen] = useState(false);
   const [saveStatus, setSaveStatus] = useState("idle"); // "idle" | "dirty" | "saving" | "saved"
   const saveTimerRef = useRef(null);
   const docKeyRef = useRef(null);
+
+  const toggleFullscreen = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      (el.requestFullscreen?.() || el.webkitRequestFullscreen?.())?.then?.(() => setFullscreen(true));
+    } else {
+      (document.exitFullscreen?.() || document.webkitExitFullscreen?.())?.then?.(() => setFullscreen(false));
+    }
+  };
+
+  useEffect(() => {
+    const onChange = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -889,18 +934,30 @@ function OnlyOfficeEditor({ sopId }) {
   }, [sopId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="relative border rounded-lg overflow-hidden" style={{ height: "80vh" }}>
-      {/* Save status indicator (top-right, like Google Docs) */}
-      <div className="absolute top-2 right-12 z-10 pointer-events-none">
+    <div
+      ref={containerRef}
+      className="relative border rounded-lg overflow-hidden bg-background"
+      style={{ height: fullscreen ? "100vh" : "80vh" }}
+    >
+      {/* Top-right controls */}
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
         {saveStatus === "dirty" && (
-          <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Unsaved</span>
+          <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 pointer-events-none">Unsaved</span>
         )}
         {saveStatus === "saving" && (
-          <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">Saving…</span>
+          <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 pointer-events-none">Saving…</span>
         )}
         {saveStatus === "saved" && (
-          <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200">Saved</span>
+          <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200 pointer-events-none">Saved</span>
         )}
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          title={fullscreen ? "Exit full screen" : "Full screen"}
+          className="h-7 w-7 rounded bg-background/80 border border-border hover:bg-muted flex items-center justify-center"
+        >
+          {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
       </div>
       <div id="oo-editor" style={{ width: "100%", height: "100%" }} />
       {loading && !error && (
@@ -1226,8 +1283,17 @@ export default function SOPEditorPage() {
           {(isOwner(sop) || isPrivileged) && !isArchived && (
             <Button variant="outline" size="sm" onClick={() => setShowArchiveConfirm(true)}><Archive className="h-4 w-4 mr-1" />Archive</Button>
           )}
-          {/* Edit controls — legacy editors only; OO manages its own save */}
-          {canEdit && !isEditing && !isOOType && <Button size="sm" onClick={enterEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>}
+          {/* Edit controls */}
+          {canEdit && !isEditing && <Button size="sm" onClick={enterEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>}
+          {canEdit && isEditing && isOOType && (
+            <Button size="sm" variant="outline" onClick={async () => {
+              setIsEditing(false);
+              // Give OO ~2.5s to flush any pending force-save, then refetch so plain_text is current
+              setTimeout(() => { loadSop(); }, 2500);
+            }}>
+              <Eye className="h-4 w-4 mr-1" />Done
+            </Button>
+          )}
           {canEdit && isEditing && !isOOType && (
             <>
               <Input placeholder="Change note" value={changeNote} onChange={e => setChangeNote(e.target.value)} className="w-36 h-8 text-sm" />
@@ -1288,7 +1354,11 @@ export default function SOPEditorPage() {
         </div>
 
         {isOOType ? (
-          <OnlyOfficeEditor sopId={id} />
+          isEditing ? (
+            <OnlyOfficeEditor sopId={id} />
+          ) : (
+            <PlainTextView sop={sop} canEdit={canEdit} onEdit={enterEdit} />
+          )
         ) : (
           <>
             {sop.sop_type === "document" && <DocumentEditor content={draft} onChange={setDraft} editable={isEditing} sopId={id} />}

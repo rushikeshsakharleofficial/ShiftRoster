@@ -178,6 +178,7 @@ export default function FileManagerPage() {
   const [newFolderName, setNewFolderName] = useState("");
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
   const fileInputRef = useRef(null);
   const uploadIdRef = useRef(0);
 
@@ -302,10 +303,21 @@ export default function FileManagerPage() {
     window.open(filesApi.downloadUrl(file.id), "_blank", "noopener,noreferrer");
   };
 
-  // SOP-linked items open inside the SOP editor, not download
+  // SOP-linked → SOP editor. Media/PDF → inline preview. Everything else → download.
   const handleOpen = (file) => {
     if (file.sop_id) {
       navigate(`/sops/${file.sop_id}`);
+      return;
+    }
+    const mime = file.mime || "";
+    const previewable =
+      mime.startsWith("image/") ||
+      mime.startsWith("video/") ||
+      mime.startsWith("audio/") ||
+      mime === "application/pdf" ||
+      mime.startsWith("text/");
+    if (previewable) {
+      setPreviewFile(file);
     } else {
       handleDownload(file);
     }
@@ -622,7 +634,58 @@ export default function FileManagerPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Inline preview (image / video / audio / pdf / text) */}
+      <FilePreviewDialog
+        file={previewFile}
+        onClose={() => setPreviewFile(null)}
+        onDownload={() => { if (previewFile) handleDownload(previewFile); }}
+      />
     </div>
+  );
+}
+
+function FilePreviewDialog({ file, onClose, onDownload }) {
+  if (!file) return null;
+  const mime = file.mime || "";
+  const url = filesApi.downloadUrl(file.id);
+  return (
+    <Dialog open={!!file} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] p-0 overflow-hidden flex flex-col">
+        <DialogHeader className="px-4 py-3 border-b">
+          <DialogTitle className="flex items-center gap-2">
+            <span className="truncate">{file.name}</span>
+            <Button variant="outline" size="sm" className="ml-auto" onClick={onDownload}>
+              <Download className="h-4 w-4 mr-1" /> Download
+            </Button>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-auto bg-muted/30 flex items-center justify-center">
+          {mime.startsWith("image/") && (
+            <img src={url} alt={file.name} className="max-w-full max-h-[75vh] object-contain" />
+          )}
+          {mime.startsWith("video/") && (
+            <video src={url} controls className="max-w-full max-h-[75vh]" />
+          )}
+          {mime.startsWith("audio/") && (
+            <audio src={url} controls className="w-full max-w-lg" />
+          )}
+          {mime === "application/pdf" && (
+            <iframe src={url} title={file.name} className="w-full h-[75vh] border-0 bg-white" />
+          )}
+          {mime.startsWith("text/") && (
+            <iframe src={url} title={file.name} className="w-full h-[75vh] border-0 bg-white" />
+          )}
+          {!mime.startsWith("image/") && !mime.startsWith("video/") && !mime.startsWith("audio/")
+            && mime !== "application/pdf" && !mime.startsWith("text/") && (
+              <div className="text-center p-8">
+                <p className="text-sm text-muted-foreground mb-3">Preview not available for this file type.</p>
+                <Button onClick={onDownload}><Download className="h-4 w-4 mr-1" /> Download</Button>
+              </div>
+            )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
