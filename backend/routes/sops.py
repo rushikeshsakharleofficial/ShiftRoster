@@ -615,7 +615,6 @@ async def get_editor_config(sop_id: str, user=Depends(get_current_user)):
     if _OO_JWT_SECRET:
         config["token"] = _pyjwt.encode(config.copy(), _OO_JWT_SECRET, algorithm="HS256")
 
-    config["_download_url"] = f"/api/sops/{sop_id}/file?t={file_token}"
     return config
 
 
