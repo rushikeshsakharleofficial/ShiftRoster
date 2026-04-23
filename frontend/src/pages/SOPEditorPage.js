@@ -785,15 +785,53 @@ function OnlyOfficeEditor({ sopId }) {
   const editorRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [retrying, setRetrying] = useState(false);
+  const retryCountRef = useRef(0);
+
+  // Keep ref in sync so callbacks don't close over stale state
+  useEffect(() => { retryCountRef.current = retryCount; }, [retryCount]);
 
   useEffect(() => {
     let alive = true;
 
     const initEditor = (config) => {
       if (!alive) return;
-      editorRef.current = new window.DocsAPI.DocEditor("oo-editor", config);
-      if (alive) setLoading(false);
+      // Destroy any previous editor instance before creating a new one
+      try { editorRef.current?.destroyEditor?.(); } catch {}
+      editorRef.current = null;
+
+      const configWithEvents = {
+        ...config,
+        events: {
+          onDocumentReady: () => {
+            if (alive) { setLoading(false); setRetrying(false); }
+          },
+          onError: (event) => {
+            if (!alive) return;
+            console.error("OO error:", event?.data);
+            if (retryCountRef.current < 3) {
+              setRetrying(true);
+              setTimeout(() => {
+                if (alive) setRetryCount(c => c + 1);
+              }, 3000);
+            } else {
+              setLoading(false);
+              setError(true);
+            }
+          },
+        },
+      };
+
+      editorRef.current = new window.DocsAPI.DocEditor("oo-editor", configWithEvents);
     };
+
+    // If retrying, force a fresh api.js load by clearing cached DocsAPI
+    if (retryCount > 0) {
+      delete window.DocsAPI;
+      const oldScript = document.getElementById("oo-api-js");
+      if (oldScript) oldScript.remove();
+    }
 
     sopsApi.getEditorConfig(sopId).then(({ data: config }) => {
       if (!alive) return;
@@ -821,16 +859,24 @@ function OnlyOfficeEditor({ sopId }) {
       try { editorRef.current?.destroyEditor?.(); } catch {}
       editorRef.current = null;
     };
-  }, [sopId]);
+  }, [sopId, retryCount]);
 
   return (
     <div className="relative border rounded-lg overflow-hidden" style={{ height: "80vh" }}>
       <div id="oo-editor" style={{ width: "100%", height: "100%" }} />
-      {loading && !error && (
+      {loading && !error && !retrying && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/80">
           <div className="text-center space-y-3">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto" />
             <p className="text-sm text-muted-foreground">Loading document editor…</p>
+          </div>
+        </div>
+      )}
+      {retrying && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+          <div className="text-center space-y-3">
+            <Loader2 className="h-8 w-8 animate-spin text-amber-500 mx-auto" />
+            <p className="text-sm text-muted-foreground">Connection interrupted, retrying… ({retryCount}/3)</p>
           </div>
         </div>
       )}
@@ -986,6 +1032,14 @@ export default function SOPEditorPage() {
     setShowTransfer(true);
   };
 
+  const handlePublishStatusChange = async (newStatus) => {
+    try {
+      await sopsApi.setPublishStatus(id, newStatus);
+      setSop(prev => ({ ...prev, publish_status: newStatus }));
+      toast.success(`SOP ${newStatus}`);
+    } catch (err) { toast.error(formatApiError(err?.response?.data?.detail)); }
+  };
+
   const csvImportRef = useRef();
 
   const handleExportPDF = () => {
@@ -1098,6 +1152,31 @@ export default function SOPEditorPage() {
         )}
         <Badge variant="outline">v{sop.current_version}</Badge>
         <Badge variant={isArchived ? "secondary" : "default"}>{sop.status}</Badge>
+        {/* Publish status badge */}
+        <Badge
+          variant="outline"
+          className={
+            (sop.publish_status === "published")
+              ? "border-green-500 text-green-700 bg-green-50"
+              : (sop.publish_status === "private")
+              ? "border-gray-400 text-gray-600 bg-gray-50"
+              : "border-amber-400 text-amber-700 bg-amber-50"
+          }
+        >
+          {sop.publish_status === "published" ? "Published" : sop.publish_status === "private" ? "Private" : "Draft"}
+        </Badge>
+        {/* Publish status selector — owners/admins/managers only */}
+        {(isOwner(sop) || isPrivileged) && !isArchived && (
+          <select
+            value={sop.publish_status || "draft"}
+            onChange={(e) => handlePublishStatusChange(e.target.value)}
+            className="text-sm border rounded px-2 py-1 bg-background"
+          >
+            <option value="draft">Draft</option>
+            <option value="private">Private</option>
+            <option value="published">Published</option>
+          </select>
+        )}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {/* Export / Import — legacy editors only */}
           {!isOOType && <Button variant="outline" size="sm" onClick={handleExportPDF}><Download className="h-4 w-4 mr-1" />PDF</Button>}
@@ -1141,6 +1220,21 @@ export default function SOPEditorPage() {
           </div>
           <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={handleApprove}><Check className="h-4 w-4 mr-1" />Approve</Button>
           <Button size="sm" variant="outline" className="text-red-600 border-red-300 hover:bg-red-50" onClick={handleReject}><X className="h-4 w-4 mr-1" />Reject</Button>
+        </div>
+      )}
+
+      {/* Draft banner */}
+      {(sop.publish_status === "draft" || !sop.publish_status) && !isArchived && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 px-4 py-2 flex items-center gap-2 text-sm text-amber-800 dark:text-amber-300">
+          <span>Draft — auto-saved. Publish when ready.</span>
+          {(isOwner(sop) || isPrivileged) && (
+            <button
+              onClick={() => handlePublishStatusChange("published")}
+              className="ml-auto text-xs bg-amber-600 text-white px-3 py-1 rounded hover:bg-amber-700"
+            >
+              Publish
+            </button>
+          )}
         </div>
       )}
 
