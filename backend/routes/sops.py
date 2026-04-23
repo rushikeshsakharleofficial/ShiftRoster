@@ -695,7 +695,18 @@ async def serve_sop_file(sop_id: str, t: str):
 
 @router.post("/{sop_id}/onlyoffice-callback")
 async def onlyoffice_callback(sop_id: str, request: Request):
-    """OnlyOffice document server save callback."""
+    """OnlyOffice document server save callback.
+
+    Status codes:
+      1 = document is being edited
+      2 = ready to save (all users closed, or autosave)
+      3 = document saving error
+      4 = closed with no changes
+      6 = force-save success (user hit save, or forcesave triggered)
+      7 = force-save error
+    """
+    import logging
+    logger = logging.getLogger("sops.onlyoffice_callback")
     body = await request.json()
 
     # Always verify JWT — prevents unauthenticated content injection via fake callbacks
@@ -704,18 +715,31 @@ async def onlyoffice_callback(sop_id: str, request: Request):
     auth_header = request.headers.get("Authorization", "")
     token = auth_header.removeprefix("Bearer ").strip() or body.get("token", "")
     if not token:
+        logger.warning("OO callback missing token for sop=%s", sop_id)
         return {"error": 1}
     try:
         body = _pyjwt.decode(token, _OO_JWT_SECRET, algorithms=["HS256"])
-    except _pyjwt.PyJWTError:
+    except _pyjwt.PyJWTError as e:
+        logger.warning("OO callback JWT verify failed for sop=%s: %s", sop_id, e)
         return {"error": 1}
 
     status = body.get("status")
+    logger.info("OO callback sop=%s status=%s", sop_id, status)
 
-    if status in (2, 7):  # 2=ready-to-save, 7=forcesave-complete
+    # Statuses 2 and 6 both mean "save the document now"; url contains the updated file.
+    if status in (2, 6):
         download_url = body.get("url")
         if not download_url:
+            logger.warning("OO callback sop=%s status=%s missing url", sop_id, status)
             return {"error": 1}
+
+        # OO may emit internal URLs (http://127.0.0.1:8000/...) that the backend can't
+        # reach. Rewrite to the onlyoffice docker service hostname.
+        from urllib.parse import urlparse, urlunparse
+        parsed = urlparse(download_url)
+        if parsed.hostname in ("127.0.0.1", "localhost", "documentserver"):
+            download_url = urlunparse(parsed._replace(netloc="onlyoffice"))
+            logger.info("OO callback rewrote download_url → %s", download_url)
 
         sop = await db.sops.find_one({"_id": _to_oid(sop_id)})
         if not sop or not sop.get("oo_file"):
@@ -726,9 +750,12 @@ async def onlyoffice_callback(sop_id: str, request: Request):
             async with httpx.AsyncClient(follow_redirects=True) as client:
                 resp = await client.get(download_url, timeout=30.0)
                 if resp.status_code != 200:
+                    logger.error("OO download failed: status=%s url=%s", resp.status_code, download_url)
                     return {"error": 1}
                 file_path.write_bytes(resp.content)
-        except Exception:
+                logger.info("OO saved %d bytes to %s", len(resp.content), file_path)
+        except Exception as e:
+            logger.exception("OO download exception: %s", e)
             return {"error": 1}
 
         now = datetime.now(timezone.utc)
