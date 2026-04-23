@@ -893,10 +893,14 @@ async def onlyoffice_callback(sop_id: str, request: Request):
         logger.warning("OO callback missing token for sop=%s", sop_id)
         return {"error": 1}
     try:
-        body = _pyjwt.decode(token, _OO_JWT_SECRET, algorithms=["HS256"])
+        decoded = _pyjwt.decode(token, _OO_JWT_SECRET, algorithms=["HS256"])
     except _pyjwt.PyJWTError as e:
         logger.warning("OO callback JWT verify failed for sop=%s: %s", sop_id, e)
         return {"error": 1}
+
+    # When OO signs the Authorization header, the JWT payload is wrapped as {"payload": {...}}.
+    # When token is in body, the payload is the body itself. Unwrap if needed.
+    body = decoded.get("payload") if isinstance(decoded.get("payload"), dict) else decoded
 
     status = body.get("status")
     logger.info("OO callback sop=%s status=%s", sop_id, status)

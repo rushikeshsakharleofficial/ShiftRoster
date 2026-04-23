@@ -579,9 +579,12 @@ async def files_oo_callback(item_id: str, request: _Request):
     if not token:
         return {"error": 1}
     try:
-        body = _pyjwt.decode(token, _OO_JWT_SECRET, algorithms=["HS256"])
+        decoded = _pyjwt.decode(token, _OO_JWT_SECRET, algorithms=["HS256"])
     except _pyjwt.PyJWTError:
         return {"error": 1}
+
+    # OO wraps body in {"payload": ...} when JWT travels in Authorization header
+    body = decoded.get("payload") if isinstance(decoded.get("payload"), dict) else decoded
 
     status = body.get("status")
     logger.info("files OO callback item=%s status=%s", item_id, status)
