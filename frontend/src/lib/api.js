@@ -71,7 +71,7 @@ export const usersApi = {
   delete: (id) => api.delete(`/users/${id}`),
   changeLevel: (id, data) => api.put(`/users/${id}/level`, data),
   mandateMfa: (data) => api.put("/users/mfa/mandate", data),
-  uploadAvatar: (id, formData) => api.post(`/users/${id}/avatar`, formData, { headers: { "Content-Type": undefined } }),
+  uploadAvatar: (id, formData) => api.post(`/users/${id}/avatar`, formData),
 };
 
 // Departments
@@ -293,10 +293,7 @@ export const chatApi = {
   listUsers: (params) => api.get("/chat/users", { params }),
   mentionUsers: (q) => api.get("/chat/mention-users", { params: { q } }),
 
-  // File upload — do NOT set Content-Type manually; axios sets it with boundary from FormData
-  uploadFile: (formData) => api.post("/chat/upload", formData, {
-    headers: { "Content-Type": undefined },
-  }),
+  uploadFile: (formData) => api.post("/chat/upload", formData),
 
   // E2EE key distribution
   updateChannelE2eeKeys: (channelId, keys) => api.put(`/chat/channels/${channelId}/e2ee-keys`, keys),
@@ -341,7 +338,7 @@ export const sopsApi = {
   versions: (id) => api.get(`/sops/${id}/versions`),
   revert: (id, versionId) => api.post(`/sops/${id}/revert/${versionId}`),
   archive: (id) => api.post(`/sops/${id}/archive`),
-  upload: (formData) => api.post("/sops/upload", formData, { headers: { "Content-Type": undefined } }),
+  upload: (formData) => api.post("/sops/upload", formData),
   setPublishStatus: (id, publish_status) => api.put(`/sops/${id}/publish-status`, { publish_status }),
 };
 
@@ -352,7 +349,6 @@ export const filesApi = {
   upload: (formData, scope, parentId, onUploadProgress) =>
     api.post(`/files/upload`, formData, {
       params: { scope, parent_id: parentId || "" },
-      headers: { "Content-Type": "multipart/form-data" },
       onUploadProgress,
     }),
   downloadUrl: (id) => `/api/files/${id}/download`,
@@ -372,7 +368,7 @@ export const cryptoApi = {
 export const storiesApi = {
   list: () => api.get("/stories"),
   create: (data) => api.post("/stories", data),
-  upload: (formData) => api.post("/stories/upload", formData, { headers: { "Content-Type": undefined } }),
+  upload: (formData) => api.post("/stories/upload", formData),
   view: (id) => api.post(`/stories/${id}/view`),
   delete: (id) => api.delete(`/stories/${id}`),
 };
