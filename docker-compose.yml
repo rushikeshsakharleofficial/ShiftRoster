@@ -94,31 +94,11 @@ services:
         limits:
           memory: 3G
 
-  # GitHub Actions self-hosted runner — auto-registers on first start
-  # Needs GITHUB_PAT (repo scope) in .env — never expires, no manual token refresh
-  github-runner:
-    image: myoung34/github-runner:latest
-    container_name: shiftroster-runner
-    restart: unless-stopped
-    environment:
-      ACCESS_TOKEN: ${GITHUB_PAT}
-      REPO_URL: https://github.com/rushikeshsakharleofficial/ShiftRoster
-      RUNNER_NAME: shiftroster-server
-      RUNNER_WORKDIR: /tmp/runner/work
-      RUNNER_SCOPE: repo
-      LABELS: self-hosted
-      EPHEMERAL: "false"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /projects/ShiftRoster:/projects/ShiftRoster
-      - runner_work:/tmp/runner
 
 volumes:
   mongo_data:
     driver: local
   backend_uploads:
-    driver: local
-  runner_work:
     driver: local
   onlyoffice_data:
     driver: local

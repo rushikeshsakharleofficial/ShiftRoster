@@ -1,0 +1,23 @@
+services:
+  github-runner:
+    image: myoung34/github-runner:latest
+    container_name: shiftroster-runner
+    # restart: always ensures runner re-registers automatically after any exit
+    # (canceled job sends SIGTERM → runner deregisters cleanly → restart brings it back)
+    restart: always
+    environment:
+      ACCESS_TOKEN: ${GITHUB_PAT}
+      REPO_URL: https://github.com/rushikeshsakharleofficial/ShiftRoster
+      RUNNER_NAME: shiftroster-server
+      RUNNER_WORKDIR: /tmp/runner/work
+      RUNNER_SCOPE: repo
+      LABELS: self-hosted
+      EPHEMERAL: "false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /projects/ShiftRoster:/projects/ShiftRoster
+      - runner_work:/tmp/runner
+
+volumes:
+  runner_work:
+    driver: local
