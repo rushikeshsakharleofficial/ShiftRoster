@@ -971,9 +971,9 @@ export default function ChatPage() {
       </aside>
 
       {/* === MAIN — chat surface === */}
-      <main className="flex-1 flex flex-col min-w-0 bg-background">
+      <main className="flex-1 flex flex-col min-w-0 bg-[#0e1117]">
         {/* Header */}
-        <header className="h-14 border-b border-border/40 px-5 flex items-center gap-3 shrink-0 bg-background/80 backdrop-blur-md sticky top-0 z-10">
+        <header className="h-14 border-b border-white/5 px-5 flex items-center gap-3 shrink-0 bg-[#0e1117]/90 backdrop-blur-md sticky top-0 z-10">
           {activeChannel ? (
             <>
               {isActiveDM ? (
@@ -1059,7 +1059,7 @@ export default function ChatPage() {
         <StoryStrip currentUser={user} />
 
         {/* Body — discovery / empty / join / messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar bg-[#0e1117]">
           {!activeChannelId && !showDiscovery ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-12">
               <div className="relative mb-8">
@@ -1247,7 +1247,7 @@ export default function ChatPage() {
         {activeChannel && (
           <div
             className={cn(
-              "border-t border-border/40 bg-background/95 backdrop-blur-md shrink-0",
+              "border-t border-white/5 bg-[#0e1117]/95 backdrop-blur-md shrink-0",
               inputDisabled && "opacity-60"
             )}
           >
@@ -1291,7 +1291,7 @@ export default function ChatPage() {
                   onChange={handleFileSelect}
                 />
 
-                <div className="flex-1 flex items-end bg-muted/60 border border-border/60 rounded-2xl min-h-[40px] focus-within:border-indigo-400/50 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all shadow-sm">
+                <div className="flex-1 flex items-end bg-white/5 border border-white/10 rounded-2xl min-h-[40px] focus-within:border-indigo-400/50 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all shadow-sm">
                   <Textarea
                     ref={inputRef}
                     value={inputText}
