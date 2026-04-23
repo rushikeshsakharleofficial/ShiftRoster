@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { version as APP_VERSION } from "../../../package.json";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import ThemeToggle from "@/components/layout/ThemeToggle";
@@ -410,6 +411,13 @@ export default function AppLayout() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        {/* Version badge */}
+        {sidebarOpen && (
+          <div className="px-4 py-2 flex justify-end border-t border-border/30">
+            <span className="text-[10px] text-muted-foreground/50 select-none">v{APP_VERSION}</span>
+          </div>
+        )}
       </aside>
 
       {/* Mobile overlay */}
