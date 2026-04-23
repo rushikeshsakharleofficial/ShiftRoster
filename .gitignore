@@ -276,10 +276,16 @@ venv/
 .venv/
 env/
 .env/
-bin/
-lib/
-share/
-include/
-Scripts/
+# Specific venv subdirectories to avoid matching src/lib etc.
+venv/bin/
+venv/lib/
+venv/share/
+venv/include/
+venv/Scripts/
+.venv/bin/
+.venv/lib/
+.venv/share/
+.venv/include/
+.venv/Scripts/
 pyvenv.cfg
 pip-selfcheck.json
