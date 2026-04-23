@@ -66,7 +66,7 @@ app = FastAPI(
 # Security: explicit methods/headers instead of wildcards when allow_credentials=True
 _CORS_ORIGINS = os.getenv(
     "CORS_ORIGINS",
-    "https://bot.linuxhardened.com,http://72.62.231.43:8080,http://localhost:8080,http://localhost:3000"
+    "http://localhost:8080,http://localhost:3000"
 ).split(",")
 
 app.add_middleware(

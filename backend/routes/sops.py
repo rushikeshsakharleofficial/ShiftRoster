@@ -11,6 +11,13 @@ import os
 
 router = APIRouter(prefix="/api/sops", tags=["sops"], redirect_slashes=False)
 
+
+def _to_oid(val: str) -> ObjectId:
+    try:
+        return ObjectId(val)
+    except Exception:
+        raise HTTPException(422, "Invalid ID format")
+
 UPLOADS_DIR = Path(__file__).parent.parent / "uploads"
 MAX_SOP_FILE_BYTES = 50 * 1024 * 1024
 _CHUNK = 1024 * 1024
@@ -179,7 +186,7 @@ async def list_sops(user=Depends(get_current_user)):
 
 @router.get("/{sop_id}", response_model=dict)
 async def get_sop(sop_id: str, user=Depends(get_current_user)):
-    sop = await db.sops.find_one({"_id": ObjectId(sop_id), "org_id": user.get("org_id")})
+    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
     if not sop:
         raise HTTPException(404, "SOP not found")
     return serialize_doc(sop)
@@ -187,7 +194,7 @@ async def get_sop(sop_id: str, user=Depends(get_current_user)):
 
 @router.put("/{sop_id}", response_model=dict)
 async def update_sop(sop_id: str, req: SOPUpdate, user=Depends(get_current_user)):
-    sop = await db.sops.find_one({"_id": ObjectId(sop_id), "org_id": user.get("org_id")})
+    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
     if not sop:
         raise HTTPException(404, "SOP not found")
     if sop.get("status") == "archived":
@@ -212,7 +219,7 @@ async def update_sop(sop_id: str, req: SOPUpdate, user=Depends(get_current_user)
                 pending[field] = val
 
         await db.sops.update_one(
-            {"_id": ObjectId(sop_id)},
+            {"_id": _to_oid(sop_id)},
             {"$set": {
                 "has_pending_edit": True,
                 "pending_content": pending,
@@ -230,12 +237,12 @@ async def update_sop(sop_id: str, req: SOPUpdate, user=Depends(get_current_user)
             link=f"/sops/{sop_id}",
         )
         await log_audit(user.get("org_id"), user["id"], "propose_edit", "sop", sop_id)
-        updated = await db.sops.find_one({"_id": ObjectId(sop_id)})
+        updated = await db.sops.find_one({"_id": _to_oid(sop_id)})
         return serialize_doc(updated)
 
     # Direct edit: archive current, apply new
     await db.sop_versions.insert_one({
-        "sop_id": ObjectId(sop_id),
+        "sop_id": _to_oid(sop_id),
         "org_id": user.get("org_id"),
         "version": sop.get("current_version", 1),
         "content": sop.get("content", {}),
@@ -257,22 +264,22 @@ async def update_sop(sop_id: str, req: SOPUpdate, user=Depends(get_current_user)
         if val is not None:
             updates[field] = val
 
-    await db.sops.update_one({"_id": ObjectId(sop_id)}, {"$set": updates})
+    await db.sops.update_one({"_id": _to_oid(sop_id)}, {"$set": updates})
     await log_audit(user.get("org_id"), user["id"], "update", "sop", sop_id)
-    updated = await db.sops.find_one({"_id": ObjectId(sop_id)})
+    updated = await db.sops.find_one({"_id": _to_oid(sop_id)})
     return serialize_doc(updated)
 
 
 @router.delete("/{sop_id}")
 async def delete_sop(sop_id: str, user=Depends(get_current_user)):
-    sop = await db.sops.find_one({"_id": ObjectId(sop_id), "org_id": user.get("org_id")})
+    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
     if not sop:
         raise HTTPException(404, "SOP not found")
     if not (str(sop["owner"]) == user["id"] or user.get("system_role") in ("admin", "manager")):
         raise HTTPException(403, "Only the SOP owner, admin, or manager can delete")
 
-    await db.sops.delete_one({"_id": ObjectId(sop_id)})
-    await db.sop_versions.delete_many({"sop_id": ObjectId(sop_id)})
+    await db.sops.delete_one({"_id": _to_oid(sop_id)})
+    await db.sop_versions.delete_many({"sop_id": _to_oid(sop_id)})
     await log_audit(user.get("org_id"), user["id"], "delete", "sop", sop_id)
     return {"ok": True}
 
@@ -281,7 +288,7 @@ async def delete_sop(sop_id: str, user=Depends(get_current_user)):
 
 @router.put("/{sop_id}/approve", response_model=dict)
 async def approve_sop_edit(sop_id: str, user=Depends(get_current_user)):
-    sop = await db.sops.find_one({"_id": ObjectId(sop_id), "org_id": user.get("org_id")})
+    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
     if not sop:
         raise HTTPException(404, "SOP not found")
     if not (str(sop["owner"]) == user["id"] or user.get("system_role") in ("admin", "manager")):
@@ -294,7 +301,7 @@ async def approve_sop_edit(sop_id: str, user=Depends(get_current_user)):
     pending = sop.get("pending_content") or {}
 
     await db.sop_versions.insert_one({
-        "sop_id": ObjectId(sop_id),
+        "sop_id": _to_oid(sop_id),
         "org_id": user.get("org_id"),
         "version": sop.get("current_version", 1),
         "content": sop.get("content", {}),
@@ -319,7 +326,7 @@ async def approve_sop_edit(sop_id: str, user=Depends(get_current_user)):
         if k in pending:
             updates[k] = pending[k]
 
-    await db.sops.update_one({"_id": ObjectId(sop_id)}, {"$set": updates})
+    await db.sops.update_one({"_id": _to_oid(sop_id)}, {"$set": updates})
 
     if sop.get("pending_edit_by"):
         approver_name = user.get("full_name") or user.get("username", "Owner")
@@ -331,13 +338,13 @@ async def approve_sop_edit(sop_id: str, user=Depends(get_current_user)):
         )
 
     await log_audit(user.get("org_id"), user["id"], "approve_edit", "sop", sop_id)
-    updated = await db.sops.find_one({"_id": ObjectId(sop_id)})
+    updated = await db.sops.find_one({"_id": _to_oid(sop_id)})
     return serialize_doc(updated)
 
 
 @router.put("/{sop_id}/reject", response_model=dict)
 async def reject_sop_edit(sop_id: str, user=Depends(get_current_user)):
-    sop = await db.sops.find_one({"_id": ObjectId(sop_id), "org_id": user.get("org_id")})
+    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
     if not sop:
         raise HTTPException(404, "SOP not found")
     if not (str(sop["owner"]) == user["id"] or user.get("system_role") in ("admin", "manager")):
@@ -355,7 +362,7 @@ async def reject_sop_edit(sop_id: str, user=Depends(get_current_user)):
         )
 
     await db.sops.update_one(
-        {"_id": ObjectId(sop_id)},
+        {"_id": _to_oid(sop_id)},
         {"$set": {
             "has_pending_edit": False,
             "pending_content": None,
@@ -365,7 +372,7 @@ async def reject_sop_edit(sop_id: str, user=Depends(get_current_user)):
     )
 
     await log_audit(user.get("org_id"), user["id"], "reject_edit", "sop", sop_id)
-    updated = await db.sops.find_one({"_id": ObjectId(sop_id)})
+    updated = await db.sops.find_one({"_id": _to_oid(sop_id)})
     return serialize_doc(updated)
 
 
@@ -373,22 +380,22 @@ async def reject_sop_edit(sop_id: str, user=Depends(get_current_user)):
 
 @router.get("/{sop_id}/versions", response_model=List[dict])
 async def list_sop_versions(sop_id: str, user=Depends(get_current_user)):
-    sop = await db.sops.find_one({"_id": ObjectId(sop_id), "org_id": user.get("org_id")})
+    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
     if not sop:
         raise HTTPException(404, "SOP not found")
-    versions = await db.sop_versions.find({"sop_id": ObjectId(sop_id)}).sort("version", -1).to_list(100)
+    versions = await db.sop_versions.find({"sop_id": _to_oid(sop_id)}).sort("version", -1).to_list(100)
     return serialize_list(versions)
 
 
 @router.post("/{sop_id}/revert/{version_id}", response_model=dict)
 async def revert_sop(sop_id: str, version_id: str, user=Depends(get_current_user)):
-    sop = await db.sops.find_one({"_id": ObjectId(sop_id), "org_id": user.get("org_id")})
+    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
     if not sop:
         raise HTTPException(404, "SOP not found")
     if not (str(sop["owner"]) == user["id"] or user.get("system_role") in ("admin", "manager")):
         raise HTTPException(403, "Only the SOP owner can revert versions")
 
-    ver = await db.sop_versions.find_one({"_id": ObjectId(version_id), "sop_id": ObjectId(sop_id)})
+    ver = await db.sop_versions.find_one({"_id": _to_oid(version_id), "sop_id": _to_oid(sop_id)})
     if not ver:
         raise HTTPException(404, "Version not found")
 
@@ -396,7 +403,7 @@ async def revert_sop(sop_id: str, version_id: str, user=Depends(get_current_user
     uid = ObjectId(user["id"])
 
     await db.sop_versions.insert_one({
-        "sop_id": ObjectId(sop_id),
+        "sop_id": _to_oid(sop_id),
         "org_id": user.get("org_id"),
         "version": sop.get("current_version", 1),
         "content": sop.get("content", {}),
@@ -409,7 +416,7 @@ async def revert_sop(sop_id: str, version_id: str, user=Depends(get_current_user
     })
 
     await db.sops.update_one(
-        {"_id": ObjectId(sop_id)},
+        {"_id": _to_oid(sop_id)},
         {"$set": {
             "content": ver.get("content", {}),
             "file_url": ver.get("file_url"),
@@ -425,7 +432,7 @@ async def revert_sop(sop_id: str, version_id: str, user=Depends(get_current_user
     )
 
     await log_audit(user.get("org_id"), user["id"], "revert", "sop", sop_id, diff={"to_version": ver["version"]})
-    updated = await db.sops.find_one({"_id": ObjectId(sop_id)})
+    updated = await db.sops.find_one({"_id": _to_oid(sop_id)})
     return serialize_doc(updated)
 
 
@@ -433,7 +440,7 @@ async def revert_sop(sop_id: str, version_id: str, user=Depends(get_current_user
 
 @router.post("/{sop_id}/acknowledge", response_model=dict)
 async def acknowledge_sop(sop_id: str, user=Depends(get_current_user)):
-    sop = await db.sops.find_one({"_id": ObjectId(sop_id), "org_id": user.get("org_id")})
+    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
     if not sop:
         raise HTTPException(404, "SOP not found")
 
@@ -441,11 +448,11 @@ async def acknowledge_sop(sop_id: str, user=Depends(get_current_user)):
     already = any(str(a.get("user_id")) == uid_str for a in sop.get("acknowledged_by", []))
     if not already:
         await db.sops.update_one(
-            {"_id": ObjectId(sop_id)},
+            {"_id": _to_oid(sop_id)},
             {"$push": {"acknowledged_by": {"user_id": ObjectId(uid_str), "at": datetime.now(timezone.utc)}}},
         )
         await log_audit(user.get("org_id"), user["id"], "acknowledge", "sop", sop_id)
-        sop = await db.sops.find_one({"_id": ObjectId(sop_id)})
+        sop = await db.sops.find_one({"_id": _to_oid(sop_id)})
 
     return serialize_doc(sop)
 
@@ -454,31 +461,31 @@ async def acknowledge_sop(sop_id: str, user=Depends(get_current_user)):
 
 @router.post("/{sop_id}/transfer", response_model=dict)
 async def transfer_sop_ownership(sop_id: str, req: SOPTransfer, user=Depends(get_current_user)):
-    sop = await db.sops.find_one({"_id": ObjectId(sop_id), "org_id": user.get("org_id")})
+    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
     if not sop:
         raise HTTPException(404, "SOP not found")
     if not (str(sop["owner"]) == user["id"] or user.get("system_role") in ("admin", "manager")):
         raise HTTPException(403, "Only the SOP owner or admin can transfer ownership")
 
-    new_owner = await db.users.find_one({"_id": ObjectId(req.new_owner_id), "org_id": user.get("org_id")})
+    new_owner = await db.users.find_one({"_id": _to_oid(req.new_owner_id), "org_id": user.get("org_id")})
     if not new_owner:
         raise HTTPException(404, "Target user not found in this organisation")
 
     now = datetime.now(timezone.utc)
     await db.sops.update_one(
-        {"_id": ObjectId(sop_id)},
-        {"$set": {"owner": ObjectId(req.new_owner_id), "updated_at": now, "updated_by": ObjectId(user["id"])}},
+        {"_id": _to_oid(sop_id)},
+        {"$set": {"owner": _to_oid(req.new_owner_id), "updated_at": now, "updated_by": ObjectId(user["id"])}},
     )
 
     await create_notification(
-        ObjectId(req.new_owner_id),
+        _to_oid(req.new_owner_id),
         "sop_ownership_transfer",
         f"You are now the owner of SOP \"{sop['title']}\"",
         link=f"/sops/{sop_id}",
     )
 
     await log_audit(user.get("org_id"), user["id"], "transfer_ownership", "sop", sop_id, diff={"new_owner": req.new_owner_id})
-    updated = await db.sops.find_one({"_id": ObjectId(sop_id)})
+    updated = await db.sops.find_one({"_id": _to_oid(sop_id)})
     return serialize_doc(updated)
 
 
@@ -486,7 +493,7 @@ async def transfer_sop_ownership(sop_id: str, req: SOPTransfer, user=Depends(get
 
 @router.post("/{sop_id}/archive", response_model=dict)
 async def archive_sop(sop_id: str, user=Depends(get_current_user)):
-    sop = await db.sops.find_one({"_id": ObjectId(sop_id), "org_id": user.get("org_id")})
+    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
     if not sop:
         raise HTTPException(404, "SOP not found")
     if not (str(sop["owner"]) == user["id"] or user.get("system_role") in ("admin", "manager")):
@@ -494,10 +501,10 @@ async def archive_sop(sop_id: str, user=Depends(get_current_user)):
 
     now = datetime.now(timezone.utc)
     await db.sops.update_one(
-        {"_id": ObjectId(sop_id)},
+        {"_id": _to_oid(sop_id)},
         {"$set": {"status": "archived", "updated_at": now, "updated_by": ObjectId(user["id"])}},
     )
 
     await log_audit(user.get("org_id"), user["id"], "archive", "sop", sop_id)
-    updated = await db.sops.find_one({"_id": ObjectId(sop_id)})
+    updated = await db.sops.find_one({"_id": _to_oid(sop_id)})
     return serialize_doc(updated)

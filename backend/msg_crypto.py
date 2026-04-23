@@ -2,7 +2,9 @@ import os
 from cryptography.fernet import Fernet, InvalidToken
 
 _raw = os.getenv("MSG_ENCRYPT_KEY", "").strip().encode()
-_fernet: Fernet | None = Fernet(_raw) if _raw else None
+if not _raw:
+    raise RuntimeError("MSG_ENCRYPT_KEY env var is not set — message encryption is required")
+_fernet: Fernet = Fernet(_raw)
 
 
 def encrypt_text(text: str) -> str:
