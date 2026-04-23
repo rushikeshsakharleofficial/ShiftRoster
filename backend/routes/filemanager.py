@@ -255,7 +255,11 @@ async def upload_file(
 # ── Download ──
 
 @router.get("/{item_id}/download")
-async def download_file(item_id: str, user=Depends(get_current_user)):
+async def download_file(
+    item_id: str,
+    inline: int = Query(0),  # 1 = render inline (previews), 0 = force download
+    user=Depends(get_current_user),
+):
     item = await db.filemanager_items.find_one({
         "_id": _to_oid(item_id),
         "org_id": ObjectId(user["org_id"]),
@@ -266,6 +270,8 @@ async def download_file(item_id: str, user=Depends(get_current_user)):
         raise HTTPException(400, "Item is not a file")
     if not _can_read(item, user):
         raise HTTPException(403, "Not allowed to read this file")
+
+    disposition = "inline" if inline else "attachment"
 
     # SOP-backed items live at the SOP's oo_file path instead of filemanager storage
     sop_id = item.get("sop_id")
@@ -280,6 +286,7 @@ async def download_file(item_id: str, user=Depends(get_current_user)):
             str(sop_path),
             media_type=item.get("mime") or "application/octet-stream",
             filename=item["name"],
+            content_disposition_type=disposition,
         )
 
     storage_name = item.get("storage_name")
@@ -294,6 +301,7 @@ async def download_file(item_id: str, user=Depends(get_current_user)):
         str(path),
         media_type=item.get("mime") or "application/octet-stream",
         filename=item["name"],
+        content_disposition_type=disposition,
     )
 
 

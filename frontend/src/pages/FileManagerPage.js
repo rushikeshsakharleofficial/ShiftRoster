@@ -655,7 +655,8 @@ function FilePreviewDialog({ file, onClose, onDownload }) {
   const name = file.name || "";
   const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
   const isOODoc = ["docx", "xlsx", "pptx"].includes(ext);
-  const url = filesApi.downloadUrl(file.id);
+  // previewUrl = Content-Disposition: inline so browser renders instead of downloading
+  const url = filesApi.previewUrl(file.id);
   return (
     <Dialog open={!!file} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-6xl w-[95vw] max-h-[95vh] p-0 overflow-hidden flex flex-col">

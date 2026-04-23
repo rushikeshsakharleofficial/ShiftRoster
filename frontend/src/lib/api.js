@@ -358,6 +358,7 @@ export const filesApi = {
       onUploadProgress,
     }),
   downloadUrl: (id) => `/api/files/${id}/download`,
+  previewUrl: (id) => `/api/files/${id}/download?inline=1`,
   rename: (id, name) => api.put(`/files/${id}`, { name }),
   delete: (id) => api.delete(`/files/${id}`),
   move: (id, data) => api.post(`/files/${id}/move`, data),
