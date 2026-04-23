@@ -5,7 +5,6 @@ DOMAIN="${DOMAIN:-localhost}"
 PROTOCOL="${PROTOCOL:-http}"
 BACKEND_URL="${BACKEND_URL:-http://backend:8000}"
 FRONTEND_URL="${FRONTEND_URL:-http://frontend:80}"
-ONLYOFFICE_URL="${ONLYOFFICE_URL:-http://onlyoffice:80}"
 SSL_CERT="${SSL_CERT:-/etc/nginx/ssl/cert.pem}"
 SSL_KEY="${SSL_KEY:-/etc/nginx/ssl/key.pem}"
 
@@ -28,36 +27,6 @@ COMMON_LOCATIONS='
         proxy_pass '"$BACKEND_URL"';
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-    }
-
-    location /onlyoffice/ {
-        proxy_pass '"$ONLYOFFICE_URL"'/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        # $http_host preserves the port — OO uses Host to build its cache URLs
-        proxy_set_header Host $http_host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $http_host;
-        proxy_set_header X-Forwarded-Port $server_port;
-        proxy_read_timeout 86400;
-        client_max_body_size 110m;
-    }
-
-    # OnlyOffice generates /cache/, /doc/, /info/ URLs at root. Proxy those too.
-    location ~ ^/(cache|doc|info|coauthoring|web-apps|sdkjs|sdkjs-plugins|fonts|dictionaries|welcome)/ {
-        proxy_pass '"$ONLYOFFICE_URL"';
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $http_host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 86400;
-        client_max_body_size 110m;
     }
 
     location / {

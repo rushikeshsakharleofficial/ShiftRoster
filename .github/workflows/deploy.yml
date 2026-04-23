@@ -109,10 +109,8 @@ jobs:
       - name: Rebuild application containers
         run: |
           cd /projects/ShiftRoster
-          # Only rebuild services with local Dockerfiles; third-party images (onlyoffice, runner) need no rebuild
+          # Only rebuild services with local Dockerfiles; third-party images (runner) need no rebuild
           docker compose up -d --build --no-deps backend frontend nginx
-          # Start onlyoffice if not running (first deploy); no image rebuild needed
-          docker compose up -d onlyoffice
 
       - name: Verify healthy
         run: |

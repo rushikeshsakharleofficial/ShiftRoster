@@ -1,5 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -7,14 +6,8 @@ from bson import ObjectId
 from db import db
 from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit, create_notification
 import uuid
-import time
-import jwt as _pyjwt
-import httpx
 from pathlib import Path
 import os
-from docx import Document as _DocxDoc
-from openpyxl import Workbook as _Workbook
-from pptx import Presentation as _Presentation
 
 router = APIRouter(prefix="/api/sops", tags=["sops"], redirect_slashes=False)
 
@@ -39,145 +32,6 @@ _ALLOWED_MIME = (
     "image/png",
     "image/jpeg",
 )
-
-# ── OnlyOffice constants ──
-_OO_JWT_SECRET = os.getenv("ONLYOFFICE_JWT_SECRET", "")
-_OO_BACKEND_URL = os.getenv("BACKEND_INTERNAL_URL", "http://backend:8000")
-_OO_EXT = {"document": "docx", "spreadsheet": "xlsx", "presentation": "pptx"}
-_OO_DOC_TYPE = {"docx": "word", "xlsx": "cell", "pptx": "slide"}
-_OO_MIME = {
-    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-}
-
-
-def _as_oid(val):
-    """Normalize an org_id that may arrive as a str OR ObjectId."""
-    if val is None:
-        return None
-    if isinstance(val, ObjectId):
-        return val
-    return ObjectId(val)
-
-
-async def _get_or_create_sops_folder(org_oid, uid, now):
-    """Return ObjectId of the shared 'SOPs' folder in the file manager, creating it once per org."""
-    existing = await db.filemanager_items.find_one({
-        "org_id": org_oid,
-        "scope": "shared",
-        "parent_id": None,
-        "type": "folder",
-        "name": "SOPs",
-    })
-    if existing:
-        return existing["_id"]
-    doc = {
-        "org_id": org_oid,
-        "owner_id": uid,
-        "parent_id": None,
-        "scope": "shared",
-        "type": "folder",
-        "name": "SOPs",
-        "storage_name": None,
-        "size": 0,
-        "mime": None,
-        "created_at": now,
-        "updated_at": now,
-    }
-    result = await db.filemanager_items.insert_one(doc)
-    return result.inserted_id
-
-
-async def _register_sop_in_filemanager(sop_oid, title, oo_filename, org_id, uid, now):
-    """Insert a filemanager_items row pointing to this SOP's OO file. Idempotent on sop_id."""
-    org_oid = _as_oid(org_id)
-    ext = oo_filename.rsplit(".", 1)[-1] if "." in oo_filename else "docx"
-    mime = _OO_MIME.get(ext, "application/octet-stream")
-    try:
-        size = (UPLOADS_DIR / oo_filename).stat().st_size
-    except Exception:
-        size = 0
-    parent_id = await _get_or_create_sops_folder(org_oid, uid, now)
-    await db.filemanager_items.update_one(
-        {"org_id": org_oid, "sop_id": sop_oid},
-        {"$setOnInsert": {
-            "org_id": org_oid,
-            "owner_id": uid,
-            "parent_id": parent_id,
-            "scope": "shared",
-            "type": "file",
-            "storage_name": None,
-            "sop_id": sop_oid,
-            "created_at": now,
-        }, "$set": {
-            "name": f"{title}.{ext}",
-            "size": size,
-            "mime": mime,
-            "updated_at": now,
-        }},
-        upsert=True,
-    )
-
-
-def _create_oo_file(sop_id: str, sop_type: str) -> Optional[str]:
-    """Create a blank OnlyOffice file; return relative filename or None if not an OO type."""
-    ext = _OO_EXT.get(sop_type)
-    if not ext:
-        return None
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"oo_{sop_id}.{ext}"
-    file_path = UPLOADS_DIR / filename
-    try:
-        if ext == "docx":
-            _DocxDoc().save(str(file_path))
-        elif ext == "xlsx":
-            _Workbook().save(str(file_path))
-        elif ext == "pptx":
-            _Presentation().save(str(file_path))
-        return filename
-    except Exception:
-        return None
-
-
-def _extract_plain_text(oo_filename: str) -> str:
-    """Read text content out of a saved OO file for the read-only preview."""
-    file_path = UPLOADS_DIR / oo_filename
-    if not file_path.exists():
-        return ""
-    ext = oo_filename.rsplit(".", 1)[-1].lower() if "." in oo_filename else ""
-    try:
-        if ext == "docx":
-            doc = _DocxDoc(str(file_path))
-            return "\n\n".join(p.text for p in doc.paragraphs if p.text)
-        if ext == "xlsx":
-            from openpyxl import load_workbook
-            wb = load_workbook(str(file_path), data_only=True, read_only=True)
-            lines = []
-            for sheet in wb.worksheets:
-                lines.append(f"# {sheet.title}")
-                for row in sheet.iter_rows(values_only=True):
-                    cells = ["" if v is None else str(v) for v in row]
-                    if any(cells):
-                        lines.append(" | ".join(cells))
-                lines.append("")
-            wb.close()
-            return "\n".join(lines)
-        if ext == "pptx":
-            pres = _Presentation(str(file_path))
-            lines = []
-            for i, slide in enumerate(pres.slides, 1):
-                lines.append(f"# Slide {i}")
-                for shape in slide.shapes:
-                    if shape.has_text_frame:
-                        for para in shape.text_frame.paragraphs:
-                            if para.text:
-                                lines.append(para.text)
-                lines.append("")
-            return "\n".join(lines)
-    except Exception:
-        return ""
-    return ""
 
 
 async def _is_readonly_user(user: dict) -> bool:
@@ -300,7 +154,6 @@ async def create_sop(req: SOPCreate, user=Depends(get_current_user)):
         "pending_content": None,
         "pending_edit_by": None,
         "pending_edit_at": None,
-        "oo_file": None,
         "owner": uid,
         "created_by": uid,
         "created_at": now,
@@ -311,19 +164,6 @@ async def create_sop(req: SOPCreate, user=Depends(get_current_user)):
     result = await db.sops.insert_one(new_sop)
     new_sop["_id"] = result.inserted_id
     sop_id = str(result.inserted_id)
-
-    # Create blank OnlyOffice file for document/spreadsheet/presentation types
-    oo_filename = _create_oo_file(sop_id, req.sop_type)
-    if oo_filename:
-        await db.sops.update_one(
-            {"_id": result.inserted_id},
-            {"$set": {"oo_file": oo_filename}},
-        )
-        new_sop["oo_file"] = oo_filename
-        # Register in file manager so it shows under the shared "SOPs" folder
-        await _register_sop_in_filemanager(
-            result.inserted_id, req.title, oo_filename, user.get("org_id"), uid, now
-        )
 
     await db.sop_versions.insert_one({
         "sop_id": result.inserted_id,
@@ -441,14 +281,6 @@ async def update_sop(sop_id: str, req: SOPUpdate, user=Depends(get_current_user)
 
     await db.sops.update_one({"_id": _to_oid(sop_id)}, {"$set": updates})
 
-    # Keep the file manager entry in sync with title changes
-    if "title" in updates and sop.get("oo_file"):
-        oo_ext = sop["oo_file"].rsplit(".", 1)[-1] if "." in sop["oo_file"] else "docx"
-        await db.filemanager_items.update_one(
-            {"org_id": _as_oid(user.get("org_id")), "sop_id": _to_oid(sop_id)},
-            {"$set": {"name": f"{updates['title']}.{oo_ext}", "updated_at": now}},
-        )
-
     await log_audit(user.get("org_id"), user["id"], "update", "sop", sop_id)
     updated = await db.sops.find_one({"_id": _to_oid(sop_id)})
     return serialize_doc(updated)
@@ -462,14 +294,8 @@ async def delete_sop(sop_id: str, user=Depends(get_current_user)):
     if not (str(sop["owner"]) == user["id"] or user.get("system_role") in ("admin", "manager")):
         raise HTTPException(403, "Only the SOP owner, admin, or manager can delete")
 
-    if sop.get("oo_file"):
-        (UPLOADS_DIR / sop["oo_file"]).unlink(missing_ok=True)
     await db.sops.delete_one({"_id": _to_oid(sop_id)})
     await db.sop_versions.delete_many({"sop_id": _to_oid(sop_id)})
-    # Remove the file manager mirror entry
-    await db.filemanager_items.delete_one(
-        {"org_id": _as_oid(sop.get("org_id")), "sop_id": _to_oid(sop_id)}
-    )
     await log_audit(user.get("org_id"), user["id"], "delete", "sop", sop_id)
     return {"ok": True}
 
@@ -723,251 +549,3 @@ async def update_publish_status(sop_id: str, req: SOPPublish, user=Depends(get_c
     await log_audit(user.get("org_id"), user["id"], "update_publish_status", "sop", sop_id, diff={"publish_status": req.publish_status})
     updated = await db.sops.find_one({"_id": _to_oid(sop_id)})
     return serialize_doc(updated)
-
-
-# ── OnlyOffice editor integration ──
-
-@router.get("/{sop_id}/editor-config")
-async def get_editor_config(sop_id: str, user=Depends(get_current_user)):
-    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
-    if not sop:
-        raise HTTPException(404, "SOP not found")
-    if not sop.get("oo_file"):
-        raise HTTPException(400, "SOP does not use OnlyOffice editor")
-
-    ext = Path(sop["oo_file"]).suffix.lstrip(".")
-    doc_type = _OO_DOC_TYPE.get(ext, "word")
-    _secret = _OO_JWT_SECRET or "oo-file-fallback-secret"
-
-    file_token = _pyjwt.encode(
-        {"sop_id": sop_id, "exp": int(time.time()) + 3600},
-        _secret,
-        algorithm="HS256",
-    )
-
-    doc_url = f"{_OO_BACKEND_URL}/api/sops/{sop_id}/file?t={file_token}"
-    callback_url = f"{_OO_BACKEND_URL}/api/sops/{sop_id}/onlyoffice-callback"
-    _fp = UPLOADS_DIR / sop["oo_file"]
-    if not _fp.exists():
-        new_oo = _create_oo_file(sop_id, sop.get("sop_type"))
-        if new_oo:
-            await db.sops.update_one(
-                {"_id": _to_oid(sop_id)},
-                {"$set": {"oo_file": new_oo}},
-            )
-            sop["oo_file"] = new_oo
-            _fp = UPLOADS_DIR / new_oo
-    # Key includes current timestamp so each browser session gets a fresh OO session.
-    # Prevents stale/corrupt OO cache from a prior failed session (e.g. callback 404 during
-    # backend restart) from poisoning future opens of the same document.
-    doc_key = f"{sop_id}_{sop.get('current_version', 1)}_{int(time.time())}"
-
-    is_editor = str(sop.get("owner", "")) == user["id"] or user.get("system_role") in ("admin", "manager")
-    can_edit = is_editor and sop.get("status") != "archived"
-
-    config = {
-        "document": {
-            "fileType": ext,
-            "key": doc_key,
-            "title": sop.get("title", "Untitled"),
-            "url": doc_url,
-            "permissions": {
-                "edit": can_edit,
-                "download": True,
-                "print": True,
-            },
-        },
-        "documentType": doc_type,
-        "editorConfig": {
-            "callbackUrl": callback_url,
-            "mode": "edit" if can_edit else "view",
-            "user": {
-                "id": user["id"],
-                "name": user.get("full_name") or user.get("username", "User"),
-            },
-            "customization": {
-                "autosave": True,
-                "forcesave": True,
-                "compactHeader": True,
-            },
-        },
-        "width": "100%",
-        "height": "100%",
-    }
-
-    if _OO_JWT_SECRET:
-        config["token"] = _pyjwt.encode(config.copy(), _OO_JWT_SECRET, algorithm="HS256")
-
-    return config
-
-
-@router.get("/{sop_id}/file")
-async def serve_sop_file(sop_id: str, t: str):
-    """Serve SOP OnlyOffice file — short-lived token auth for OO server and browser downloads."""
-    _secret = _OO_JWT_SECRET or "oo-file-fallback-secret"
-    try:
-        payload = _pyjwt.decode(t, _secret, algorithms=["HS256"])
-        if payload.get("sop_id") != sop_id:
-            raise HTTPException(403, "Token mismatch")
-    except _pyjwt.PyJWTError:
-        raise HTTPException(401, "Invalid or expired token")
-
-    sop = await db.sops.find_one({"_id": _to_oid(sop_id)})
-    if not sop or not sop.get("oo_file"):
-        raise HTTPException(404, "File not found")
-
-    file_path = UPLOADS_DIR / sop["oo_file"]
-    if not file_path.exists():
-        raise HTTPException(404, "File not found on disk")
-
-    return FileResponse(str(file_path))
-
-
-class SOPForceSave(BaseModel):
-    doc_key: str
-
-
-@router.post("/{sop_id}/force-save")
-async def force_save_sop(sop_id: str, req: SOPForceSave, user=Depends(get_current_user)):
-    """Ask OnlyOffice to save the document RIGHT NOW (Google-Docs-style save-while-typing).
-
-    Client debounces keystrokes (~2s) and hits this. We forward a forcesave command to
-    OO's CommandService with the current doc_key; OO responds by invoking our
-    /onlyoffice-callback with status=6, which writes the bytes to disk.
-    """
-    if not _OO_JWT_SECRET:
-        raise HTTPException(500, "OnlyOffice JWT secret not configured")
-
-    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
-    if not sop or not sop.get("oo_file"):
-        raise HTTPException(404, "SOP not found or not an OnlyOffice document")
-
-    payload = {
-        "c": "forcesave",
-        "key": req.doc_key,
-        "userdata": user["id"],
-    }
-    payload["token"] = _pyjwt.encode({"payload": payload}, _OO_JWT_SECRET, algorithm="HS256")
-
-    oo_internal = os.getenv("ONLYOFFICE_INTERNAL_URL", "http://onlyoffice")
-    command_url = f"{oo_internal}/coauthoring/CommandService.ashx"
-
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                command_url,
-                json=payload,
-                headers={"Authorization": f"Bearer {payload['token']}"},
-                timeout=10.0,
-            )
-            # OO returns {"error": N}. error=0 = success, error=4 = no clients editing,
-            # error=3 = no doc found. 4 is acceptable (nothing to save).
-            data = resp.json() if resp.status_code == 200 else {"error": resp.status_code}
-            return data
-    except Exception as e:
-        raise HTTPException(502, f"Force-save request failed: {e}")
-
-
-@router.post("/{sop_id}/onlyoffice-callback")
-async def onlyoffice_callback(sop_id: str, request: Request):
-    """OnlyOffice document server save callback.
-
-    Status codes:
-      1 = document is being edited
-      2 = ready to save (all users closed, or autosave)
-      3 = document saving error
-      4 = closed with no changes
-      6 = force-save success (user hit save, or forcesave triggered)
-      7 = force-save error
-    """
-    import logging
-    logger = logging.getLogger("sops.onlyoffice_callback")
-    body = await request.json()
-
-    # Always verify JWT — prevents unauthenticated content injection via fake callbacks
-    if not _OO_JWT_SECRET:
-        return {"error": 1}
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header.removeprefix("Bearer ").strip() or body.get("token", "")
-    if not token:
-        logger.warning("OO callback missing token for sop=%s", sop_id)
-        return {"error": 1}
-    try:
-        decoded = _pyjwt.decode(token, _OO_JWT_SECRET, algorithms=["HS256"])
-    except _pyjwt.PyJWTError as e:
-        logger.warning("OO callback JWT verify failed for sop=%s: %s", sop_id, e)
-        return {"error": 1}
-
-    # When OO signs the Authorization header, the JWT payload is wrapped as {"payload": {...}}.
-    # When token is in body, the payload is the body itself. Unwrap if needed.
-    body = decoded.get("payload") if isinstance(decoded.get("payload"), dict) else decoded
-
-    status = body.get("status")
-    logger.info("OO callback sop=%s status=%s", sop_id, status)
-
-    # Statuses 2 and 6 both mean "save the document now"; url contains the updated file.
-    if status in (2, 6):
-        download_url = body.get("url")
-        if not download_url:
-            logger.warning("OO callback sop=%s status=%s missing url", sop_id, status)
-            return {"error": 1}
-
-        # OO may emit internal URLs (http://127.0.0.1:8000/...) that the backend can't
-        # reach. Rewrite to the onlyoffice docker service hostname.
-        from urllib.parse import urlparse, urlunparse
-        parsed = urlparse(download_url)
-        if parsed.hostname in ("127.0.0.1", "localhost", "documentserver"):
-            download_url = urlunparse(parsed._replace(netloc="onlyoffice"))
-            logger.info("OO callback rewrote download_url → %s", download_url)
-
-        sop = await db.sops.find_one({"_id": _to_oid(sop_id)})
-        if not sop or not sop.get("oo_file"):
-            return {"error": 1}
-
-        file_path = UPLOADS_DIR / sop["oo_file"]
-        try:
-            async with httpx.AsyncClient(follow_redirects=True) as client:
-                resp = await client.get(download_url, timeout=30.0)
-                if resp.status_code != 200:
-                    logger.error("OO download failed: status=%s url=%s", resp.status_code, download_url)
-                    return {"error": 1}
-                file_path.write_bytes(resp.content)
-                logger.info("OO saved %d bytes to %s", len(resp.content), file_path)
-        except Exception as e:
-            logger.exception("OO download exception: %s", e)
-            return {"error": 1}
-
-        now = datetime.now(timezone.utc)
-        new_version = sop.get("current_version", 1) + 1
-
-        await db.sop_versions.insert_one({
-            "sop_id": sop["_id"],
-            "org_id": sop.get("org_id"),
-            "version": sop.get("current_version", 1),
-            "content": {},
-            "oo_file": sop["oo_file"],
-            "sop_type": sop.get("sop_type"),
-            "changed_by": None,
-            "changed_at": now,
-            "change_note": "Auto-saved via OnlyOffice",
-        })
-
-        # Extract a plain-text preview for the read-only view mode
-        plain_text = _extract_plain_text(sop["oo_file"])
-
-        await db.sops.update_one(
-            {"_id": sop["_id"]},
-            {"$set": {
-                "current_version": new_version,
-                "updated_at": now,
-                "plain_text": plain_text,
-            }},
-        )
-
-        # Refresh the file manager entry's size + timestamp so Files view stays current
-        await db.filemanager_items.update_one(
-            {"org_id": _as_oid(sop.get("org_id")), "sop_id": sop["_id"]},
-            {"$set": {"size": len(resp.content), "updated_at": now}},
-        )
-
-    return {"error": 0}
