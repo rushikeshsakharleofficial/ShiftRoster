@@ -138,3 +138,8 @@ tests/
 AGENTS.md
 GEMINI.md
 CLAUDE.md
+
+# AI agent skill folders
+.agents/
+skills/
+skills-lock.json

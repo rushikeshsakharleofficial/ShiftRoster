@@ -1,206 +1,127 @@
-# 📅 ShiftRoster: Enterprise-Grade Shift Management & Roster Automation
+# 📅 ShiftRoster: The Operational OS for Mission-Critical Teams
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![React 19](https://img.shields.io/badge/Frontend-React%2019-61DAFB.svg?style=flat&logo=react)](https://react.dev/)
-[![MongoDB](https://img.shields.io/badge/Database-MongoDB-47A248.svg?style=flat&logo=mongodb)](https://www.mongodb.com/)
+[![MongoDB 7](https://img.shields.io/badge/Database-MongoDB%207-47A248.svg?style=flat&logo=mongodb)](https://www.mongodb.com/)
 [![Docker](https://img.shields.io/badge/Infrastructure-Docker-2496ED.svg?style=flat&logo=docker)](https://www.docker.com/)
 
-**ShiftRoster** is a high-performance, open-source shift management platform designed for mission-critical operations teams. It consolidates scheduling, attendance tracking, real-time collaboration, and complex permission management into a single, cohesive workspace.
+**ShiftRoster** is a high-performance, open-source Operational OS designed for elite operations teams. Beyond simple scheduling, it provides a unified workspace for **Zero-Trust Collaboration**, **Native Document Engineering**, and **Enterprise Identity Lifecycle**.
 
 ## 📍 Table of Contents
-- [🚀 Key Features](#-key-features)
-- [🛡️ Enterprise-Grade Security](#️-enterprise-grade-security)
-- [⚡ Performance](#-performance)
-- [⚙️ Tech Stack](#️-tech-stack)
-- [📦 Project Architecture](#-project-structure)
-- [🛠️ Quick Start (Docker)](#️-quick-start-docker)
-- [🧪 Testing](#-testing)
-- [🔐 Password Policy](#-password-policy)
-- [🎨 Branding](#-branding)
-- [🧠 How-to: Agentic Automation](#-how-to-agentic-automation)
+- [🚀 Key Modules](#-key-modules)
+- [📝 Office-Vibe: Native Editor Suite](#-office-vibe-native-editor-suite)
+- [🛡️ Zero-Trust Security (E2EE)](#️-zero-trust-security-e2ee)
+- [⚙️ Enterprise Compliance](#️-enterprise-compliance)
+- [⚡ Tech Stack](#-tech-stack)
+- [📦 Architecture](#-project-architecture)
+- [🛠️ Quick Start](#️-quick-start-docker)
+- [🧪 Quality Assurance](#-testing)
 - [🤝 Contributing](#-contributing)
 - [⚖️ License](#️-license)
 
-## 🚀 Key Features
+## 🚀 Key Modules
 
-*   **Intelligent Shift Calendar**: Interactive week/month views with drag-and-drop assignments, automated shift templates, and position-based staffing.
-*   **Real-Time Collaboration**: Built-in chat engine with channels, DMs, and presence indicators powered by high-concurrency WebSockets.
-*   **Presence & Attendance**: Biometric-ready clock-in/out system with late tracking, automated reports, and proximity indicators.
-*   **Dynamic IAM (Identity & Access Management)**: Granular resource-based access control (RBAC) allowing for custom permission groups and secure delegation.
-*   **Automated Handovers**: Structured digital handover notes to ensure zero information loss between operational shifts.
-*   **AMOLED-Friendly Interface**: Modern, ultra-dark theme support optimized for low-light operations and high-end displays.
+*   **Intelligent Shift Roster**: Interactive calendar with drag-and-drop, recurrence engines, and position-based staffing.
+*   **Encrypted Messaging**: Real-time Chat & Stories with E2EE, channels, and rich media support.
+*   **Structured Handovers**: Digital logbooks ensuring zero information loss during shift changes.
+*   **Presence & Attendance**: Biometric-ready clock-in/out with automated late tracking and reporting.
+*   **File Manager**: Centralized, secure storage for operational assets with inline previews.
 
-## 🛡️ Enterprise-Grade Security
+## 📝 Office-Vibe: Native Editor Suite
 
-ShiftRoster is built with a **Security-First** philosophy:
--   **Multi-Factor Authentication (MFA)**: Native TOTP support (Google Authenticator/Authy) with QR code setup.
--   **Secure Session Management**: JWT-based authentication using **HTTP-only, Secure, and SameSite** cookies to prevent XSS and CSRF attacks.
--   **Refresh Token Rotation**: Each `/refresh` issues a new refresh token; old tokens are invalidated to limit replay window.
--   **Atomic Password Setup**: TOCTOU-safe `find_one_and_update` prevents setup-token reuse on password creation.
--   **Rate Limiting**: `/forgot-password` throttled to 3 attempts/hour per IP+email to block enumeration and SMTP DoS.
--   **File Upload Hardening**: Blocked extension list (`.php`, `.exe`, `.sh`, ...) + MIME whitelist + streaming writer (no in-memory buffering).
--   **Startup Secret Validation**: Missing `JWT_SECRET` / `MONGO_URL` / `DB_NAME` fails boot; `JWT_SECRET` enforced ≥ 32 chars.
--   **CORS Tightening**: Explicit method/header lists instead of wildcards when `allow_credentials=True`.
--   **Admin-Configurable Password Policy**: Per-org min/max length, uppercase/lowercase/digit/special requirements.
--   **Comprehensive Audit Logs**: Every administrative action is cryptographically timestamped and logged for compliance and security auditing.
--   **Fine-Grained IAM**: Custom groups with `Resource x Action` mapping (e.g., `Shifts:Edit`, `Financials:Read`).
+ShiftRoster features a custom-built, high-performance editor suite—eliminating the need for heavy external dependencies like OnlyOffice.
 
-## ⚡ Performance
+*   **Rich Doc Editor**: Tiptap-powered real-time editor for SOPs with full formatting, image embedding, and version history.
+*   **Grid (Excel-like)**: In-browser spreadsheet editing for operational data with formula support (SUM/AVG/COUNT).
+*   **Presentations**: Slide deck builder for shift briefings and operational reviews.
+*   **Native Previews**: Instant previews for Markdown, JSON, CSV, PDF, and Office formats.
 
--   **Tuned Mongo Pool**: `maxPoolSize=50`, retry reads/writes, idle timeouts to handle concurrent async workload without queueing.
--   **Parallel WebSocket Broadcasts**: Presence fan-out via `asyncio.gather` (one slow client no longer blocks others).
--   **N+1 Query Elimination**: Calendar notes batched (≈400 queries → 3); chat unread counts aggregated (≈100 queries → 2).
--   **Streaming File Uploads**: 1 MB chunks instead of full in-memory read; 100 MB uploads no longer spike memory.
--   **Parallel Startup Indexes**: All collection index creations run concurrently; fast cold-start.
--   **Frontend Code Splitting**: Heavy pages (Reports/recharts) and chat emoji picker (`emoji-mart` 3.2 MB) lazy-loaded via `React.lazy`.
+## 🛡️ Zero-Trust Security (E2EE)
 
-## ⚙️ Tech Stack
+Built with a **Security-First** philosophy for mission-critical environments:
+-   **End-to-End Encryption (E2EE)**: Messages and files are encrypted using **P-256 ECDH** key exchange and **AES-256-GCM** payloads. Keys never leave the client.
+-   **BIP39 Mnemonic Backup**: Users generate a 12-word recovery phrase to restore access to encrypted data across devices.
+-   **Secure Session Management**: JWT-based auth using **HTTP-only, Secure, SameSite** cookies with **Refresh Token Rotation**.
+-   **Audit Persistence**: Every administrative action is cryptographically timestamped and logged (Immutable Audit Trail).
 
-### **Backend (Performance Core)**
--   **Runtime**: Python 3.11+
--   **Framework**: **FastAPI** (Fully Asynchronous)
--   **Database**: **MongoDB** with Motor Async Driver
--   **Task Queue**: Integrated background tasks for automated purging and reminders.
+## ⚙️ Enterprise Compliance
+
+-   **LDAP/Active Directory**: Native sync for user lifecycle, group mapping, and single-sign-on (SSO).
+-   **Automated Housekeeping**: Admin-controlled purging policies (FastAPI background tasks + MongoDB TTL) to meet data retention requirements.
+-   **Granular IAM**: Resource-Action based Access Control (RBAC) allowing for custom permission groups (e.g., `Shifts:Edit`, `Financials:Read`).
+-   **Password Hardening**: Admin-configurable complexity policies (length, case, digits, specials).
+
+## ⚡ Tech Stack
+
+### **Backend (Asynchronous Core)**
+-   **Framework**: FastAPI (Python 3.11+)
+-   **Database**: MongoDB 7 (Motor Async Driver)
+-   **Security**: Cryptography (Fernet & RSA), BIP39 Seed Logic
+-   **Tasks**: Background purging and reminder engines
 
 ### **Frontend (Modern UX)**
--   **Framework**: **React 19** + Vite
--   **Styling**: Tailwind CSS & Radix UI Primitives
--   **Components**: shadcn/ui (Enterprise standard)
--   **State/Routing**: React Router 7 & Context API
-
-### **Infrastructure (Reliability)**
--   **Reverse Proxy**: Nginx (Optimized for WebSockets)
--   **Containerization**: Docker & Docker Compose
--   **SSL**: Built-in support for custom certificates.
+-   **Framework**: React 19 + Vite
+-   **State**: Context API + React Router 7
+-   **Components**: shadcn/ui + Lucide + Radix UI
+-   **Editors**: Tiptap + ExcelJS
 
 ## 📦 Project Architecture
 
 ```
 backend/
-  routes/                # Modular API (IAM, Auth, Chat, Shifts, etc.)
-  tasks/                 # Automated background operations
-  auth_utils.py          # Cryptography and Token handling
-  presence_manager.py    # High-concurrency WS handler
-  db.py                  # Async MongoDB singleton
+  routes/                # Modular API (IAM, Auth, Chat, SOPs, etc.)
+  tasks/                 # Automated Housekeeping (Purging, Reminders)
+  auth_utils.py          # Cryptography & JWT logic
+  presence_manager.py    # High-concurrency WebSocket handler
 
 frontend/
-  src/pages/             # 17+ route-level operational pages
-  src/components/ui/     # Reusable shadcn/ui primitives
-  src/contexts/          # Global State (Auth, Chat, Theme)
+  src/pages/             # 20+route-level operational pages
+  src/lib/crypto.js      # E2EE & Mnemonic recovery logic
   src/lib/api.js         # Optimized Axios interceptors
 ```
 
 ## 🛠️ Quick Start (Docker)
 
-1.  **Clone the Repository**:
+1.  **Clone & Configure**:
     ```bash
     git clone https://github.com/rushikeshsakharleofficial/ShiftRoster.git
     cd ShiftRoster
+    cp .env.example .env
     ```
 
-2.  **Set Environment Variables**:
-    Create a `.env` file in the root:
-    ```env
-    # Required (boot will fail fast if missing)
-    JWT_SECRET=$(openssl rand -hex 32)            # must be >= 32 chars
-    MONGO_USER=shiftroster
-    MONGO_PASSWORD=$(openssl rand -base64 24)
-    SECURE_COOKIES=true                            # set false only for local HTTP
-    DOMAIN=example.com
-    PROTOCOL=https
-    # Optional
-    CORS_ORIGINS=https://app.example.com,https://admin.example.com
-    MONGO_MAX_POOL=50
-    MONGO_MIN_POOL=5
-    ```
-
-3.  **Provide SSL Certificates** (HTTPS):
-    Place `cert.pem` and `key.pem` in `./ssl/` before launching. For local testing:
+2.  **Generate Keys**:
     ```bash
-    mkdir -p ssl && openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-      -keyout ssl/key.pem -out ssl/cert.pem -subj "/CN=localhost"
+    # Generate the Fernet key for database field encryption
+    python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     ```
 
-4.  **Launch the Stack**:
+3.  **Launch**:
     ```bash
-    docker compose up -d
+    docker compose up -d --build
     ```
 
-5.  **First-Time Setup**:
-    Visit `http://<host>:8080/setup` (or HTTPS on `8443`) and create the initial SuperAdmin account via the web UI.
+4.  **Setup**:
+    Visit `http://localhost:8080/setup` to create the initial SuperAdmin.
 
-## 🧪 Testing
+## 🧪 Quality Assurance
 
-Full test infrastructure is included — pytest for backend, Vitest for frontend, Selenium for E2E.
-
-```bash
-# Backend
-cd backend && pip install -r requirements-dev.txt
-pytest tests/ -v --cov                 # unit + integration + coverage
-pytest tests/e2e/ -v                   # E2E (Selenium, services must be up)
-
-# Frontend
-cd frontend && npm install
-npm run test                           # Vitest watch mode
-npm run test:coverage                  # coverage report
-npm run lint                           # ESLint
-```
-
-CI runs on every push/PR via GitHub Actions (`.github/workflows/tests.yml`):
-- Hard-blocks merges on test failures
-- Coverage thresholds: backend ≥ 80%, frontend ≥ 70%
-
-See [TESTING.md](./TESTING.md) for fixture docs, patterns, and troubleshooting.
-
-## 🔐 Password Policy
-
-Admins configure password rules per organization — no hardcoded defaults past initial setup.
-
-**Settings → Policy → Password Policy** (admin only):
-- Min length (6–128) / Max length (8–256)
-- Require uppercase / lowercase / digit / special character (independent toggles)
-- Persists to `organizations.password_policy`
-- Enforced on: initial setup, `setup-password` token flow, admin-created users with explicit passwords
-
-**API:**
-```bash
-# Admin: update policy
-PUT /api/organization  { "password_policy": {"min_length": 14, "require_digit": true} }
-
-# Authed: read current policy (for frontend to show requirements)
-GET /api/organization/password-policy
-
-# Public: policy by org_id (for setup-password page)
-GET /api/organization/password-policy/public?org_id=<id>
-```
-
-## 🎨 Branding
-
-Favicon and page title are driven by organization settings — **no default logo**, nothing loads until admin uploads one.
+ShiftRoster maintains high stability through a multi-tier testing strategy:
+-   **Backend**: Pytest (Unit + Integration) with Coverage reports.
+-   **Frontend**: Vitest for component logic.
+-   **E2EE**: Playwright-based End-to-End workflow testing.
 
 ```bash
-PUT /api/organization  { "brand_name": "Acme Corp", "logo_url": "https://cdn.acme.com/logo.svg" }
+# Run all tests
+cd backend && pytest
+cd frontend && npm run test
 ```
-
-Frontend reads `GET /api/public/branding` on every page load and injects `<link rel="icon">` + updates `document.title` only when `logo_url` is non-empty.
-
-## 🧠 How-to: Agentic Automation
-
-### **How to integrate ShiftRoster with AI Agents?**
-ShiftRoster features a clean, RESTful API and a structured IAM system, making it perfect for agentic integration. You can easily point a Gemini agent to the `/api/shifts` endpoint to automate roster generation based on employee availability or history.
-
-### **How to automate attendance reports?**
-The backend includes a `tasks/` module. You can extend the `purging.py` or create a new task to generate PDF reports and email them via the `email_utils.py` module every Sunday at midnight.
 
 ## 🤝 Contributing
-Contributions are welcome! Please follow these steps:
-1.  Fork the repo and create your feature branch.
-2.  Ensure your code follows the **design_guidelines.json**.
-3.  Submit a PR with a detailed explanation of changes.
+Contributions are welcome! Please follow our **design_guidelines.json** and ensure all new features include appropriate tests.
 
 ## ⚖️ License
-Licensed under the **Apache License 2.0**. This ensures your right to use, modify, and distribute the software while protecting the maintainers from liability. See the [LICENSE](./LICENSE) file for details.
+Licensed under the **Apache License 2.0**.
 
 ---
 *Developed for elite operations teams. Stability: 100% | Performance: Optimized.*
