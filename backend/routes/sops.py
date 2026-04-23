@@ -294,6 +294,27 @@ async def delete_sop(sop_id: str, user=Depends(get_current_user)):
     if not (str(sop["owner"]) == user["id"] or user.get("system_role") in ("admin", "manager")):
         raise HTTPException(403, "Only the SOP owner, admin, or manager can delete")
 
+    # Collect all unique file paths from current SOP and its versions
+    file_urls = set()
+    if sop.get("file_url"):
+        file_urls.add(sop["file_url"])
+
+    versions_cursor = db.sop_versions.find({"sop_id": _to_oid(sop_id)})
+    async for v in versions_cursor:
+        if v.get("file_url"):
+            file_urls.add(v["file_url"])
+
+    # Physical cleanup
+    for url in file_urls:
+        if url.startswith("/uploads/"):
+            filename = url.replace("/uploads/", "")
+            file_path = UPLOADS_DIR / filename
+            try:
+                if file_path.exists():
+                    file_path.unlink()
+            except Exception as e:
+                print(f"Failed to delete SOP file {file_path}: {e}")
+
     await db.sops.delete_one({"_id": _to_oid(sop_id)})
     await db.sop_versions.delete_many({"sop_id": _to_oid(sop_id)})
     await log_audit(user.get("org_id"), user["id"], "delete", "sop", sop_id)
