@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { filesApi, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
+import mammoth from "mammoth";
+import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -654,7 +656,9 @@ function FilePreviewDialog({ file, onClose, onDownload }) {
   const mime = file.mime || "";
   const name = file.name || "";
   const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
-  const isOODoc = ["docx", "xlsx", "pptx"].includes(ext);
+  const isDocx = ext === "docx";
+  const isXlsx = ext === "xlsx";
+  const isPptx = ext === "pptx";
   // previewUrl = Content-Disposition: inline so browser renders instead of downloading
   const url = filesApi.previewUrl(file.id);
   return (
@@ -669,8 +673,15 @@ function FilePreviewDialog({ file, onClose, onDownload }) {
           </DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-auto bg-muted/30 flex items-center justify-center">
-          {isOODoc ? (
-            <FileOOEmbed itemId={file.id} />
+          {isDocx ? (
+            <DocxViewer key={url} url={url} />
+          ) : isXlsx ? (
+            <XlsxViewer key={url} url={url} />
+          ) : isPptx ? (
+            <div className="text-center p-8">
+              <p className="text-sm text-muted-foreground mb-3">Inline preview not supported for .pptx yet.</p>
+              <Button onClick={onDownload}><Download className="h-4 w-4 mr-1" /> Download</Button>
+            </div>
           ) : mime.startsWith("image/") ? (
             <img src={url} alt={file.name} className="max-w-full max-h-[80vh] object-contain" />
           ) : mime.startsWith("video/") ? (
@@ -693,86 +704,70 @@ function FilePreviewDialog({ file, onClose, onDownload }) {
   );
 }
 
-// Embed OnlyOffice for a file-manager item (uploaded docx/xlsx/pptx).
-function FileOOEmbed({ itemId }) {
-  const editorRef = useRef(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const saveTimerRef = useRef(null);
-  const docKeyRef = useRef(null);
-
+// Self-made viewer for .docx — uses mammoth to convert to HTML in the browser.
+function DocxViewer({ url }) {
+  const [html, setHtml] = useState(null);
+  const [err, setErr] = useState(false);
   useEffect(() => {
     let alive = true;
-    let loadingTimeout = null;
-
-    const triggerForceSave = async () => {
-      if (!alive || !docKeyRef.current) return;
-      try { await filesApi.forceSave(itemId, docKeyRef.current); } catch (e) { console.warn(e); }
-    };
-
-    const initEditor = (config) => {
-      if (!alive) return;
-      try { editorRef.current?.destroyEditor?.(); } catch {}
-      editorRef.current = null;
-      docKeyRef.current = config?.document?.key || null;
-      loadingTimeout = setTimeout(() => { if (alive) setLoading(false); }, 3000);
-      editorRef.current = new window.DocsAPI.DocEditor("fm-oo-editor", {
-        ...config,
-        events: {
-          onDocumentReady: () => { if (alive) setLoading(false); },
-          onError: (e) => console.warn("OO error:", e?.data),
-          onDocumentStateChange: (e) => {
-            if (e?.data === true) {
-              if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-              saveTimerRef.current = setTimeout(triggerForceSave, 2000);
-            }
-          },
-        },
-      });
-    };
-
-    filesApi.getEditorConfig(itemId).then(({ data: config }) => {
-      if (!alive) return;
-      if (window.DocsAPI) { initEditor(config); return; }
-      const existing = document.getElementById("oo-api-js");
-      if (existing) { existing.addEventListener("load", () => initEditor(config)); return; }
-      const s = document.createElement("script");
-      s.id = "oo-api-js";
-      s.src = "/onlyoffice/web-apps/apps/api/documents/api.js";
-      s.onload = () => initEditor(config);
-      s.onerror = () => { if (alive) { setLoading(false); setError(true); } };
-      document.head.appendChild(s);
-    }).catch((e) => {
-      console.error("files editor-config failed", e);
-      if (alive) { setLoading(false); setError(true); }
-    });
-
-    return () => {
-      alive = false;
-      if (loadingTimeout) clearTimeout(loadingTimeout);
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      if (docKeyRef.current) filesApi.forceSave(itemId, docKeyRef.current).catch(() => {});
-      try { editorRef.current?.destroyEditor?.(); } catch {}
-      editorRef.current = null;
-    };
-  }, [itemId]);
-
+    fetch(url, { credentials: "include" })
+      .then((r) => r.arrayBuffer())
+      .then((buf) => mammoth.convertToHtml({ arrayBuffer: buf }))
+      .then((result) => { if (alive) setHtml(result.value); })
+      .catch(() => { if (alive) setErr(true); });
+    return () => { alive = false; };
+  }, [url]);
+  if (err) return <p className="p-6 text-sm text-muted-foreground">Failed to render DOCX.</p>;
+  if (!html) return <div className="p-6"><Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /></div>;
   return (
-    <div className="relative w-full h-[85vh] bg-background">
-      <div id="fm-oo-editor" style={{ width: "100%", height: "100%" }} />
-      {loading && !error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/80 pointer-events-none">
-          <div className="text-center space-y-2">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto" />
-            <p className="text-sm text-muted-foreground">Loading editor…</p>
-          </div>
-        </div>
-      )}
-      {error && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <p className="text-sm text-muted-foreground">Editor unavailable. Try refreshing.</p>
-        </div>
-      )}
+    <div
+      className="p-8 bg-white max-w-4xl mx-auto prose prose-sm"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+// Self-made viewer for .xlsx — uses SheetJS to render each sheet as an HTML table.
+function XlsxViewer({ url }) {
+  const [sheets, setSheets] = useState(null);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetch(url, { credentials: "include" })
+      .then((r) => r.arrayBuffer())
+      .then((buf) => {
+        const wb = XLSX.read(buf, { type: "array" });
+        const out = wb.SheetNames.map((n) => ({
+          name: n,
+          html: XLSX.utils.sheet_to_html(wb.Sheets[n]),
+        }));
+        if (alive) setSheets(out);
+      })
+      .catch(() => { if (alive) setErr(true); });
+    return () => { alive = false; };
+  }, [url]);
+  if (err) return <p className="p-6 text-sm text-muted-foreground">Failed to render XLSX.</p>;
+  if (!sheets) return <div className="p-6"><Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /></div>;
+  return (
+    <div className="flex flex-col w-full h-full">
+      <div className="flex gap-1 border-b bg-muted/20 px-2 py-1 overflow-x-auto">
+        {sheets.map((s, i) => (
+          <button
+            key={i}
+            onClick={() => setActiveIdx(i)}
+            className={
+              "px-3 py-1 text-xs rounded " +
+              (i === activeIdx ? "bg-background font-medium border" : "hover:bg-background/50")
+            }
+          >
+            {s.name}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 overflow-auto bg-white p-2 [&_table]:border-collapse [&_td]:border [&_td]:border-gray-200 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:bg-gray-100">
+        <div dangerouslySetInnerHTML={{ __html: sheets[activeIdx].html }} />
+      </div>
     </div>
   );
 }

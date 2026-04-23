@@ -20,7 +20,6 @@ import {
   Upload, Download, Pencil, Link, Image, Video, Bold,
   Italic, Underline, AlignLeft, AlignCenter, AlignRight,
   List, ListOrdered, Quote, Undo, Redo, Minus,
-  Maximize2, Minimize2, FileText
 } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -780,209 +779,6 @@ function FileEditor({ sop, onFileUploaded, editable }) {
   );
 }
 
-// ── OnlyOffice editor ──
-
-// Read-only markdown-ish preview shown until user clicks Edit.
-function PlainTextView({ sop, canEdit, onEdit }) {
-  const text = sop?.plain_text || "";
-  return (
-    <div className="relative border rounded-lg bg-muted/20" style={{ minHeight: "60vh" }}>
-      <div className="flex items-center gap-2 px-4 py-2 border-b bg-background/50">
-        <FileText className="h-4 w-4 text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">Read-only preview</span>
-        {canEdit && (
-          <Button size="sm" className="ml-auto" onClick={onEdit}>
-            <Pencil className="h-4 w-4 mr-1" />Edit
-          </Button>
-        )}
-      </div>
-      <div className="px-6 py-5">
-        {text ? (
-          <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-foreground">{text}</pre>
-        ) : (
-          <p className="text-sm text-muted-foreground italic">No content yet. Click Edit to start writing.</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
-function OnlyOfficeEditor({ sopId }) {
-  const editorRef = useRef(null);
-  const containerRef = useRef(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [fullscreen, setFullscreen] = useState(false);
-  const [saveStatus, setSaveStatus] = useState("idle"); // "idle" | "dirty" | "saving" | "saved"
-  const saveTimerRef = useRef(null);
-  const docKeyRef = useRef(null);
-
-  const toggleFullscreen = () => {
-    const el = containerRef.current;
-    if (!el) return;
-    if (!document.fullscreenElement) {
-      (el.requestFullscreen?.() || el.webkitRequestFullscreen?.())?.then?.(() => setFullscreen(true));
-    } else {
-      (document.exitFullscreen?.() || document.webkitExitFullscreen?.())?.then?.(() => setFullscreen(false));
-    }
-  };
-
-  useEffect(() => {
-    const onChange = () => setFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
-
-  useEffect(() => {
-    let alive = true;
-    let loadingTimeout = null;
-
-    const triggerForceSave = async () => {
-      if (!alive || !docKeyRef.current) return;
-      setSaveStatus("saving");
-      try {
-        await sopsApi.forceSave(sopId, docKeyRef.current);
-        if (alive) {
-          setSaveStatus("saved");
-          // Fade "Saved" after 2s
-          setTimeout(() => { if (alive) setSaveStatus("idle"); }, 2000);
-        }
-      } catch (e) {
-        console.warn("forceSave failed:", e);
-        if (alive) setSaveStatus("idle");
-      }
-    };
-
-    const initEditor = (config) => {
-      if (!alive) return;
-      try { editorRef.current?.destroyEditor?.(); } catch {}
-      editorRef.current = null;
-      docKeyRef.current = config?.document?.key || null;
-
-      // Hide loading spinner after 3s regardless — OO may render UI before firing onDocumentReady,
-      // or may fire onError silently for non-fatal changesError. Don't block the user.
-      loadingTimeout = setTimeout(() => {
-        if (alive) setLoading(false);
-      }, 3000);
-
-      const configWithEvents = {
-        ...config,
-        events: {
-          onDocumentReady: () => {
-            if (alive) setLoading(false);
-          },
-          onError: (event) => {
-            // Log all OO errors but never retry or show error overlay.
-            console.warn("OO event error:", event?.data);
-          },
-          onWarning: (event) => {
-            console.warn("OO warning:", event?.data);
-          },
-          onDocumentStateChange: (event) => {
-            // event.data === true means unsaved changes exist
-            if (!alive) return;
-            if (event?.data === true) {
-              setSaveStatus("dirty");
-              // Debounce: 2s after last change, trigger force-save (Google-Docs-style)
-              if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-              saveTimerRef.current = setTimeout(() => {
-                saveTimerRef.current = null;
-                triggerForceSave();
-              }, 2000);
-            }
-          },
-        },
-      };
-
-      editorRef.current = new window.DocsAPI.DocEditor("oo-editor", configWithEvents);
-    };
-
-    sopsApi.getEditorConfig(sopId).then(({ data: config }) => {
-      if (!alive) return;
-      if (window.DocsAPI) {
-        initEditor(config);
-        return;
-      }
-      const existing = document.getElementById("oo-api-js");
-      if (existing) {
-        existing.addEventListener("load", () => initEditor(config));
-        return;
-      }
-      const s = document.createElement("script");
-      s.id = "oo-api-js";
-      s.src = "/onlyoffice/web-apps/apps/api/documents/api.js";
-      s.onload = () => initEditor(config);
-      s.onerror = () => { if (alive) { setLoading(false); setError(true); } };
-      document.head.appendChild(s);
-    }).catch((e) => {
-      console.error("editor-config fetch failed:", e);
-      if (alive) { setLoading(false); setError(true); }
-    });
-
-    return () => {
-      alive = false;
-      if (loadingTimeout) clearTimeout(loadingTimeout);
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      // Flush any pending edits before unmount
-      if (saveStatus === "dirty" && docKeyRef.current) {
-        sopsApi.forceSave(sopId, docKeyRef.current).catch(() => {});
-      }
-      try { editorRef.current?.destroyEditor?.(); } catch {}
-      editorRef.current = null;
-    };
-  }, [sopId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <div
-      ref={containerRef}
-      className="relative border rounded-lg overflow-hidden bg-background"
-      style={{ height: fullscreen ? "100vh" : "80vh" }}
-    >
-      {/* Top-right controls */}
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
-        {saveStatus === "dirty" && (
-          <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 pointer-events-none">Unsaved</span>
-        )}
-        {saveStatus === "saving" && (
-          <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 pointer-events-none">Saving…</span>
-        )}
-        {saveStatus === "saved" && (
-          <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200 pointer-events-none">Saved</span>
-        )}
-        <button
-          type="button"
-          onClick={toggleFullscreen}
-          title={fullscreen ? "Exit full screen" : "Full screen"}
-          className="h-7 w-7 rounded bg-background/80 border border-border hover:bg-muted flex items-center justify-center"
-        >
-          {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-        </button>
-      </div>
-      <div id="oo-editor" style={{ width: "100%", height: "100%" }} />
-      {loading && !error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/80 pointer-events-none">
-          <div className="text-center space-y-3">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto" />
-            <p className="text-sm text-muted-foreground">Loading document editor…</p>
-          </div>
-        </div>
-      )}
-      {error && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center space-y-3 p-8">
-            <AlertTriangle className="h-10 w-10 mx-auto text-amber-500" />
-            <p className="font-medium">Document editor unavailable</p>
-            <p className="text-sm text-muted-foreground max-w-sm">
-              Failed to load editor configuration. Refresh the page.
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Main page ──
 
 export default function SOPEditorPage() {
@@ -1225,7 +1021,6 @@ export default function SOPEditorPage() {
   const canEdit = !isArchived;
   const canDirect = canDirectEdit(sop);
   const showPendingBanner = sop.has_pending_edit && (isOwner(sop) || isPrivileged);
-  const isOOType = !!sop.oo_file;
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -1266,9 +1061,9 @@ export default function SOPEditorPage() {
           </select>
         )}
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {/* Export / Import — legacy editors only */}
-          {!isOOType && <Button variant="outline" size="sm" onClick={handleExportPDF}><Download className="h-4 w-4 mr-1" />PDF</Button>}
-          {sop.sop_type === "spreadsheet" && !isOOType && (
+          {/* Export / Import */}
+          <Button variant="outline" size="sm" onClick={handleExportPDF}><Download className="h-4 w-4 mr-1" />PDF</Button>
+          {sop.sop_type === "spreadsheet" && (
             <>
               <Button variant="outline" size="sm" onClick={handleExportCSV}><Download className="h-4 w-4 mr-1" />CSV</Button>
               <Button variant="outline" size="sm" onClick={() => csvImportRef.current?.click()}><Upload className="h-4 w-4 mr-1" />Import CSV</Button>
@@ -1285,16 +1080,7 @@ export default function SOPEditorPage() {
           )}
           {/* Edit controls */}
           {canEdit && !isEditing && <Button size="sm" onClick={enterEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>}
-          {canEdit && isEditing && isOOType && (
-            <Button size="sm" variant="outline" onClick={async () => {
-              setIsEditing(false);
-              // Give OO ~2.5s to flush any pending force-save, then refetch so plain_text is current
-              setTimeout(() => { loadSop(); }, 2500);
-            }}>
-              <Eye className="h-4 w-4 mr-1" />Done
-            </Button>
-          )}
-          {canEdit && isEditing && !isOOType && (
+          {canEdit && isEditing && (
             <>
               <Input placeholder="Change note" value={changeNote} onChange={e => setChangeNote(e.target.value)} className="w-36 h-8 text-sm" />
               <Button size="sm" variant="outline" onClick={cancelEdit}><X className="h-4 w-4 mr-1" />Cancel</Button>
@@ -1353,20 +1139,12 @@ export default function SOPEditorPage() {
           </div>
         </div>
 
-        {isOOType ? (
-          isEditing ? (
-            <OnlyOfficeEditor sopId={id} />
-          ) : (
-            <PlainTextView sop={sop} canEdit={canEdit} onEdit={enterEdit} />
-          )
-        ) : (
-          <>
-            {sop.sop_type === "document" && <DocumentEditor content={draft} onChange={setDraft} editable={isEditing} sopId={id} />}
-            {sop.sop_type === "spreadsheet" && <SpreadsheetEditor content={draft} onChange={setDraft} editable={isEditing} />}
-            {sop.sop_type === "presentation" && <PresentationEditor content={draft} onChange={setDraft} editable={isEditing} />}
-            {sop.sop_type === "file" && <FileEditor sop={sop} editable={isEditing} onFileUploaded={fileData => setDraft(fd => ({ ...fd, ...fileData }))} />}
-          </>
-        )}
+        <>
+          {sop.sop_type === "document" && <DocumentEditor content={draft} onChange={setDraft} editable={isEditing} sopId={id} />}
+          {sop.sop_type === "spreadsheet" && <SpreadsheetEditor content={draft} onChange={setDraft} editable={isEditing} />}
+          {sop.sop_type === "presentation" && <PresentationEditor content={draft} onChange={setDraft} editable={isEditing} />}
+          {sop.sop_type === "file" && <FileEditor sop={sop} editable={isEditing} onFileUploaded={fileData => setDraft(fd => ({ ...fd, ...fileData }))} />}
+        </>
 
         {sop.acknowledged_by?.length > 0 && (
           <div className="border rounded-lg p-4">

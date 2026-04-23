@@ -342,9 +342,7 @@ export const sopsApi = {
   revert: (id, versionId) => api.post(`/sops/${id}/revert/${versionId}`),
   archive: (id) => api.post(`/sops/${id}/archive`),
   upload: (formData) => api.post("/sops/upload", formData, { headers: { "Content-Type": undefined } }),
-  getEditorConfig: (id) => api.get(`/sops/${id}/editor-config`),
   setPublishStatus: (id, publish_status) => api.put(`/sops/${id}/publish-status`, { publish_status }),
-  forceSave: (id, doc_key) => api.post(`/sops/${id}/force-save`, { doc_key }),
 };
 
 // File Manager
@@ -362,8 +360,6 @@ export const filesApi = {
   rename: (id, name) => api.put(`/files/${id}`, { name }),
   delete: (id) => api.delete(`/files/${id}`),
   move: (id, data) => api.post(`/files/${id}/move`, data),
-  getEditorConfig: (id) => api.get(`/files/${id}/editor-config`),
-  forceSave: (id, doc_key) => api.post(`/files/${id}/force-save`, { doc_key }),
 };
 
 // E2EE key exchange
