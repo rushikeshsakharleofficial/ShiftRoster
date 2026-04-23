@@ -364,6 +364,8 @@ export const filesApi = {
   rename: (id, name) => api.put(`/files/${id}`, { name }),
   delete: (id) => api.delete(`/files/${id}`),
   move: (id, data) => api.post(`/files/${id}/move`, data),
+  getEditorConfig: (id) => api.get(`/files/${id}/editor-config`),
+  forceSave: (id, doc_key) => api.post(`/files/${id}/force-save`, { doc_key }),
 };
 
 // E2EE key exchange

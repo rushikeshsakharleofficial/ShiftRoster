@@ -437,3 +437,183 @@ async def move_item(item_id: str, req: ItemMove, user=Depends(get_current_user))
     await log_audit(user.get("org_id"), user["id"], "update", "file", item_id)
     updated = await db.filemanager_items.find_one({"_id": item["_id"]})
     return _item_response(updated)
+
+
+# ── OnlyOffice embed for uploaded docx/xlsx/pptx files ──
+import time as _time
+import jwt as _pyjwt
+import httpx as _httpx
+from fastapi import Request as _Request
+
+_OO_JWT_SECRET = os.getenv("ONLYOFFICE_JWT_SECRET", "")
+_OO_BACKEND_URL = os.getenv("BACKEND_INTERNAL_URL", "http://backend:8000")
+_OO_SUPPORTED_EXT = {"docx", "xlsx", "pptx"}
+_OO_DOC_TYPE = {"docx": "word", "xlsx": "cell", "pptx": "slide"}
+
+
+def _oo_ext_from_item(item: dict) -> Optional[str]:
+    name = item.get("name") or ""
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    return ext if ext in _OO_SUPPORTED_EXT else None
+
+
+@router.get("/{item_id}/editor-config")
+async def files_editor_config(item_id: str, user=Depends(get_current_user)):
+    item = await db.filemanager_items.find_one({
+        "_id": _to_oid(item_id),
+        "org_id": ObjectId(user["org_id"]),
+    })
+    if not item:
+        raise HTTPException(404, "File not found")
+    if item.get("type") != "file" or not item.get("storage_name"):
+        raise HTTPException(400, "Item is not an editable file")
+    if item.get("sop_id"):
+        raise HTTPException(400, "SOP-linked file — open from the SOPs page")
+    if not _can_read(item, user):
+        raise HTTPException(403, "Not allowed")
+
+    ext = _oo_ext_from_item(item)
+    if not ext:
+        raise HTTPException(400, "File type not supported by OnlyOffice editor")
+
+    _secret = _OO_JWT_SECRET or "oo-file-fallback-secret"
+    file_token = _pyjwt.encode(
+        {"item_id": item_id, "exp": int(_time.time()) + 3600},
+        _secret,
+        algorithm="HS256",
+    )
+
+    doc_url = f"{_OO_BACKEND_URL}/api/files/{item_id}/stream?t={file_token}"
+    callback_url = f"{_OO_BACKEND_URL}/api/files/{item_id}/onlyoffice-callback"
+    doc_key = f"fm_{item_id}_{int(_time.time())}"
+
+    can_edit = _can_mutate(item, user)
+
+    config = {
+        "document": {
+            "fileType": ext,
+            "key": doc_key,
+            "title": item["name"],
+            "url": doc_url,
+            "permissions": {"edit": can_edit, "download": True, "print": True},
+        },
+        "documentType": _OO_DOC_TYPE[ext],
+        "editorConfig": {
+            "callbackUrl": callback_url,
+            "mode": "edit" if can_edit else "view",
+            "user": {
+                "id": user["id"],
+                "name": user.get("full_name") or user.get("username", "User"),
+            },
+            "customization": {"autosave": True, "forcesave": True, "compactHeader": True},
+        },
+        "width": "100%",
+        "height": "100%",
+    }
+    if _OO_JWT_SECRET:
+        config["token"] = _pyjwt.encode(config.copy(), _OO_JWT_SECRET, algorithm="HS256")
+    return config
+
+
+@router.get("/{item_id}/stream")
+async def files_stream(item_id: str, t: str):
+    _secret = _OO_JWT_SECRET or "oo-file-fallback-secret"
+    try:
+        payload = _pyjwt.decode(t, _secret, algorithms=["HS256"])
+        if payload.get("item_id") != item_id:
+            raise HTTPException(403, "Token mismatch")
+    except _pyjwt.PyJWTError:
+        raise HTTPException(401, "Invalid or expired token")
+
+    item = await db.filemanager_items.find_one({"_id": _to_oid(item_id)})
+    if not item or not item.get("storage_name"):
+        raise HTTPException(404, "File not found")
+    path = FM_ROOT / str(item["org_id"]) / item["storage_name"]
+    if not path.exists():
+        raise HTTPException(404, "File missing on disk")
+    return FileResponse(str(path))
+
+
+@router.post("/{item_id}/force-save")
+async def files_force_save(item_id: str, request: _Request, user=Depends(get_current_user)):
+    body = await request.json()
+    doc_key = body.get("doc_key")
+    if not doc_key:
+        raise HTTPException(400, "doc_key required")
+    if not _OO_JWT_SECRET:
+        raise HTTPException(500, "OnlyOffice JWT not configured")
+
+    item = await db.filemanager_items.find_one({
+        "_id": _to_oid(item_id),
+        "org_id": ObjectId(user["org_id"]),
+    })
+    if not item or item.get("type") != "file" or not item.get("storage_name"):
+        raise HTTPException(404, "File not found")
+
+    payload = {"c": "forcesave", "key": doc_key, "userdata": user["id"]}
+    payload["token"] = _pyjwt.encode({"payload": payload}, _OO_JWT_SECRET, algorithm="HS256")
+    oo_internal = os.getenv("ONLYOFFICE_INTERNAL_URL", "http://onlyoffice")
+    url = f"{oo_internal}/coauthoring/CommandService.ashx"
+    try:
+        async with _httpx.AsyncClient() as client:
+            resp = await client.post(
+                url, json=payload,
+                headers={"Authorization": f"Bearer {payload['token']}"},
+                timeout=10.0,
+            )
+            return resp.json() if resp.status_code == 200 else {"error": resp.status_code}
+    except Exception as e:
+        raise HTTPException(502, f"Force-save failed: {e}")
+
+
+@router.post("/{item_id}/onlyoffice-callback")
+async def files_oo_callback(item_id: str, request: _Request):
+    import logging
+    logger = logging.getLogger("filemanager.oo_callback")
+    body = await request.json()
+
+    if not _OO_JWT_SECRET:
+        return {"error": 1}
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.removeprefix("Bearer ").strip() or body.get("token", "")
+    if not token:
+        return {"error": 1}
+    try:
+        body = _pyjwt.decode(token, _OO_JWT_SECRET, algorithms=["HS256"])
+    except _pyjwt.PyJWTError:
+        return {"error": 1}
+
+    status = body.get("status")
+    logger.info("files OO callback item=%s status=%s", item_id, status)
+
+    if status in (2, 6):
+        download_url = body.get("url")
+        if not download_url:
+            return {"error": 1}
+        from urllib.parse import urlparse, urlunparse
+        parsed = urlparse(download_url)
+        if parsed.hostname in ("127.0.0.1", "localhost", "documentserver"):
+            download_url = urlunparse(parsed._replace(netloc="onlyoffice"))
+
+        item = await db.filemanager_items.find_one({"_id": _to_oid(item_id)})
+        if not item or not item.get("storage_name"):
+            return {"error": 1}
+        file_path = FM_ROOT / str(item["org_id"]) / item["storage_name"]
+        try:
+            async with _httpx.AsyncClient(follow_redirects=True) as client:
+                resp = await client.get(download_url, timeout=30.0)
+                if resp.status_code != 200:
+                    logger.error("files OO download failed %s", resp.status_code)
+                    return {"error": 1}
+                file_path.write_bytes(resp.content)
+        except Exception as e:
+            logger.exception("files OO download exception: %s", e)
+            return {"error": 1}
+
+        now = datetime.now(timezone.utc)
+        await db.filemanager_items.update_one(
+            {"_id": _to_oid(item_id)},
+            {"$set": {"size": len(resp.content), "updated_at": now}},
+        )
+
+    return {"error": 0}

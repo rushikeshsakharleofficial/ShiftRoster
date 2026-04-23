@@ -303,14 +303,18 @@ export default function FileManagerPage() {
     window.open(filesApi.downloadUrl(file.id), "_blank", "noopener,noreferrer");
   };
 
-  // SOP-linked → SOP editor. Media/PDF → inline preview. Everything else → download.
+  // SOP-linked → SOP editor. Everything with a previewer → modal. Else → download.
   const handleOpen = (file) => {
     if (file.sop_id) {
       navigate(`/sops/${file.sop_id}`);
       return;
     }
     const mime = file.mime || "";
+    const name = file.name || "";
+    const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+    const isOODoc = ["docx", "xlsx", "pptx"].includes(ext);
     const previewable =
+      isOODoc ||
       mime.startsWith("image/") ||
       mime.startsWith("video/") ||
       mime.startsWith("audio/") ||
@@ -648,10 +652,13 @@ export default function FileManagerPage() {
 function FilePreviewDialog({ file, onClose, onDownload }) {
   if (!file) return null;
   const mime = file.mime || "";
+  const name = file.name || "";
+  const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+  const isOODoc = ["docx", "xlsx", "pptx"].includes(ext);
   const url = filesApi.downloadUrl(file.id);
   return (
     <Dialog open={!!file} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] p-0 overflow-hidden flex flex-col">
+      <DialogContent className="max-w-6xl w-[95vw] max-h-[95vh] p-0 overflow-hidden flex flex-col">
         <DialogHeader className="px-4 py-3 border-b">
           <DialogTitle className="flex items-center gap-2">
             <span className="truncate">{file.name}</span>
@@ -661,31 +668,111 @@ function FilePreviewDialog({ file, onClose, onDownload }) {
           </DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-auto bg-muted/30 flex items-center justify-center">
-          {mime.startsWith("image/") && (
-            <img src={url} alt={file.name} className="max-w-full max-h-[75vh] object-contain" />
-          )}
-          {mime.startsWith("video/") && (
-            <video src={url} controls className="max-w-full max-h-[75vh]" />
-          )}
-          {mime.startsWith("audio/") && (
+          {isOODoc ? (
+            <FileOOEmbed itemId={file.id} />
+          ) : mime.startsWith("image/") ? (
+            <img src={url} alt={file.name} className="max-w-full max-h-[80vh] object-contain" />
+          ) : mime.startsWith("video/") ? (
+            <video src={url} controls className="max-w-full max-h-[80vh]" />
+          ) : mime.startsWith("audio/") ? (
             <audio src={url} controls className="w-full max-w-lg" />
+          ) : mime === "application/pdf" ? (
+            <iframe src={url} title={file.name} className="w-full h-[80vh] border-0 bg-white" />
+          ) : mime.startsWith("text/") ? (
+            <iframe src={url} title={file.name} className="w-full h-[80vh] border-0 bg-white" />
+          ) : (
+            <div className="text-center p-8">
+              <p className="text-sm text-muted-foreground mb-3">Preview not available for this file type.</p>
+              <Button onClick={onDownload}><Download className="h-4 w-4 mr-1" /> Download</Button>
+            </div>
           )}
-          {mime === "application/pdf" && (
-            <iframe src={url} title={file.name} className="w-full h-[75vh] border-0 bg-white" />
-          )}
-          {mime.startsWith("text/") && (
-            <iframe src={url} title={file.name} className="w-full h-[75vh] border-0 bg-white" />
-          )}
-          {!mime.startsWith("image/") && !mime.startsWith("video/") && !mime.startsWith("audio/")
-            && mime !== "application/pdf" && !mime.startsWith("text/") && (
-              <div className="text-center p-8">
-                <p className="text-sm text-muted-foreground mb-3">Preview not available for this file type.</p>
-                <Button onClick={onDownload}><Download className="h-4 w-4 mr-1" /> Download</Button>
-              </div>
-            )}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Embed OnlyOffice for a file-manager item (uploaded docx/xlsx/pptx).
+function FileOOEmbed({ itemId }) {
+  const editorRef = useRef(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const saveTimerRef = useRef(null);
+  const docKeyRef = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+    let loadingTimeout = null;
+
+    const triggerForceSave = async () => {
+      if (!alive || !docKeyRef.current) return;
+      try { await filesApi.forceSave(itemId, docKeyRef.current); } catch (e) { console.warn(e); }
+    };
+
+    const initEditor = (config) => {
+      if (!alive) return;
+      try { editorRef.current?.destroyEditor?.(); } catch {}
+      editorRef.current = null;
+      docKeyRef.current = config?.document?.key || null;
+      loadingTimeout = setTimeout(() => { if (alive) setLoading(false); }, 3000);
+      editorRef.current = new window.DocsAPI.DocEditor("fm-oo-editor", {
+        ...config,
+        events: {
+          onDocumentReady: () => { if (alive) setLoading(false); },
+          onError: (e) => console.warn("OO error:", e?.data),
+          onDocumentStateChange: (e) => {
+            if (e?.data === true) {
+              if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+              saveTimerRef.current = setTimeout(triggerForceSave, 2000);
+            }
+          },
+        },
+      });
+    };
+
+    filesApi.getEditorConfig(itemId).then(({ data: config }) => {
+      if (!alive) return;
+      if (window.DocsAPI) { initEditor(config); return; }
+      const existing = document.getElementById("oo-api-js");
+      if (existing) { existing.addEventListener("load", () => initEditor(config)); return; }
+      const s = document.createElement("script");
+      s.id = "oo-api-js";
+      s.src = "/onlyoffice/web-apps/apps/api/documents/api.js";
+      s.onload = () => initEditor(config);
+      s.onerror = () => { if (alive) { setLoading(false); setError(true); } };
+      document.head.appendChild(s);
+    }).catch((e) => {
+      console.error("files editor-config failed", e);
+      if (alive) { setLoading(false); setError(true); }
+    });
+
+    return () => {
+      alive = false;
+      if (loadingTimeout) clearTimeout(loadingTimeout);
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (docKeyRef.current) filesApi.forceSave(itemId, docKeyRef.current).catch(() => {});
+      try { editorRef.current?.destroyEditor?.(); } catch {}
+      editorRef.current = null;
+    };
+  }, [itemId]);
+
+  return (
+    <div className="relative w-full h-[85vh] bg-background">
+      <div id="fm-oo-editor" style={{ width: "100%", height: "100%" }} />
+      {loading && !error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/80 pointer-events-none">
+          <div className="text-center space-y-2">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto" />
+            <p className="text-sm text-muted-foreground">Loading editor…</p>
+          </div>
+        </div>
+      )}
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <p className="text-sm text-muted-foreground">Editor unavailable. Try refreshing.</p>
+        </div>
+      )}
+    </div>
   );
 }
 
