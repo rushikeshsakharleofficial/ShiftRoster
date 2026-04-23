@@ -59,6 +59,19 @@ class ItemMove(BaseModel):
     new_scope: Optional[str] = None
 
 
+# ── Serialization helper ──
+
+def _item_response(doc: dict) -> dict:
+    """Serialize a filemanager item and attach derived fields for the frontend."""
+    out = serialize_doc(doc)
+    out["is_folder"] = doc.get("type") == "folder"
+    return out
+
+
+def _items_response(docs: list) -> list:
+    return [_item_response(d) for d in docs]
+
+
 # ── Permission helpers ──
 
 def _can_read(item: dict, user: dict) -> bool:
@@ -117,7 +130,7 @@ async def list_items(
     # Folders first, then by name — type "folder" < "file" alphabetically
     cursor = db.filemanager_items.find(q).sort([("type", 1), ("name", 1)])
     docs = await cursor.to_list(1000)
-    return serialize_list(docs)
+    return _items_response(docs)
 
 
 # ── Create folder ──
@@ -160,7 +173,7 @@ async def create_folder(req: FolderCreate, user=Depends(get_current_user)):
     result = await db.filemanager_items.insert_one(doc)
     doc["_id"] = result.inserted_id
     await log_audit(user.get("org_id"), user["id"], "create", "file", str(result.inserted_id))
-    return serialize_doc(doc)
+    return _item_response(doc)
 
 
 # ── Upload ──
@@ -236,7 +249,7 @@ async def upload_file(
     result = await db.filemanager_items.insert_one(doc)
     doc["_id"] = result.inserted_id
     await log_audit(user.get("org_id"), user["id"], "create", "file", str(result.inserted_id))
-    return serialize_doc(doc)
+    return _item_response(doc)
 
 
 # ── Download ──
@@ -253,6 +266,21 @@ async def download_file(item_id: str, user=Depends(get_current_user)):
         raise HTTPException(400, "Item is not a file")
     if not _can_read(item, user):
         raise HTTPException(403, "Not allowed to read this file")
+
+    # SOP-backed items live at the SOP's oo_file path instead of filemanager storage
+    sop_id = item.get("sop_id")
+    if sop_id:
+        sop = await db.sops.find_one({"_id": sop_id})
+        if not sop or not sop.get("oo_file"):
+            raise HTTPException(404, "Linked SOP file is missing")
+        sop_path = UPLOADS_DIR / sop["oo_file"]
+        if not sop_path.exists():
+            raise HTTPException(404, "SOP file missing on disk")
+        return FileResponse(
+            str(sop_path),
+            media_type=item.get("mime") or "application/octet-stream",
+            filename=item["name"],
+        )
 
     storage_name = item.get("storage_name")
     if not storage_name:
@@ -279,6 +307,8 @@ async def rename_item(item_id: str, req: ItemRename, user=Depends(get_current_us
     })
     if not item:
         raise HTTPException(404, "Item not found")
+    if item.get("sop_id"):
+        raise HTTPException(400, "SOP-linked files are managed from the SOPs page")
     if not _can_mutate(item, user):
         raise HTTPException(403, "Not allowed to rename this item")
 
@@ -293,7 +323,7 @@ async def rename_item(item_id: str, req: ItemRename, user=Depends(get_current_us
     )
     await log_audit(user.get("org_id"), user["id"], "update", "file", item_id)
     updated = await db.filemanager_items.find_one({"_id": _to_oid(item_id)})
-    return serialize_doc(updated)
+    return _item_response(updated)
 
 
 # ── Delete (recursive for folders) ──
@@ -324,6 +354,8 @@ async def delete_item(item_id: str, user=Depends(get_current_user)):
     })
     if not item:
         raise HTTPException(404, "Item not found")
+    if item.get("sop_id"):
+        raise HTTPException(400, "SOP-linked files must be deleted from the SOPs page")
     if not _can_mutate(item, user):
         raise HTTPException(403, "Not allowed to delete this item")
 
@@ -359,6 +391,8 @@ async def move_item(item_id: str, req: ItemMove, user=Depends(get_current_user))
     })
     if not item:
         raise HTTPException(404, "Item not found")
+    if item.get("sop_id"):
+        raise HTTPException(400, "SOP-linked files cannot be moved")
     if not _can_mutate(item, user):
         raise HTTPException(403, "Not allowed to move this item")
 
@@ -402,4 +436,4 @@ async def move_item(item_id: str, req: ItemMove, user=Depends(get_current_user))
     await db.filemanager_items.update_one({"_id": item["_id"]}, {"$set": updates})
     await log_audit(user.get("org_id"), user["id"], "update", "file", item_id)
     updated = await db.filemanager_items.find_one({"_id": item["_id"]})
-    return serialize_doc(updated)
+    return _item_response(updated)
