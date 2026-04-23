@@ -1,10 +1,29 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { filesApi, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
 import mammoth from "mammoth";
 import ExcelJS from "exceljs";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import JSZip from "jszip";
+import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
+import jsLang from "react-syntax-highlighter/dist/esm/languages/prism/javascript";
+import tsLang from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
+import jsxLang from "react-syntax-highlighter/dist/esm/languages/prism/jsx";
+import tsxLang from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
+import pyLang from "react-syntax-highlighter/dist/esm/languages/prism/python";
+import rbLang from "react-syntax-highlighter/dist/esm/languages/prism/ruby";
+import goLang from "react-syntax-highlighter/dist/esm/languages/prism/go";
+import rsLang from "react-syntax-highlighter/dist/esm/languages/prism/rust";
+import bashLang from "react-syntax-highlighter/dist/esm/languages/prism/bash";
+import yamlLang from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
+import xmlLang from "react-syntax-highlighter/dist/esm/languages/prism/markup";
+import cssLang from "react-syntax-highlighter/dist/esm/languages/prism/css";
+import scssLang from "react-syntax-highlighter/dist/esm/languages/prism/scss";
+import sqlLang from "react-syntax-highlighter/dist/esm/languages/prism/sql";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +43,86 @@ import {
   Upload, Download, Trash2, Edit2, MoreVertical, Grid3x3, List,
   ChevronRight, Home, Loader2, Search, Move, X, ExternalLink,
 } from "lucide-react";
+
+// Register Prism languages for the code viewer (keeps bundle lean vs. full Prism).
+SyntaxHighlighter.registerLanguage("javascript", jsLang);
+SyntaxHighlighter.registerLanguage("typescript", tsLang);
+SyntaxHighlighter.registerLanguage("jsx", jsxLang);
+SyntaxHighlighter.registerLanguage("tsx", tsxLang);
+SyntaxHighlighter.registerLanguage("python", pyLang);
+SyntaxHighlighter.registerLanguage("ruby", rbLang);
+SyntaxHighlighter.registerLanguage("go", goLang);
+SyntaxHighlighter.registerLanguage("rust", rsLang);
+SyntaxHighlighter.registerLanguage("bash", bashLang);
+SyntaxHighlighter.registerLanguage("yaml", yamlLang);
+SyntaxHighlighter.registerLanguage("markup", xmlLang);
+SyntaxHighlighter.registerLanguage("css", cssLang);
+SyntaxHighlighter.registerLanguage("scss", scssLang);
+SyntaxHighlighter.registerLanguage("sql", sqlLang);
+
+// Map file extension -> Prism language name (Prism names don't match extensions 1:1).
+const CODE_LANG_MAP = {
+  js: "javascript",
+  ts: "typescript",
+  tsx: "tsx",
+  jsx: "jsx",
+  py: "python",
+  rb: "ruby",
+  go: "go",
+  rs: "rust",
+  sh: "bash",
+  yml: "yaml",
+  yaml: "yaml",
+  xml: "markup",
+  html: "markup",
+  css: "css",
+  scss: "scss",
+  sql: "sql",
+};
+
+// Determine what previewer to use for a file, favoring extension (mime is unreliable for text).
+const getKind = (file) => {
+  if (!file) return "unknown";
+  const n = (file.name || "").toLowerCase();
+  const ext = n.includes(".") ? n.split(".").pop() : "";
+  const mime = file.mime || "";
+  if (ext === "md" || ext === "markdown") return "md";
+  if (ext === "json") return "json";
+  if (ext === "csv" || ext === "tsv") return { kind: "csv", sep: ext === "tsv" ? "\t" : "," };
+  if (Object.prototype.hasOwnProperty.call(CODE_LANG_MAP, ext)) {
+    return { kind: "code", lang: CODE_LANG_MAP[ext] };
+  }
+  if (ext === "pptx") return "pptx";
+  if (ext === "docx") return "docx";
+  if (ext === "xlsx") return "xlsx";
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime === "application/pdf") return "pdf";
+  if (mime.startsWith("text/")) return "text";
+  return "unknown";
+};
+
+const isPreviewable = (file) => getKind(file) !== "unknown";
+
+const fetchText = async (url) => {
+  const r = await fetch(url, { credentials: "include" });
+  if (!r.ok) throw new Error("http " + r.status);
+  return r.text();
+};
+const fetchBuf = async (url) => {
+  const r = await fetch(url, { credentials: "include" });
+  if (!r.ok) throw new Error("http " + r.status);
+  return r.arrayBuffer();
+};
+
+const escHtmlText = (s) =>
+  String(s == null ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 // Pick icon by mime type
 const iconForMime = (mime) => {
@@ -311,18 +410,7 @@ export default function FileManagerPage() {
       navigate(`/sops/${file.sop_id}`);
       return;
     }
-    const mime = file.mime || "";
-    const name = file.name || "";
-    const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
-    const isOODoc = ["docx", "xlsx", "pptx"].includes(ext);
-    const previewable =
-      isOODoc ||
-      mime.startsWith("image/") ||
-      mime.startsWith("video/") ||
-      mime.startsWith("audio/") ||
-      mime === "application/pdf" ||
-      mime.startsWith("text/");
-    if (previewable) {
+    if (isPreviewable(file)) {
       setPreviewFile(file);
     } else {
       handleDownload(file);
@@ -653,14 +741,44 @@ export default function FileManagerPage() {
 
 function FilePreviewDialog({ file, onClose, onDownload }) {
   if (!file) return null;
-  const mime = file.mime || "";
-  const name = file.name || "";
-  const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
-  const isDocx = ext === "docx";
-  const isXlsx = ext === "xlsx";
-  const isPptx = ext === "pptx";
   // previewUrl = Content-Disposition: inline so browser renders instead of downloading
   const url = filesApi.previewUrl(file.id);
+  const kind = getKind(file);
+  const renderBody = () => {
+    if (kind && typeof kind === "object") {
+      if (kind.kind === "csv") return <CsvViewer key={url} url={url} separator={kind.sep} />;
+      if (kind.kind === "code") return <CodeViewer key={url} url={url} lang={kind.lang} />;
+    }
+    switch (kind) {
+      case "image":
+        return <img src={url} alt={file.name} className="max-w-full max-h-[80vh] object-contain" />;
+      case "video":
+        return <video src={url} controls className="max-w-full max-h-[80vh]" />;
+      case "audio":
+        return <audio src={url} controls className="w-full max-w-lg" />;
+      case "pdf":
+        return <iframe src={url} title={file.name} className="w-full h-[80vh] border-0 bg-white" />;
+      case "text":
+        return <iframe src={url} title={file.name} className="w-full h-[80vh] border-0 bg-white" />;
+      case "md":
+        return <MarkdownViewer key={url} url={url} />;
+      case "json":
+        return <JsonViewer key={url} url={url} />;
+      case "docx":
+        return <DocxViewer key={url} url={url} />;
+      case "xlsx":
+        return <XlsxViewer key={url} url={url} />;
+      case "pptx":
+        return <PptxViewer key={url} url={url} onDownload={onDownload} />;
+      default:
+        return (
+          <div className="text-center p-8">
+            <p className="text-sm text-muted-foreground mb-3">Preview not available for this file type.</p>
+            <Button onClick={onDownload}><Download className="h-4 w-4 mr-1" /> Download</Button>
+          </div>
+        );
+    }
+  };
   return (
     <Dialog open={!!file} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-6xl w-[95vw] max-h-[95vh] p-0 overflow-hidden flex flex-col">
@@ -673,34 +791,271 @@ function FilePreviewDialog({ file, onClose, onDownload }) {
           </DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-auto bg-muted/30 flex items-center justify-center">
-          {isDocx ? (
-            <DocxViewer key={url} url={url} />
-          ) : isXlsx ? (
-            <XlsxViewer key={url} url={url} />
-          ) : isPptx ? (
-            <div className="text-center p-8">
-              <p className="text-sm text-muted-foreground mb-3">Inline preview not supported for .pptx yet.</p>
-              <Button onClick={onDownload}><Download className="h-4 w-4 mr-1" /> Download</Button>
-            </div>
-          ) : mime.startsWith("image/") ? (
-            <img src={url} alt={file.name} className="max-w-full max-h-[80vh] object-contain" />
-          ) : mime.startsWith("video/") ? (
-            <video src={url} controls className="max-w-full max-h-[80vh]" />
-          ) : mime.startsWith("audio/") ? (
-            <audio src={url} controls className="w-full max-w-lg" />
-          ) : mime === "application/pdf" ? (
-            <iframe src={url} title={file.name} className="w-full h-[80vh] border-0 bg-white" />
-          ) : mime.startsWith("text/") ? (
-            <iframe src={url} title={file.name} className="w-full h-[80vh] border-0 bg-white" />
-          ) : (
-            <div className="text-center p-8">
-              <p className="text-sm text-muted-foreground mb-3">Preview not available for this file type.</p>
-              <Button onClick={onDownload}><Download className="h-4 w-4 mr-1" /> Download</Button>
-            </div>
-          )}
+          {renderBody()}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Renders Markdown (.md / .markdown) as HTML with GitHub-flavored extensions.
+// react-markdown is safe by default — no raw HTML passthrough.
+function MarkdownViewer({ url }) {
+  const [text, setText] = useState(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetchText(url)
+      .then((t) => { if (alive) setText(t); })
+      .catch(() => { if (alive) setErr(true); });
+    return () => { alive = false; };
+  }, [url]);
+  if (err) return <p className="p-6 text-sm text-muted-foreground">Failed to load Markdown.</p>;
+  if (text === null) return <div className="p-6"><Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /></div>;
+  return (
+    <div className="p-8 bg-white max-w-4xl mx-auto w-full prose prose-sm">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+    </div>
+  );
+}
+
+// Renders JSON pretty-printed with a tiny regex-based syntax highlight pass.
+// Handles invalid JSON gracefully (renders as plain escaped text).
+function JsonViewer({ url }) {
+  const [raw, setRaw] = useState(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetchText(url)
+      .then((t) => { if (alive) setRaw(t); })
+      .catch(() => { if (alive) setErr(true); });
+    return () => { alive = false; };
+  }, [url]);
+  const html = useMemo(() => {
+    if (raw === null) return null;
+    let pretty;
+    try {
+      pretty = JSON.stringify(JSON.parse(raw), null, 2);
+    } catch {
+      // Not valid JSON — show raw text, escaped.
+      return escHtmlText(raw);
+    }
+    // Escape first, then apply color spans using regex on escaped output.
+    const escaped = escHtmlText(pretty);
+    return escaped.replace(
+      /("(?:\\.|[^"\\])*"(?:\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
+      (match) => {
+        let cls = "text-amber-700"; // number
+        if (/^"/.test(match)) {
+          cls = /:$/.test(match) ? "text-sky-700 font-medium" : "text-emerald-700";
+        } else if (/true|false/.test(match)) {
+          cls = "text-purple-700";
+        } else if (/null/.test(match)) {
+          cls = "text-gray-500";
+        }
+        return `<span class="${cls}">${match}</span>`;
+      }
+    );
+  }, [raw]);
+  if (err) return <p className="p-6 text-sm text-muted-foreground">Failed to load JSON.</p>;
+  if (raw === null) return <div className="p-6"><Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /></div>;
+  return (
+    <div className="w-full h-full bg-white p-4 overflow-auto">
+      <pre
+        className="text-xs font-mono whitespace-pre leading-5"
+        // Content is built from escaped text and static class strings — no untrusted HTML.
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </div>
+  );
+}
+
+// Parses a CSV/TSV line respecting quoted fields ("a,b" stays one cell, "a""b" -> a"b).
+function parseDelimitedLine(line, sep) {
+  const out = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; }
+        else { inQuotes = false; }
+      } else {
+        cur += ch;
+      }
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === sep) { out.push(cur); cur = ""; }
+      else cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+// Renders CSV/TSV as an HTML table. First row treated as header.
+function CsvViewer({ url, separator = "," }) {
+  const [rows, setRows] = useState(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetchText(url)
+      .then((t) => {
+        if (!alive) return;
+        // Split on any line ending; drop a single trailing blank line.
+        const lines = t.split(/\r?\n/);
+        if (lines.length && lines[lines.length - 1] === "") lines.pop();
+        const parsed = lines.map((ln) => parseDelimitedLine(ln, separator));
+        setRows(parsed);
+      })
+      .catch(() => { if (alive) setErr(true); });
+    return () => { alive = false; };
+  }, [url, separator]);
+  if (err) return <p className="p-6 text-sm text-muted-foreground">Failed to load CSV.</p>;
+  if (!rows) return <div className="p-6"><Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /></div>;
+  if (rows.length === 0) return <p className="p-6 text-sm text-muted-foreground">Empty file.</p>;
+  const [head, ...body] = rows;
+  const colCount = Math.max(head.length, ...body.map((r) => r.length));
+  const pad = (arr) => {
+    if (arr.length >= colCount) return arr;
+    return arr.concat(new Array(colCount - arr.length).fill(""));
+  };
+  return (
+    <div className="w-full h-full bg-white p-2 overflow-auto">
+      <table className="text-xs border-collapse">
+        <thead>
+          <tr>
+            {pad(head).map((h, i) => (
+              <th key={i} className="border border-gray-200 px-2 py-1 bg-gray-100 text-left font-medium">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((row, ri) => (
+            <tr key={ri}>
+              {pad(row).map((cell, ci) => (
+                <td key={ci} className="border border-gray-200 px-2 py-1 align-top whitespace-pre-wrap">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Renders source code with Prism syntax highlighting (light theme).
+function CodeViewer({ url, lang }) {
+  const [text, setText] = useState(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetchText(url)
+      .then((t) => { if (alive) setText(t); })
+      .catch(() => { if (alive) setErr(true); });
+    return () => { alive = false; };
+  }, [url]);
+  if (err) return <p className="p-6 text-sm text-muted-foreground">Failed to load file.</p>;
+  if (text === null) return <div className="p-6"><Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /></div>;
+  return (
+    <div className="w-full h-full bg-white overflow-auto">
+      <SyntaxHighlighter
+        language={lang}
+        style={oneLight}
+        showLineNumbers
+        wrapLongLines={false}
+        customStyle={{ margin: 0, fontSize: 12, background: "white" }}
+      >
+        {text}
+      </SyntaxHighlighter>
+    </div>
+  );
+}
+
+// Extracts slide titles + text from a .pptx by unzipping and grabbing <a:t> nodes.
+// Falls back to Download if extraction fails.
+function PptxViewer({ url, onDownload }) {
+  const [slides, setSlides] = useState(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const buf = await fetchBuf(url);
+        const zip = await JSZip.loadAsync(buf);
+        // Collect slideN.xml entries and sort numerically (slide2 before slide10).
+        const slideEntries = [];
+        zip.forEach((path, entry) => {
+          const m = /^ppt\/slides\/slide(\d+)\.xml$/.exec(path);
+          if (m && !entry.dir) slideEntries.push({ idx: parseInt(m[1], 10), entry });
+        });
+        slideEntries.sort((a, b) => a.idx - b.idx);
+        if (slideEntries.length === 0) throw new Error("no slides found");
+        const parser = new DOMParser();
+        const parsed = [];
+        for (const { idx, entry } of slideEntries) {
+          const xml = await entry.async("string");
+          const doc = parser.parseFromString(xml, "application/xml");
+          // Grab every drawingml text run (<a:t>). Namespaces vary, so use wildcard.
+          const textNodes = doc.getElementsByTagNameNS("*", "t");
+          const bullets = [];
+          for (let i = 0; i < textNodes.length; i++) {
+            const t = (textNodes[i].textContent || "").trim();
+            if (t) bullets.push(t);
+          }
+          parsed.push({ idx, bullets });
+        }
+        if (alive) setSlides(parsed);
+      } catch (e) {
+        console.warn("pptx extract error:", e);
+        if (alive) setErr(true);
+      }
+    })();
+    return () => { alive = false; };
+  }, [url]);
+  if (err) {
+    return (
+      <div className="text-center p-8">
+        <p className="text-sm text-muted-foreground mb-3">Could not extract slide text.</p>
+        <Button onClick={onDownload}><Download className="h-4 w-4 mr-1" /> Download</Button>
+      </div>
+    );
+  }
+  if (!slides) return <div className="p-6"><Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /></div>;
+  return (
+    <div className="w-full h-full bg-white overflow-auto p-6 max-w-4xl mx-auto">
+      <p className="text-xs text-muted-foreground mb-4">
+        Text-only preview. {slides.length} slide{slides.length === 1 ? "" : "s"} extracted.
+        {" "}Visuals and layout are not rendered — use Download for full fidelity.
+      </p>
+      <div className="space-y-5">
+        {slides.map((s) => {
+          const [title, ...rest] = s.bullets;
+          return (
+            <div key={s.idx} className="border rounded-lg p-4">
+              <div className="flex items-baseline gap-2 mb-2">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Slide {s.idx}</span>
+                {title && <h3 className="text-sm font-semibold truncate">{title}</h3>}
+              </div>
+              {rest.length > 0 ? (
+                <ul className="list-disc pl-5 space-y-1 text-xs">
+                  {rest.map((b, i) => (
+                    <li key={i}>{b}</li>
+                  ))}
+                </ul>
+              ) : (
+                !title && <p className="text-xs text-muted-foreground italic">(no text on this slide)</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
