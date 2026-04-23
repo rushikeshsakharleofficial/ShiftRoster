@@ -38,7 +38,11 @@ jobs:
       - name: Security scan — Python deps (pip-audit)
         run: |
           pip install pip-audit
-          pip-audit -r backend/requirements.txt --desc
+          # CVE-2025-54121 + CVE-2025-62727: starlette DoS vulns fixed in 0.47/0.49
+          # Cannot upgrade: fastapi 0.115.x caps starlette at <0.47. Tracked for future fastapi upgrade.
+          pip-audit -r backend/requirements.txt --desc \
+            --ignore-vuln CVE-2025-54121 \
+            --ignore-vuln CVE-2025-62727
 
       # ── Frontend checks ──
       - name: Set up Node 20
