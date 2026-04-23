@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { filesApi, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
 import mammoth from "mammoth";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -727,24 +727,58 @@ function DocxViewer({ url }) {
   );
 }
 
-// Self-made viewer for .xlsx — uses SheetJS to render each sheet as an HTML table.
+// Self-made viewer for .xlsx — uses ExcelJS; render each sheet as an HTML table.
 function XlsxViewer({ url }) {
   const [sheets, setSheets] = useState(null);
   const [activeIdx, setActiveIdx] = useState(0);
   const [err, setErr] = useState(false);
   useEffect(() => {
     let alive = true;
-    fetch(url, { credentials: "include" })
-      .then((r) => r.arrayBuffer())
-      .then((buf) => {
-        const wb = XLSX.read(buf, { type: "array" });
-        const out = wb.SheetNames.map((n) => ({
-          name: n,
-          html: XLSX.utils.sheet_to_html(wb.Sheets[n]),
-        }));
+    const escHtml = (v) => {
+      if (v === null || v === undefined) return "";
+      // ExcelJS returns rich text, formulas, hyperlinks as objects; coerce to string safely
+      let s;
+      if (typeof v === "object") {
+        if (v.richText) s = v.richText.map((rt) => rt.text || "").join("");
+        else if (v.text) s = String(v.text);
+        else if (v.result !== undefined) s = String(v.result);
+        else if (v.formula) s = String(v.result ?? "");
+        else if (v instanceof Date) s = v.toLocaleString();
+        else s = String(v);
+      } else {
+        s = String(v);
+      }
+      return s
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    };
+    (async () => {
+      try {
+        const resp = await fetch(url, { credentials: "include" });
+        const buf = await resp.arrayBuffer();
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buf);
+        const out = [];
+        wb.eachSheet((sheet) => {
+          const rows = [];
+          sheet.eachRow({ includeEmpty: false }, (row) => {
+            const cells = [];
+            row.eachCell({ includeEmpty: true }, (cell) => {
+              cells.push(`<td>${escHtml(cell.value)}</td>`);
+            });
+            rows.push(`<tr>${cells.join("")}</tr>`);
+          });
+          out.push({
+            name: sheet.name,
+            html: `<table>${rows.join("")}</table>`,
+          });
+        });
         if (alive) setSheets(out);
-      })
-      .catch(() => { if (alive) setErr(true); });
+      } catch (e) {
+        console.warn("xlsx render error:", e);
+        if (alive) setErr(true);
+      }
+    })();
     return () => { alive = false; };
   }, [url]);
   if (err) return <p className="p-6 text-sm text-muted-foreground">Failed to render XLSX.</p>;
