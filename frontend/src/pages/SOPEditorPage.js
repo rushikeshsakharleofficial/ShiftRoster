@@ -785,15 +785,35 @@ function OnlyOfficeEditor({ sopId }) {
   const editorRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [saveStatus, setSaveStatus] = useState("idle"); // "idle" | "dirty" | "saving" | "saved"
+  const saveTimerRef = useRef(null);
+  const docKeyRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
     let loadingTimeout = null;
 
+    const triggerForceSave = async () => {
+      if (!alive || !docKeyRef.current) return;
+      setSaveStatus("saving");
+      try {
+        await sopsApi.forceSave(sopId, docKeyRef.current);
+        if (alive) {
+          setSaveStatus("saved");
+          // Fade "Saved" after 2s
+          setTimeout(() => { if (alive) setSaveStatus("idle"); }, 2000);
+        }
+      } catch (e) {
+        console.warn("forceSave failed:", e);
+        if (alive) setSaveStatus("idle");
+      }
+    };
+
     const initEditor = (config) => {
       if (!alive) return;
       try { editorRef.current?.destroyEditor?.(); } catch {}
       editorRef.current = null;
+      docKeyRef.current = config?.document?.key || null;
 
       // Hide loading spinner after 3s regardless — OO may render UI before firing onDocumentReady,
       // or may fire onError silently for non-fatal changesError. Don't block the user.
@@ -809,11 +829,23 @@ function OnlyOfficeEditor({ sopId }) {
           },
           onError: (event) => {
             // Log all OO errors but never retry or show error overlay.
-            // OO's changesError crashes are non-fatal — editor stays usable.
             console.warn("OO event error:", event?.data);
           },
           onWarning: (event) => {
             console.warn("OO warning:", event?.data);
+          },
+          onDocumentStateChange: (event) => {
+            // event.data === true means unsaved changes exist
+            if (!alive) return;
+            if (event?.data === true) {
+              setSaveStatus("dirty");
+              // Debounce: 2s after last change, trigger force-save (Google-Docs-style)
+              if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+              saveTimerRef.current = setTimeout(() => {
+                saveTimerRef.current = null;
+                triggerForceSave();
+              }, 2000);
+            }
           },
         },
       };
@@ -846,13 +878,30 @@ function OnlyOfficeEditor({ sopId }) {
     return () => {
       alive = false;
       if (loadingTimeout) clearTimeout(loadingTimeout);
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      // Flush any pending edits before unmount
+      if (saveStatus === "dirty" && docKeyRef.current) {
+        sopsApi.forceSave(sopId, docKeyRef.current).catch(() => {});
+      }
       try { editorRef.current?.destroyEditor?.(); } catch {}
       editorRef.current = null;
     };
-  }, [sopId]);
+  }, [sopId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="relative border rounded-lg overflow-hidden" style={{ height: "80vh" }}>
+      {/* Save status indicator (top-right, like Google Docs) */}
+      <div className="absolute top-2 right-12 z-10 pointer-events-none">
+        {saveStatus === "dirty" && (
+          <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Unsaved</span>
+        )}
+        {saveStatus === "saving" && (
+          <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">Saving…</span>
+        )}
+        {saveStatus === "saved" && (
+          <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200">Saved</span>
+        )}
+      </div>
       <div id="oo-editor" style={{ width: "100%", height: "100%" }} />
       {loading && !error && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 pointer-events-none">

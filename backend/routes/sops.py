@@ -773,6 +773,51 @@ async def serve_sop_file(sop_id: str, t: str):
     return FileResponse(str(file_path))
 
 
+class SOPForceSave(BaseModel):
+    doc_key: str
+
+
+@router.post("/{sop_id}/force-save")
+async def force_save_sop(sop_id: str, req: SOPForceSave, user=Depends(get_current_user)):
+    """Ask OnlyOffice to save the document RIGHT NOW (Google-Docs-style save-while-typing).
+
+    Client debounces keystrokes (~2s) and hits this. We forward a forcesave command to
+    OO's CommandService with the current doc_key; OO responds by invoking our
+    /onlyoffice-callback with status=6, which writes the bytes to disk.
+    """
+    if not _OO_JWT_SECRET:
+        raise HTTPException(500, "OnlyOffice JWT secret not configured")
+
+    sop = await db.sops.find_one({"_id": _to_oid(sop_id), "org_id": user.get("org_id")})
+    if not sop or not sop.get("oo_file"):
+        raise HTTPException(404, "SOP not found or not an OnlyOffice document")
+
+    payload = {
+        "c": "forcesave",
+        "key": req.doc_key,
+        "userdata": user["id"],
+    }
+    payload["token"] = _pyjwt.encode({"payload": payload}, _OO_JWT_SECRET, algorithm="HS256")
+
+    oo_internal = os.getenv("ONLYOFFICE_INTERNAL_URL", "http://onlyoffice")
+    command_url = f"{oo_internal}/coauthoring/CommandService.ashx"
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                command_url,
+                json=payload,
+                headers={"Authorization": f"Bearer {payload['token']}"},
+                timeout=10.0,
+            )
+            # OO returns {"error": N}. error=0 = success, error=4 = no clients editing,
+            # error=3 = no doc found. 4 is acceptable (nothing to save).
+            data = resp.json() if resp.status_code == 200 else {"error": resp.status_code}
+            return data
+    except Exception as e:
+        raise HTTPException(502, f"Force-save request failed: {e}")
+
+
 @router.post("/{sop_id}/onlyoffice-callback")
 async def onlyoffice_callback(sop_id: str, request: Request):
     """OnlyOffice document server save callback.

@@ -344,6 +344,7 @@ export const sopsApi = {
   upload: (formData) => api.post("/sops/upload", formData, { headers: { "Content-Type": undefined } }),
   getEditorConfig: (id) => api.get(`/sops/${id}/editor-config`),
   setPublishStatus: (id, publish_status) => api.put(`/sops/${id}/publish-status`, { publish_status }),
+  forceSave: (id, doc_key) => api.post(`/sops/${id}/force-save`, { doc_key }),
 };
 
 // File Manager
