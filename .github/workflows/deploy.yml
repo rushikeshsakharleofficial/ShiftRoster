@@ -3,6 +3,7 @@ name: CI/CD — Review & Deploy
 on:
   push:
     branches: [master]
+  workflow_dispatch:
 
 jobs:
   review:
