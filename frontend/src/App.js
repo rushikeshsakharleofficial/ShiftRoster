@@ -75,7 +75,12 @@ function useBrandFavicon() {
         if (!data) return;
         const link = document.getElementById("app-favicon");
         if (link) {
-          link.href = data.logo_url || "data:,";
+          if (data.logo_url) {
+            link.href = data.logo_url;
+          } else {
+            link.removeAttribute("type");
+            link.href = "data:,";
+          }
         }
         if (data.brand_name) {
           document.title = data.brand_name;

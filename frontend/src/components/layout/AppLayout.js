@@ -94,6 +94,7 @@ export default function AppLayout() {
         link.href = logoUrl;
         link.type = "image/png";
       } else {
+        link.removeAttribute("type");
         link.href = "data:,";
       }
     }).catch(() => {});

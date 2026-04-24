@@ -20,6 +20,7 @@ RUN echo 'server { \
     listen 80; \
     root /usr/share/nginx/html; \
     index index.html; \
+    location = /favicon.ico { return 204; } \
     location / { \
         try_files $uri $uri/ /index.html; \
     } \
