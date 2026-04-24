@@ -105,6 +105,12 @@ frontend/
 4.  **Setup**:
     Visit `http://localhost:8080/setup` to create the initial SuperAdmin.
 
+## ⚠️ Security Notes
+
+> **Backend runs as root inside the container.** The `backend_uploads` Docker named volume is owned by root at runtime, so the backend process runs as root. This is intentional and acceptable when the server is on a **private/internal network**. If exposed directly to the internet without a reverse proxy firewall, consider implementing a proper `gosu`-based entrypoint to drop privileges after volume chown.
+
+> **Set `APP_URL` in your `.env` before enabling password reset emails.** Without it, reset links default to `http://localhost` which won't work for external users.
+
 ## 🧪 Quality Assurance
 
 ShiftRoster maintains high stability through a multi-tier testing strategy:
