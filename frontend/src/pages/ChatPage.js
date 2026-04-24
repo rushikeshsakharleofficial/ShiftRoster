@@ -1289,7 +1289,7 @@ export default function ChatPage() {
       <div className="flex-1 flex min-w-0">
       <main className="flex-1 flex flex-col min-w-0 bg-background dark:bg-black">
         {/* Header */}
-        <header className="h-14 px-5 flex items-center gap-3 shrink-0 bg-card/95 dark:bg-zinc-950/95 backdrop-blur-md sticky top-0 z-10 shadow-[0_2px_20px_rgba(6,14,32,0.3)]">
+        <header className="h-14 px-5 flex items-center gap-3 shrink-0 bg-card border-b border-border/60 sticky top-0 z-10">
           {activeChannel ? (
             <>
               {isActiveDM ? (
