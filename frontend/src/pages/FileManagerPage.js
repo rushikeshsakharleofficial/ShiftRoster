@@ -23,6 +23,7 @@ import yamlLang from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import xmlLang from "react-syntax-highlighter/dist/esm/languages/prism/markup";
 import cssLang from "react-syntax-highlighter/dist/esm/languages/prism/css";
 import scssLang from "react-syntax-highlighter/dist/esm/languages/prism/scss";
+import DOMPurify from "dompurify";
 import sqlLang from "react-syntax-highlighter/dist/esm/languages/prism/sql";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1068,7 +1069,7 @@ function DocxViewer({ url }) {
     fetch(url, { credentials: "include" })
       .then((r) => r.arrayBuffer())
       .then((buf) => mammoth.convertToHtml({ arrayBuffer: buf }))
-      .then((result) => { if (alive) setHtml(result.value); })
+      .then((result) => { if (alive) setHtml(DOMPurify.sanitize(result.value)); })
       .catch(() => { if (alive) setErr(true); });
     return () => { alive = false; };
   }, [url]);
