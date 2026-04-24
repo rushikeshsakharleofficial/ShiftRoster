@@ -238,6 +238,22 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                 </div>
               ) : (
                 <>
+                  {/* Reply context — quoted block above bubble */}
+                  {msg.reply_to && (
+                    <div className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-lg mb-0.5 border-l-2 border-primary/50",
+                      "bg-muted/50 max-w-[85%] cursor-default",
+                      isOwn ? "self-end" : "self-start"
+                    )}>
+                      <Reply className="h-2.5 w-2.5 text-primary/60 shrink-0" />
+                      <p className="text-[10px] font-semibold text-primary/70 shrink-0 truncate max-w-[60px]">
+                        {msg.reply_to.sender_name?.split(" ")[0] || "Someone"}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {msg.reply_to.text || "a message"}
+                      </p>
+                    </div>
+                  )}
                   <div className={cn("flex items-center gap-1.5 group/msg", isOwn ? "flex-row-reverse" : "flex-row")}>
                     {displayText && (emojiOnly && !msg.file_url ? (
                       <div className="text-4xl leading-none py-1 select-none">{displayText}</div>
@@ -329,7 +345,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
 // --- Thread Panel ---
 function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, onClose, onSend }) {
   const [text, setText] = useState("");
-  const replies = (allMessages || []).filter(m => m.reply_to_id === rootMsg?.id && !m.deleted_at);
+  const replies = (allMessages || []).filter(m => m.reply_to?.id === rootMsg?.id && !m.deleted_at);
   const rootText = decryptedCache?.[rootMsg?.id] ?? rootMsg?.text;
   const rootName = rootMsg?.sender_name || "Unknown";
 
