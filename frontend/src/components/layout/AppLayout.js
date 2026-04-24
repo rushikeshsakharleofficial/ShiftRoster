@@ -57,7 +57,7 @@ export default function AppLayout() {
   const [myStatus, setMyStatus] = useState("active"); // active | break | leave
   const [profileOpen, setProfileOpen] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
-  const [profileForm, setProfileForm] = useState({ full_name: "", username: "" });
+  const [profileForm, setProfileForm] = useState({ full_name: "", username: "", phone: "", mobile_alt: "" });
   const [profileAvatar, setProfileAvatar] = useState(""); // current saved avatar
   const [profileAvatarFile, setProfileAvatarFile] = useState(null); // pending file (not yet uploaded)
   const [profileAvatarPreview, setProfileAvatarPreview] = useState(""); // local blob preview
@@ -161,7 +161,7 @@ export default function AppLayout() {
   }, [user?.id]);
 
   const openProfile = () => {
-    setProfileForm({ full_name: user?.full_name || "", username: user?.username || "" });
+    setProfileForm({ full_name: user?.full_name || "", username: user?.username || "", phone: user?.phone || "", mobile_alt: user?.mobile_alt || "" });
     setProfileAvatar(user?.avatar_url || "");
     setProfileAvatarFile(null);
     setProfileAvatarPreview("");
@@ -190,6 +190,8 @@ export default function AppLayout() {
       const payload = {};
       if (profileForm.full_name.trim()) payload.full_name = profileForm.full_name.trim();
       if (profileForm.username.trim()) payload.username = profileForm.username.trim().toLowerCase();
+      payload.phone = profileForm.phone.trim();
+      payload.mobile_alt = profileForm.mobile_alt.trim();
       if (Object.keys(payload).length > 0) {
         await usersApi.update(user.id, payload);
       }
@@ -694,6 +696,25 @@ export default function AppLayout() {
                   placeholder="e.g. john.doe"
                 />
                 <p className="text-[11px] text-muted-foreground">Used for @mentions and login. Letters, numbers, dots, underscores only.</p>
+              </div>
+              {/* Mobile numbers */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Mobile Number</Label>
+                  <Input
+                    value={profileForm.phone}
+                    onChange={(e) => setProfileForm(f => ({ ...f, phone: e.target.value }))}
+                    placeholder="+1 555 000 0000"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Additional Mobile <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Input
+                    value={profileForm.mobile_alt}
+                    onChange={(e) => setProfileForm(f => ({ ...f, mobile_alt: e.target.value }))}
+                    placeholder="+1 555 000 0001"
+                  />
+                </div>
               </div>
               {profileError && <p className="text-xs text-destructive">{profileError}</p>}
             </div>

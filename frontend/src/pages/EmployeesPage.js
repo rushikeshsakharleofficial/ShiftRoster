@@ -17,7 +17,7 @@ import { Plus, Search, MoreHorizontal, Pencil, Trash2, ChevronUp, ChevronDown, L
 const API_URL = import.meta.env.REACT_APP_BACKEND_URL || "";
 
 const EMPTY_FORM = {
-  email: "", password: "", full_name: "", username: "", phone: "",
+  email: "", password: "", full_name: "", username: "", phone: "", mobile_alt: "",
   system_role: "employee", employee_level: "L1", department_id: "", employment_type: "full_time",
   send_welcome_email: true,
 };
@@ -451,9 +451,15 @@ export default function EmployeesPage() {
                 </Select>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Phone</Label>
-              <Input data-testid="emp-phone-input" value={form.phone || ""} onChange={e => setForm({...form, phone: e.target.value})} />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Mobile Number</Label>
+                <Input data-testid="emp-phone-input" value={form.phone || ""} onChange={e => setForm({...form, phone: e.target.value})} placeholder="+1 555 000 0000" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Additional Mobile <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input value={form.mobile_alt || ""} onChange={e => setForm({...form, mobile_alt: e.target.value})} placeholder="+1 555 000 0001" />
+              </div>
             </div>
           </div>
           <DialogFooter>

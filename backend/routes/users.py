@@ -24,6 +24,7 @@ class CreateUserRequest(BaseModel):
     full_name: str
     username: Optional[str] = None  # auto-generated from full_name if omitted
     phone: str = ""
+    mobile_alt: str = ""
     system_role: str = "employee"
     employee_level: Optional[str] = "L1"
     department_id: Optional[str] = None
@@ -40,6 +41,7 @@ class UpdateUserRequest(BaseModel):
     full_name: Optional[str] = None
     username: Optional[str] = None
     phone: Optional[str] = None
+    mobile_alt: Optional[str] = None
     email: Optional[str] = None
     system_role: Optional[str] = None
     employee_level: Optional[str] = None
@@ -128,6 +130,7 @@ class CreateUserRequest(BaseModel):
     full_name: str
     username: Optional[str] = None  # auto-generated from full_name if omitted
     phone: str = ""
+    mobile_alt: str = ""
     system_role: str = "employee"
     employee_level: Optional[str] = "L1"
     department_id: Optional[str] = None
@@ -195,6 +198,7 @@ async def create_user(data: CreateUserRequest, request: Request):
         "password_hash": password_hash,
         "full_name": data.full_name,
         "phone": data.phone,
+        "mobile_alt": data.mobile_alt,
         "avatar_url": "",
         "system_role": data.system_role,
         "employee_level": data.employee_level if data.system_role == "employee" else None,
