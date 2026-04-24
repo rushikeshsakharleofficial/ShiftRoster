@@ -551,7 +551,10 @@ async def upload_avatar(user_id: str, request: Request, file: UploadFile = File(
     if len(content) > MAX_AVATAR_BYTES:
         raise HTTPException(status_code=400, detail="Image too large (max 5 MB)")
 
-    ext = os.path.splitext(file.filename or "avatar.jpg")[1] or ".jpg"
+    _ALLOWED_AVATAR_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+    ext = os.path.splitext(file.filename or "avatar.jpg")[1].lower() or ".jpg"
+    if ext not in _ALLOWED_AVATAR_EXTS:
+        raise HTTPException(status_code=400, detail="Only jpg, jpeg, png, gif, webp images allowed")
     unique_name = f"avatar_{uuid.uuid4().hex}{ext}"
     save_path = UPLOADS_DIR / unique_name
     with open(save_path, "wb") as f:

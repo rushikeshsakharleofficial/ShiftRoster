@@ -27,6 +27,14 @@ BLOCKED_EXTS = {
     ".wsf", ".hta", ".cpl", ".jsp", ".aspx", ".asp", ".cgi", ".pl",
 }
 
+# MIME whitelist — client-supplied type is not authoritative, but we reject obvious non-matches
+ALLOWED_MIME_PREFIXES = (
+    "image/", "video/", "audio/", "text/", "application/pdf",
+    "application/msword", "application/vnd.", "application/zip",
+    "application/x-zip", "application/json", "application/xml",
+    "application/octet-stream",
+)
+
 
 def _to_oid(val: str) -> ObjectId:
     try:
@@ -194,6 +202,10 @@ async def upload_file(
     ext = os.path.splitext(file.filename)[1].lower()
     if ext in BLOCKED_EXTS:
         raise HTTPException(400, f"File type '{ext}' is not allowed")
+
+    mime = (file.content_type or "application/octet-stream").lower()
+    if not any(mime.startswith(p) for p in ALLOWED_MIME_PREFIXES):
+        raise HTTPException(400, f"MIME type '{mime}' is not allowed")
 
     parent_oid = _parse_parent(parent_id)
     if parent_oid is not None:

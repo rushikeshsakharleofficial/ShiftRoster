@@ -6,8 +6,11 @@ from bson import ObjectId
 from db import db
 from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit, create_notification
 import uuid
+import logging
 from pathlib import Path
 import os
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/sops", tags=["sops"], redirect_slashes=False)
 
@@ -304,16 +307,20 @@ async def delete_sop(sop_id: str, user=Depends(get_current_user)):
         if v.get("file_url"):
             file_urls.add(v["file_url"])
 
-    # Physical cleanup
+    # Physical cleanup — containment check prevents path traversal
+    uploads_root = UPLOADS_DIR.resolve()
     for url in file_urls:
         if url.startswith("/uploads/"):
             filename = url.replace("/uploads/", "")
-            file_path = UPLOADS_DIR / filename
+            file_path = (UPLOADS_DIR / filename).resolve()
+            if not str(file_path).startswith(str(uploads_root)):
+                logger.warning("Skipping suspicious file path outside uploads dir: %s", file_path)
+                continue
             try:
                 if file_path.exists():
                     file_path.unlink()
             except Exception as e:
-                print(f"Failed to delete SOP file {file_path}: {e}")
+                logger.warning("Failed to delete SOP file %s: %s", file_path, e)
 
     await db.sops.delete_one({"_id": _to_oid(sop_id)})
     await db.sop_versions.delete_many({"sop_id": _to_oid(sop_id)})

@@ -369,7 +369,9 @@ async def websocket_endpoint(ws: WebSocket):
 
 
 @app.get("/api/presence")
-async def get_presence():
+async def get_presence(request: Request):
+    from auth_utils import get_current_user
+    await get_current_user(request)
     return presence.get_online_users()
 
 

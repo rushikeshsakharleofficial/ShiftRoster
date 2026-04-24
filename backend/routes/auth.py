@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 # Secure cookies over HTTPS — set SECURE_COOKIES=true in production
 _SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
+# Public-facing app URL — used in reset links; never derived from request headers
+_APP_URL = os.getenv("APP_URL", "http://localhost")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -333,8 +335,7 @@ async def forgot_password_request(data: RecoveryRequest, request: Request):
         }}
     )
 
-    origin = request.headers.get("origin", "https://bot.linuxhardened.com")
-    reset_link = f"{origin}/setup-password?token={token}"
+    reset_link = f"{_APP_URL}/setup-password?token={token}"
     
     smtp_success = False
     if org.get("smtp_enabled"):
@@ -362,7 +363,7 @@ async def forgot_password_request(data: RecoveryRequest, request: Request):
             user_id=str(mgr["_id"]),
             ntype="security",
             title="Password Reset Request",
-            body=f"{user['full_name']} requested a password reset. Link: {reset_link if not smtp_success else 'Sent via Email'}",
+            body=f"{user['full_name']} requested a password reset. {'Reset email sent to user.' if smtp_success else 'No SMTP configured — send user a new invitation from admin settings.'}",
             link=f"/settings?tab=security"
         )
 
@@ -427,8 +428,8 @@ async def admin_reset_mfa(user_id: str, request: Request):
     from auth_utils import get_current_user
     current = await get_current_user(request)
     
-    if current["system_role"] not in ["admin", "manager"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    if current["system_role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can reset user MFA")
 
     user = await db.users.find_one({"_id": ObjectId(user_id), "org_id": current["org_id"]})
     if not user:
@@ -535,30 +536,6 @@ async def generate_backup_codes(request: Request):
         {"$set": {"mfa_backup_codes": hashed, "updated_at": datetime.now(timezone.utc)}}
     )
     return {"backup_codes": codes}
-
-
-@router.post("/admin/reset-user-mfa/{user_id}")
-async def admin_reset_user_mfa(user_id: str, request: Request):
-    """Only administrator can disable MFA for an employee to prevent privilege escalation."""
-    from auth_utils import get_current_user
-    current = await get_current_user(request)
-    if current["system_role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can reset user MFA")
-
-    target = await db.users.find_one({"_id": ObjectId(user_id)})
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    await db.users.update_one(
-        {"_id": ObjectId(user_id)},
-        {"$set": {
-            "mfa_enabled": False,
-            "mfa_secret": None,
-            "mfa_backup_codes": [],
-            "updated_at": datetime.now(timezone.utc),
-        }}
-    )
-    return {"message": "MFA reset successfully", "user_id": user_id}
 
 
 @router.post("/refresh")
