@@ -460,7 +460,8 @@ function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, 
   const [text, setText] = useState("");
   const [alsoInChannel, setAlsoInChannel] = useState(false);
   const threadInputRef = useRef(null);
-  const replies = (allMessages || []).filter(m => m.reply_to?.id === rootMsg?.id && !m.deleted_at);
+  // Only show replies that are true thread replies (not main-chat quote replies with also_in_channel=true)
+  const replies = (allMessages || []).filter(m => m.reply_to?.id === rootMsg?.id && !m.deleted_at && !m.also_in_channel);
   const rootText = decryptedCache?.[rootMsg?.id] ?? rootMsg?.text;
   const rootName = rootMsg?.sender_name || "Unknown";
 
@@ -980,14 +981,14 @@ export default function ChatPage() {
       }
 
       const replyId = replyTo?.id || null;
+      // Main-chat quote replies always stay visible in channel
+      const mainPayload = replyId ? { ...basePayload, also_in_channel: true } : basePayload;
       if (uploadedFiles.length === 0) {
-        // text-only message
-        await sendMessage(activeChannelId, basePayload.text, replyId, !isActiveDM, null, basePayload);
+        await sendMessage(activeChannelId, mainPayload.text, replyId, !isActiveDM, null, mainPayload);
       } else {
-        // one message per file; text goes on first message only
         for (let i = 0; i < uploadedFiles.length; i++) {
-          const msgText = i === 0 ? basePayload.text : "";
-          await sendMessage(activeChannelId, msgText, i === 0 ? replyId : null, !isActiveDM, uploadedFiles[i], { ...basePayload, text: msgText });
+          const msgText = i === 0 ? mainPayload.text : "";
+          await sendMessage(activeChannelId, msgText, i === 0 ? replyId : null, !isActiveDM, uploadedFiles[i], { ...mainPayload, text: msgText });
         }
       }
 
