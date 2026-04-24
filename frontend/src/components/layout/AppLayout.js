@@ -689,93 +689,65 @@ export default function AppLayout() {
 
         {/* My Profile Dialog */}
         <Dialog open={profileOpen} onOpenChange={profileRequired ? () => {} : setProfileOpen}>
-          <DialogContent className="max-w-sm" onPointerDownOutside={profileRequired ? (e) => e.preventDefault() : undefined} onEscapeKeyDown={profileRequired ? (e) => e.preventDefault() : undefined}>
+          <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto" onPointerDownOutside={profileRequired ? (e) => e.preventDefault() : undefined} onEscapeKeyDown={profileRequired ? (e) => e.preventDefault() : undefined}>
             <DialogHeader>
               <DialogTitle>{profileRequired ? "Complete Your Profile" : "My Profile"}</DialogTitle>
             </DialogHeader>
             {profileRequired && (
               <p className="text-xs text-muted-foreground -mt-2 mb-1">Please fill in the required fields to continue using ShiftRoster.</p>
             )}
-            <div className="space-y-4 py-2">
+            <div className="space-y-2 py-1">
               {/* Avatar */}
-              <div className="flex flex-col items-center gap-2">
-                <div className="relative">
-                  <Avatar className="h-20 w-20">
+              <div className="flex items-center gap-3">
+                <div className="relative shrink-0">
+                  <Avatar className="h-12 w-12">
                     <AvatarImage src={profileAvatarPreview || (profileAvatar ? `${BACKEND_URL || ""}${profileAvatar}` : "")} />
-                    <AvatarFallback className={`text-2xl font-semibold ${getAvatarColor(user?.username || user?.full_name)}`}>
+                    <AvatarFallback className={`text-sm font-semibold ${getAvatarColor(user?.username || user?.full_name)}`}>
                       {initials}
                     </AvatarFallback>
                   </Avatar>
                   <button
                     type="button"
                     onClick={() => profileAvatarRef.current?.click()}
-                    className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:bg-primary/90"
+                    className="absolute bottom-0 right-0 h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:bg-primary/90"
                   >
-                    <Camera className="h-3 w-3" />
+                    <Camera className="h-2.5 w-2.5" />
                   </button>
                   <input ref={profileAvatarRef} type="file" accept="image/*" className="hidden" onChange={handleProfileAvatarChange} />
                 </div>
-                <p className="text-xs text-muted-foreground">Click camera to change avatar</p>
+                <p className="text-[11px] text-muted-foreground">Click camera to change avatar</p>
               </div>
-              {/* Full name */}
-              <div className="space-y-1">
-                <Label className="text-xs">Full Name</Label>
-                <Input
-                  value={profileForm.full_name}
-                  onChange={(e) => setProfileForm(f => ({ ...f, full_name: e.target.value }))}
-                  placeholder="Your full name"
-                />
-              </div>
-              {/* Username */}
-              <div className="space-y-1">
-                <Label className="text-xs">Username</Label>
-                <Input
-                  value={profileForm.username}
-                  onChange={(e) => setProfileForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, "") }))}
-                  placeholder="e.g. john.doe"
-                />
+              {/* Full name + Username row */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-0.5">
+                  <Label className="text-[11px]">Full Name</Label>
+                  <Input className="h-7 text-xs" value={profileForm.full_name} onChange={(e) => setProfileForm(f => ({ ...f, full_name: e.target.value }))} placeholder="Your full name" />
+                </div>
+                <div className="space-y-0.5">
+                  <Label className="text-[11px]">Username</Label>
+                  <Input className="h-7 text-xs" value={profileForm.username} onChange={(e) => setProfileForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, "") }))} placeholder="john.doe" />
+                </div>
               </div>
               {/* Email */}
-              <div className="space-y-1">
-                <Label className="text-xs">Email <span className="text-destructive">*</span></Label>
-                <Input
-                  type="email"
-                  required
-                  value={profileForm.email}
-                  onChange={(e) => setProfileForm(f => ({ ...f, email: e.target.value }))}
-                  placeholder="you@example.com"
-                />
-                <p className="text-[11px] text-muted-foreground">Used for @mentions and login. Letters, numbers, dots, underscores only.</p>
+              <div className="space-y-0.5">
+                <Label className="text-[11px]">Email <span className="text-destructive">*</span></Label>
+                <Input className="h-7 text-xs" type="email" required value={profileForm.email} onChange={(e) => setProfileForm(f => ({ ...f, email: e.target.value }))} placeholder="you@example.com" />
               </div>
               {/* Mobile numbers */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Mobile Number <span className="text-destructive">*</span></Label>
-                  <Input
-                    required
-                    value={profileForm.phone}
-                    onChange={(e) => setProfileForm(f => ({ ...f, phone: e.target.value }))}
-                    placeholder="+1 555 000 0000"
-                  />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-0.5">
+                  <Label className="text-[11px]">Mobile <span className="text-destructive">*</span></Label>
+                  <Input className="h-7 text-xs" required value={profileForm.phone} onChange={(e) => setProfileForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 555 000 0000" />
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Additional Mobile <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                  <Input
-                    value={profileForm.mobile_alt}
-                    onChange={(e) => setProfileForm(f => ({ ...f, mobile_alt: e.target.value }))}
-                    placeholder="+1 555 000 0001"
-                  />
+                <div className="space-y-0.5">
+                  <Label className="text-[11px]">Alt Mobile <span className="text-muted-foreground font-normal">(opt)</span></Label>
+                  <Input className="h-7 text-xs" value={profileForm.mobile_alt} onChange={(e) => setProfileForm(f => ({ ...f, mobile_alt: e.target.value }))} placeholder="+1 555 000 0001" />
                 </div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Date of Birth <span className="text-destructive">*</span></Label>
-                <Input
-                  type="date"
-                  required
-                  value={profileForm.date_of_birth}
-                  onChange={(e) => setProfileForm(f => ({ ...f, date_of_birth: e.target.value }))}
-                  className="h-8 text-sm"
-                />
+              {/* Date of Birth */}
+              <div className="space-y-0.5">
+                <Label className="text-[11px]">Date of Birth <span className="text-destructive">*</span></Label>
+                <Input className="h-7 text-xs" type="date" required value={profileForm.date_of_birth} onChange={(e) => setProfileForm(f => ({ ...f, date_of_birth: e.target.value }))} />
               </div>
               {profileError && <p className="text-xs text-destructive">{profileError}</p>}
             </div>
