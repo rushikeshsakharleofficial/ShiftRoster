@@ -183,6 +183,10 @@ export default function AppLayout() {
 
   const handleProfileSave = async () => {
     setProfileError("");
+    if (!profileForm.date_of_birth) {
+      setProfileError("Date of Birth is required.");
+      return;
+    }
     setProfileSaving(true);
     try {
       // Upload avatar first if a new file was selected
@@ -734,9 +738,10 @@ export default function AppLayout() {
                 </div>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Date of Birth</Label>
+                <Label className="text-xs text-muted-foreground">Date of Birth <span className="text-destructive">*</span></Label>
                 <Input
                   type="date"
+                  required
                   value={profileForm.date_of_birth}
                   onChange={(e) => setProfileForm(f => ({ ...f, date_of_birth: e.target.value }))}
                   className="h-8 text-sm"

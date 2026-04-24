@@ -144,7 +144,7 @@ class CreateUserRequest(BaseModel):
     mfa_mandated: bool = False
     disappearing_timer: Optional[str] = None
     public_key: Optional[str] = None
-    date_of_birth: Optional[str] = None  # "YYYY-MM-DD"
+    date_of_birth: str  # "YYYY-MM-DD", required
     send_welcome_email: bool = True
 
 
