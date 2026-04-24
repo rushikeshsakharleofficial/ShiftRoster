@@ -635,9 +635,12 @@ export default function StickyNotesPage() {
 
               {/* Toggles Section */}
               <div className="grid grid-cols-2 gap-4 pt-1">
-                <div 
+                <div
+                  role="button"
+                  tabIndex={0}
                   className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/20 cursor-pointer hover:bg-muted/30 transition-colors"
                   onClick={() => setForm({ ...form, is_public: !form.is_public })}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
                 >
                   <div className="flex items-center gap-2">
                     {form.is_public ? <Globe className="h-4 w-4 text-primary" /> : <Lock className="h-4 w-4 text-muted-foreground" />}
@@ -650,9 +653,12 @@ export default function StickyNotesPage() {
                   />
                 </div>
 
-                <div 
+                <div
+                  role="button"
+                  tabIndex={0}
                   className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/20 cursor-pointer hover:bg-muted/30 transition-colors"
                   onClick={() => setForm({ ...form, pinned: !form.pinned })}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
                 >
                   <div className="flex items-center gap-2">
                     <Pin className={cn("h-4 w-4", form.pinned ? "text-primary" : "text-muted-foreground")} />

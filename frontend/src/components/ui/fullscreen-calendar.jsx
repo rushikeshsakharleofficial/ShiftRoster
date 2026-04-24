@@ -156,8 +156,11 @@ export function FullScreenCalendar({ data = [], onDateClick, onNewEvent }) {
             {days.map((day, dayIdx) => (
               <div
                 key={dayIdx}
+                role="button"
+                tabIndex={0}
                 onClick={() => handleDayClick(day)}
                 onDoubleClick={() => handleDayDoubleClick(day)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
                 className={cn(
                   dayIdx === 0 && colStartClasses[getDay(day)],
                   !isEqual(day, selectedDay) &&

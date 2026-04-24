@@ -1208,13 +1208,16 @@ function FolderCard({ folder, onOpen, onRename, onMove, onDelete }) {
       className="group relative p-3 cursor-pointer hover:shadow-md transition-all hover:border-primary/40"
       onDoubleClick={onOpen}
     >
-      <div className="flex flex-col items-center gap-2" onClick={onOpen}>
+      <div className="flex flex-col items-center gap-2" role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onOpen(e); }}>
         <Folder className="h-12 w-12 text-primary" />
         <p className="text-xs font-medium truncate w-full text-center">{folder.name}</p>
       </div>
       <div
+        role="button"
+        tabIndex={0}
         className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
       >
         <ItemMenu
           file={folder}
@@ -1246,8 +1249,11 @@ function FileCardItem({ file, onOpen, onDownload, onRename, onMove, onDelete }) 
         {isSop && <p className="text-[9px] uppercase tracking-wide text-primary/70">SOP</p>}
       </div>
       <div
+        role="button"
+        tabIndex={0}
         className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
       >
         <ItemMenu
           file={file}

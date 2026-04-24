@@ -957,9 +957,12 @@ function PresentationEditor({ content, onChange, editable }) {
         <ScrollArea className="flex-1 border rounded-lg p-1">
           {slides.map((slide, i) => (
             <div key={slide.id}
+              role="button"
+              tabIndex={0}
               className={`group relative rounded-lg border cursor-pointer mb-1 transition-all overflow-hidden
                 ${idx === i ? "border-primary ring-1 ring-primary shadow-sm" : "border-transparent hover:border-border"}`}
-              onClick={() => setActiveIdx(i)}>
+              onClick={() => setActiveIdx(i)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}>
               <div className="aspect-video flex items-center justify-center p-2"
                 style={{ backgroundColor: slide.bg || "#1e293b" }}>
                 <div className={`text-center w-full overflow-hidden ${isLightBg(slide.bg) ? "text-gray-900" : "text-white"}`}>

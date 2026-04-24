@@ -266,8 +266,8 @@ function StoryViewer({ groups, startGroupIdx, currentUserId, onClose, onDelete }
         </div>
 
         {/* Tap zones — z-10, below header overlay (z-20) */}
-        <div className="absolute inset-y-0 left-0 w-1/3 z-10" onClick={goPrev} />
-        <div className="absolute inset-y-0 right-0 w-1/3 z-10" onClick={goNext} />
+        <div role="button" tabIndex={0} className="absolute inset-y-0 left-0 w-1/3 z-10" onClick={goPrev} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') goPrev(e); }} />
+        <div role="button" tabIndex={0} className="absolute inset-y-0 right-0 w-1/3 z-10" onClick={goNext} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') goNext(e); }} />
       </motion.div>
 
       {/* Prev/Next group arrows */}
@@ -458,8 +458,11 @@ function AddStoryDialog({ onClose, onAdded, currentUserId }) {
           ) : (
             <>
               <div
+                role="button"
+                tabIndex={0}
                 className="w-full h-48 rounded-xl border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:border-primary transition-colors overflow-hidden"
                 onClick={() => fileRef.current?.click()}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
               >
                 {preview ? (
                   file?.type.startsWith("video/") ? (

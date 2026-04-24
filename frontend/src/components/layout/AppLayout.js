@@ -503,7 +503,7 @@ export default function AppLayout() {
 
       {/* Mobile overlay */}
       {mobileSidebar && (
-        <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setMobileSidebar(false)} />
+        <div role="button" tabIndex={0} className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setMobileSidebar(false)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }} />
       )}
 
       {/* Main content */}
@@ -570,8 +570,11 @@ export default function AppLayout() {
                 </div>
                 {chatUnread > 0 && (
                   <div
+                    role="button"
+                    tabIndex={0}
                     className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer border-b border-border/50 bg-primary/[0.03] transition-colors"
                     onClick={() => navigate("/chat")}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
                   >
                     <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                       <MessageSquare className="h-3.5 w-3.5 text-primary" />
@@ -595,10 +598,13 @@ export default function AppLayout() {
                     notifications.map((n) => (
                       <div
                         key={n.id}
+                        role="button"
+                        tabIndex={0}
                         className={`flex items-start gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer border-b border-border/50 last:border-b-0 transition-colors ${
                           !n.is_read ? "bg-primary/[0.02]" : ""
                         }`}
                         onClick={() => !n.is_read && handleMarkRead(n.id)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
                       >
                         <div className={`mt-0.5 h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
                           !n.is_read ? "bg-primary/10" : "bg-muted"

@@ -298,10 +298,13 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                   {/* Reply context — quoted block above bubble */}
                   {msg.reply_to && (
                     <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => {
                         const el = document.querySelector(`[data-msg-id="${msg.reply_to.id}"]`);
                         if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("ring-2","ring-primary/40"); setTimeout(() => el.classList.remove("ring-2","ring-primary/40"), 1200); }
                       }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
                       className={cn(
                         "flex items-center gap-1.5 px-2.5 py-1 rounded-lg mb-0.5 border-l-2 border-primary/50",
                         "bg-muted/50 max-w-[85%] cursor-pointer hover:bg-muted/80 transition-colors",
@@ -579,7 +582,10 @@ function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, 
         {/* Slack-style "also send to channel" toggle */}
         <label className="flex items-center gap-2 cursor-pointer group px-1">
           <div
+            role="button"
+            tabIndex={0}
             onClick={() => setAlsoInChannel(v => !v)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
             className={cn(
               "w-8 h-4 rounded-full transition-colors shrink-0 relative",
               alsoInChannel ? "bg-primary" : "bg-muted-foreground/25"
@@ -875,7 +881,10 @@ export default function ChatPage({ compact = false }) {
           const color = getAvatarColor(newMsg.sender_name || "");
           toast.custom((id) => (
             <div
+              role="button"
+              tabIndex={0}
               onClick={() => { if (!compact) navigate(`/chat/${channelId}`); else setActiveChannelId(channelId); toast.dismiss(id); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
               className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border shadow-lg cursor-pointer hover:bg-muted/60 transition-colors w-80 max-w-full"
             >
               <span className={cn("h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-sm font-bold text-white", color)}>{initials}</span>

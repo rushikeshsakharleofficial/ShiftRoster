@@ -224,7 +224,7 @@ export default function SOPsPage() {
                     <td className="px-4 py-3"><Badge variant={sop.status === "archived" ? "secondary" : "default"}>{sop.status}</Badge></td>
                     <td className="px-4 py-3 text-muted-foreground">{sop.acknowledged_by?.length || 0}</td>
                     <td className="px-4 py-3">
-                      <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
+                      <div role="button" tabIndex={0} className="flex justify-end gap-1" onClick={e => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}>
                         {pendingForMe && (
                           <>
                             <Button size="sm" variant="outline" className="h-7 px-2 text-green-600 border-green-300 hover:bg-green-50" onClick={e => handleApprove(sop, e)}><Check className="h-3 w-3" /></Button>
