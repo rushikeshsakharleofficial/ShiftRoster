@@ -159,7 +159,7 @@ const isOnlyEmojis = (text) => {
 
 // Renders a contiguous block of messages from the same author. Avatar + name
 // appear once at the top; subsequent bubbles are tightly stacked.
-function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete, onReply, onOpenThread, decryptedCache }) {
+function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete, onReply, onOpenThread, decryptedCache, onReact, threadReplyCount }) {
   const first = messages[0];
   const cached = userCache?.[first.sender_username] || userCache?.[first.sender_id];
   const displayName =
@@ -277,6 +277,15 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                       "flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity shrink-0",
                       "bg-background border border-border rounded-full px-1 py-0.5 shadow-sm"
                     )}>
+                      {/* Quick emoji shortcuts */}
+                      {["👍","❤️","😄"].map(emoji => (
+                        <button key={emoji}
+                          onClick={() => onReact && onReact(msg.id, emoji)}
+                          className="p-1 rounded-full hover:bg-muted text-base leading-none transition-colors"
+                          title={emoji}
+                        >{emoji}</button>
+                      ))}
+                      <div className="w-px h-3 bg-border/60 mx-0.5" />
                       <button
                         onClick={() => onReply && onReply(msg)}
                         className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
@@ -324,6 +333,42 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                       fileType={msg.file_type}
                     />
                   )}
+                  {threadReplyCount > 0 && (
+                    <button
+                      onClick={() => onOpenThread && onOpenThread(msg)}
+                      className={cn(
+                        "flex items-center gap-1.5 mt-1 text-[11px] font-mono text-primary hover:underline",
+                        isOwn ? "self-end" : "self-start"
+                      )}
+                    >
+                      <MessageSquareDashed className="h-3 w-3" />
+                      {threadReplyCount} {threadReplyCount === 1 ? "reply" : "replies"}
+                    </button>
+                  )}
+                  {msg.reactions && msg.reactions.length > 0 && (() => {
+                    const grouped = {};
+                    msg.reactions.forEach(r => { grouped[r.emoji] = (grouped[r.emoji] || []); grouped[r.emoji].push(r); });
+                    return (
+                      <div className={cn("flex gap-1 flex-wrap mt-1", isOwn ? "justify-end" : "justify-start")}>
+                        {Object.entries(grouped).map(([emoji, users]) => {
+                          const iMine = users.some(r => r.user_id === user?.id);
+                          return (
+                            <button key={emoji}
+                              onClick={() => onReact && onReact(msg.id, emoji)}
+                              className={cn(
+                                "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono border transition-colors",
+                                iMine
+                                  ? "bg-primary/15 border-primary/40 text-primary"
+                                  : "bg-muted/50 border-border/40 text-muted-foreground hover:border-primary/30"
+                              )}
+                            >
+                              {emoji} {users.length}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </>
               )}
               {isLast && !isEditing && (
@@ -928,10 +973,10 @@ export default function ChatPage() {
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
       {/* === LEFT ASIDE — fixed 280px === */}
-      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border/20 bg-card dark:bg-gradient-to-b dark:from-[#0f1117] dark:to-[#141720]">
+      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border/10 bg-[#1a1614] dark:bg-[#0f0d0c]">
         {/* Top: title + quick actions */}
         <div className="h-14 px-4 flex items-center justify-between border-b border-border/20 shrink-0">
-          <h2 className="text-base font-semibold tracking-tight dark:text-white/90">Messages</h2>
+          <h2 className="text-base font-semibold tracking-tight dark:text-white/90 !text-white/90">Messages</h2>
           <div className="flex items-center gap-0.5">
             <Button
               variant="ghost"
@@ -971,7 +1016,7 @@ export default function ChatPage() {
               placeholder="Search"
               value={chatListFilter}
               onChange={(e) => setChatListFilter(e.target.value)}
-              className="pl-8 h-8 text-xs rounded-lg bg-muted/40 border-transparent dark:bg-white/5 dark:border-white/10 dark:text-white/80 dark:placeholder:text-white/30 focus-visible:bg-background dark:focus-visible:bg-white/10"
+              className="pl-8 h-8 text-xs rounded-lg bg-muted/40 border-transparent dark:bg-white/5 dark:border-white/10 dark:text-white/80 dark:placeholder:text-white/30 focus-visible:bg-background dark:focus-visible:bg-white/10 !bg-white/[0.08] !border-white/10 !text-white/80 placeholder:!text-white/30"
             />
           </div>
         </div>
@@ -981,7 +1026,7 @@ export default function ChatPage() {
           {/* Channels */}
           <div className="pt-3">
             <div className="flex items-center justify-between px-4 pb-1">
-              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/50">Channels</span>
+              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/50 !text-white/30">Channels</span>
               <button
                 onClick={() => setShowCreateChannel(true)}
                 className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
@@ -1000,8 +1045,8 @@ export default function ChatPage() {
                   className={cn(
                     "w-full flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-[5px] text-left transition-colors text-[13px] border-l-2",
                     activeChannelId === ch.id
-                      ? "border-primary bg-primary/8 text-foreground font-semibold"
-                      : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground dark:text-white/50 dark:hover:text-white/80"
+                      ? "border-primary bg-primary/8 text-foreground font-semibold !text-white !bg-white/10 !border-primary"
+                      : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground dark:text-white/50 dark:hover:text-white/80 !text-white/55 hover:!text-white/80 hover:!bg-white/[0.06]"
                   )}
                 >
                   {ch.type === "private"
@@ -1021,7 +1066,7 @@ export default function ChatPage() {
           {/* Direct messages */}
           <div className="pt-4 pb-3">
             <div className="flex items-center justify-between px-4 pb-1">
-              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/50">Direct Messages</span>
+              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/50 !text-white/30">Direct Messages</span>
             </div>
             <div className="px-2 space-y-0.5">
               {filteredDms.length === 0 ? (
@@ -1033,8 +1078,8 @@ export default function ChatPage() {
                   className={cn(
                     "w-full flex items-center gap-2 pl-2 pr-2 py-1.5 rounded-[5px] text-left transition-colors text-[13px] border-l-2",
                     activeChannelId === dm.id
-                      ? "border-primary bg-primary/8 text-foreground font-semibold"
-                      : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground dark:text-white/50 dark:hover:text-white/80"
+                      ? "border-primary bg-primary/8 text-foreground font-semibold !text-white !bg-white/10 !border-primary"
+                      : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground dark:text-white/50 dark:hover:text-white/80 !text-white/55 hover:!text-white/80 hover:!bg-white/[0.06]"
                   )}
                 >
                   <div className="relative shrink-0">
@@ -1056,7 +1101,7 @@ export default function ChatPage() {
         </ScrollArea>
 
         {/* Footer */}
-        <div className="border-t border-border/20 px-2 py-2 shrink-0 flex items-center gap-1 dark:bg-black/20 backdrop-blur-sm">
+        <div className="border-t border-border/20 px-2 py-2 shrink-0 flex items-center gap-1 dark:bg-black/20 backdrop-blur-sm !bg-black/20">
           <ThemeToggle />
           <Button
             variant="ghost"
@@ -1353,6 +1398,8 @@ export default function ChatPage() {
                       onReply={(msg) => setReplyTo(msg)}
                       onOpenThread={(msg) => setThreadMsg(msg)}
                       decryptedCache={decryptedCache}
+                      onReact={(msgId, emoji) => reactToMessage(msgId, emoji)}
+                      threadReplyCount={0}
                     />
                   );
                 })}
