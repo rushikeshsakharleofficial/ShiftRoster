@@ -112,6 +112,12 @@ jobs:
           # Only rebuild services with local Dockerfiles; third-party images (runner) need no rebuild
           docker compose up -d --build --no-deps backend frontend nginx
 
+      - name: Dump backend logs on failure
+        if: failure()
+        run: |
+          echo "=== backend logs ==="
+          docker logs shiftroster-backend --tail 80 2>&1 || true
+
       - name: Verify healthy
         run: |
           sleep 10
