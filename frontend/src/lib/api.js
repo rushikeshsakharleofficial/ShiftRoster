@@ -9,6 +9,14 @@ const api = axios.create({
   withCredentials: true, // Send cookies with every request
 });
 
+// Auto-remove Content-Type for FormData so browser sets multipart boundary correctly
+api.interceptors.request.use((config) => {
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
+  return config;
+});
+
 // Interceptor for manual token handling is no longer needed with secure cookies
 // Handle 401 - try refresh, then logout
 api.interceptors.response.use(
