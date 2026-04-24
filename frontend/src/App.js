@@ -26,6 +26,7 @@ import TasksPage from "@/pages/TasksPage";
 import SOPsPage from "@/pages/SOPsPage";
 import SOPEditorPage from "@/pages/SOPEditorPage";
 import FileManagerPage from "@/pages/FileManagerPage";
+import StoriesPage from "@/pages/StoriesPage";
 import ChatPage from "@/pages/ChatPage";
 import ChatLayout from "@/components/layout/ChatLayout";
 import { ChatProvider } from "@/contexts/ChatContext";
@@ -151,6 +152,7 @@ export default function App() {
             <Route path="/sops" element={<SOPsPage />} />
             <Route path="/sops/:id" element={<SOPEditorPage />} />
             <Route path="/files" element={<FileManagerPage />} />
+            <Route path="/stories" element={<StoriesPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/reports" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}><ReportsPage /></Suspense>} />
             <Route path="/audit-log" element={<AuditLogPage />} />

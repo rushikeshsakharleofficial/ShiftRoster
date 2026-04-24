@@ -281,6 +281,7 @@ export default function AppLayout() {
       label: "Comms",
       items: [
         { to: "/chat", icon: MessageSquare, label: "Chat", show: true, external: true },
+        { to: "/stories", icon: Camera, label: "Stories", show: true },
         { to: "/notifications", icon: Bell, label: "Notifications", show: true },
       ],
     },

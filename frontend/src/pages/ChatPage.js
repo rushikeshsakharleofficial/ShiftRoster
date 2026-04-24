@@ -37,7 +37,6 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import MediaMenu from "@/components/chat/MediaMenu";
-import { StoryStrip } from "@/components/chat/StoryStrip";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import * as crypto from "@/lib/crypto";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -101,7 +100,7 @@ function FmtBtn({ icon: Icon, title, onClick }) {
       type="button"
       onMouseDown={(e) => { e.preventDefault(); onClick(); }}
       title={title}
-      className="h-6 w-6 flex items-center justify-center rounded hover:bg-white/10 text-[#d6c4ac]/50 hover:text-[#ffd79b] transition-colors"
+      className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted dark:hover:bg-white/10 text-muted-foreground/60 dark:text-[#d6c4ac]/50 hover:text-primary dark:hover:text-[#ffd79b] transition-colors"
     >
       <Icon className="h-3 w-3" />
     </button>
@@ -114,7 +113,7 @@ function DaySeparator({ date }) {
   return (
     <div className="flex items-center my-6 px-4">
       <div className="flex-1 h-px bg-gradient-to-r from-transparent via-border/60 to-transparent" />
-      <span className="mx-3 text-[9px] font-mono font-semibold text-[#d6c4ac]/60 uppercase tracking-[0.2em] px-2 py-0.5 rounded border border-[#514532]/30 bg-[#131b2e]">
+      <span className="mx-3 text-[9px] font-mono font-semibold text-muted-foreground/60 dark:text-[#d6c4ac]/60 uppercase tracking-[0.2em] px-2 py-0.5 rounded border border-border/30 dark:border-[#514532]/30 bg-card dark:bg-zinc-950">
         {format(new Date(date), "EEE, MMM d")}
       </span>
       <div className="flex-1 h-px bg-gradient-to-r from-transparent via-border/60 to-transparent" />
@@ -275,7 +274,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
           const isLast = idx === messages.length - 1;
           const isEditing = editingId === msg.id;
           return (
-            <div key={msg.id} className={cn("relative flex flex-col", isOwn ? "items-end" : "items-start")}>
+            <div key={msg.id} data-msg-id={msg.id} className={cn("relative flex flex-col", isOwn ? "items-end" : "items-start")}>
               {isEditing ? (
                 <div className="flex flex-col gap-1 min-w-[200px]">
                   <Textarea
@@ -298,11 +297,16 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                 <>
                   {/* Reply context — quoted block above bubble */}
                   {msg.reply_to && (
-                    <div className={cn(
-                      "flex items-center gap-1.5 px-2.5 py-1 rounded-lg mb-0.5 border-l-2 border-primary/50",
-                      "bg-muted/50 max-w-[85%] cursor-default",
-                      isOwn ? "self-end" : "self-start"
-                    )}>
+                    <div
+                      onClick={() => {
+                        const el = document.querySelector(`[data-msg-id="${msg.reply_to.id}"]`);
+                        if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("ring-2","ring-primary/40"); setTimeout(() => el.classList.remove("ring-2","ring-primary/40"), 1200); }
+                      }}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 rounded-lg mb-0.5 border-l-2 border-primary/50",
+                        "bg-muted/50 max-w-[85%] cursor-pointer hover:bg-muted/80 transition-colors",
+                        isOwn ? "self-end" : "self-start"
+                      )}>
                       <Reply className="h-2.5 w-2.5 text-primary/60 shrink-0" />
                       <p className="text-[10px] font-semibold text-primary/70 shrink-0 truncate max-w-[60px]">
                         {msg.reply_to.sender_name?.split(" ")[0] || "Someone"}
@@ -322,7 +326,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                           isOwn
                             ? cn("bg-gradient-to-br from-[#ffd79b] to-[#ffb300] text-[#432c00] shadow-lg shadow-[#ffb300]/20 font-medium",
                                "rounded-2xl", isLast && "rounded-br-[4px]")
-                            : cn("bg-[#171f33] text-[#dae2fd]",
+                            : cn("bg-muted dark:bg-zinc-900 text-foreground dark:text-[#dae2fd]",
                                "rounded-2xl", isLast && "rounded-bl-[4px]")
                         )}
                       >
@@ -333,7 +337,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                     {/* Hover action bar */}
                     <div className={cn(
                       "flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity shrink-0",
-                      "bg-[#2d3449] border border-[#514532]/60 shadow-[0_4px_24px_rgba(6,14,32,0.4)] rounded-full px-1 py-0.5"
+                      "bg-popover dark:bg-zinc-800 border border-border/60 dark:border-[#514532]/60 shadow-[0_4px_24px_rgba(6,14,32,0.4)] rounded-full px-1 py-0.5"
                     )}>
                       {/* Quick emoji shortcuts */}
                       {["👍","❤️","😄"].map(emoji => (
@@ -461,9 +465,9 @@ function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, 
   const rootName = rootMsg?.sender_name || "Unknown";
 
   return (
-    <div className="w-[300px] shrink-0 border-l border-[#514532]/40 flex flex-col bg-[#0b1326]">
+    <div className="w-[300px] shrink-0 border-l border-border/40 dark:border-[#514532]/40 flex flex-col bg-background dark:bg-black">
       {/* Header */}
-      <div className="h-14 flex items-center justify-between px-4 border-b border-border/40 shrink-0 bg-[#131b2e] backdrop-blur-md">
+      <div className="h-14 flex items-center justify-between px-4 border-b border-border/40 shrink-0 bg-card dark:bg-zinc-950 backdrop-blur-md">
         <div className="flex items-center gap-2">
           <MessageSquareDashed className="h-4 w-4 text-primary" />
           <span className="font-heading text-sm font-semibold">Thread</span>
@@ -517,7 +521,7 @@ function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, 
                     "px-3 py-1.5 text-[12.5px] rounded-xl leading-relaxed",
                     isOwn
                       ? "bg-gradient-to-br from-[#ffd79b] to-[#ffb300] text-[#432c00] rounded-br-[3px]"
-                      : "bg-[#171f33] text-[#dae2fd] rounded-bl-[3px]"
+                      : "bg-muted dark:bg-zinc-900 text-foreground dark:text-[#dae2fd] rounded-bl-[3px]"
                   )}>
                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{msgText}</ReactMarkdown>
                   </div>
@@ -532,8 +536,8 @@ function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, 
       </ScrollArea>
 
       {/* Thread composer */}
-      <div className="border-t border-border/40 p-3 shrink-0 bg-[#0b1326] space-y-2">
-        <div className="bg-[#222a3d] rounded-xl overflow-hidden shadow-[0_0_0_1px_rgba(253,215,155,0.12)] focus-within:shadow-[0_0_0_1px_rgba(253,215,155,0.35)]">
+      <div className="border-t border-border/40 p-3 shrink-0 bg-background dark:bg-black space-y-2">
+        <div className="bg-muted/60 dark:bg-zinc-900 rounded-xl overflow-hidden shadow-[0_0_0_1px_rgba(253,215,155,0.12)] focus-within:shadow-[0_0_0_1px_rgba(253,215,155,0.35)]">
           {/* Toolbar */}
           <div className="flex items-center gap-0.5 px-2 pt-1.5 pb-1 border-b border-[#ffd79b]/10">
             <FmtBtn icon={Bold} title="Bold" onClick={() => applyFormat('bold', threadInputRef.current, text, setText)} />
@@ -659,6 +663,7 @@ export default function ChatPage() {
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
+  const msgCountsRef = useRef({});
 
   const joinedChannels = useMemo(() => channels.filter((ch) => ch.is_member), [channels]);
 
@@ -702,13 +707,19 @@ export default function ChatPage() {
     [messages, activeChannelId]
   );
 
+  // Main chat excludes thread replies (unless also_in_channel=true)
+  const mainMessages = useMemo(
+    () => currentMessages.filter(m => !m.reply_to || m.also_in_channel),
+    [currentMessages]
+  );
+
   // Group consecutive same-sender, same-day messages into blocks.
   const messageBlocks = useMemo(() => {
     const blocks = [];
     let currentBlock = null;
     let lastDay = null;
 
-    for (const msg of currentMessages) {
+    for (const msg of mainMessages) {
       const day = format(new Date(msg.created_at), "yyyy-MM-dd");
       if (day !== lastDay) {
         if (currentBlock) blocks.push(currentBlock);
@@ -737,7 +748,7 @@ export default function ChatPage() {
     }
     if (currentBlock) blocks.push(currentBlock);
     return blocks;
-  }, [currentMessages]);
+  }, [mainMessages]);
 
   // Discovery search
   useEffect(() => {
@@ -848,6 +859,35 @@ export default function ChatPage() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [currentMessages]);
+
+  // Pop notification when new message arrives in non-active channel/DM
+  useEffect(() => {
+    Object.entries(messages).forEach(([channelId, msgs]) => {
+      const prev = msgCountsRef.current[channelId] ?? msgs.length;
+      if (msgs.length > prev && channelId !== activeChannelId) {
+        const newMsg = msgs[msgs.length - 1];
+        if (newMsg && newMsg.sender_id !== user?.id && !newMsg.deleted_at) {
+          const ch = [...channels, ...dms].find(c => c.id === channelId);
+          const chLabel = ch?.name ? (dms.some(d => d.id === channelId) ? ch.name : `#${ch.name}`) : "a conversation";
+          const initials = (newMsg.sender_name || "?").charAt(0).toUpperCase();
+          const color = getAvatarColor(newMsg.sender_name || "");
+          toast.custom((id) => (
+            <div
+              onClick={() => { navigate(`/chat/${channelId}`); toast.dismiss(id); }}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border shadow-lg cursor-pointer hover:bg-muted/60 transition-colors w-80 max-w-full"
+            >
+              <span className={cn("h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-sm font-bold text-white", color)}>{initials}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-semibold truncate">{newMsg.sender_name || "Someone"} <span className="font-normal text-muted-foreground">{chLabel}</span></p>
+                <p className="text-[11px] text-muted-foreground truncate mt-0.5">{newMsg.text?.slice(0, 80) || "Sent an attachment"}</p>
+              </div>
+            </div>
+          ), { duration: 4000 });
+        }
+      }
+      msgCountsRef.current[channelId] = msgs.length;
+    });
+  }, [messages, activeChannelId, channels, dms, user, navigate]);
 
   useEffect(() => {
     if (inputRef.current) {
@@ -1073,10 +1113,10 @@ export default function ChatPage() {
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
       {/* === LEFT ASIDE — fixed 280px === */}
-      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border/20 bg-[#131b2e] shadow-[2px_0_24px_rgba(6,14,32,0.4)]">
+      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border/20 bg-card dark:bg-zinc-950 shadow-[2px_0_24px_rgba(6,14,32,0.15)] dark:shadow-[2px_0_24px_rgba(6,14,32,0.4)]">
         {/* Top: title + quick actions */}
         <div className="h-14 px-4 flex items-center justify-between border-b border-border/20 shrink-0">
-          <h2 className="text-base font-semibold tracking-tight !text-[#dae2fd]">Messages</h2>
+          <h2 className="text-base font-semibold tracking-tight text-foreground dark:text-[#dae2fd]">Messages</h2>
           <div className="flex items-center gap-0.5">
             <Button
               variant="ghost"
@@ -1116,7 +1156,7 @@ export default function ChatPage() {
               placeholder="Search"
               value={chatListFilter}
               onChange={(e) => setChatListFilter(e.target.value)}
-              className="pl-8 h-8 text-xs rounded-lg !bg-[#222a3d] !border-[#514532]/40 !text-[#dae2fd] !placeholder-[#d6c4ac]/50 focus-visible:bg-[#222a3d]"
+              className="pl-8 h-8 text-xs rounded-lg bg-muted dark:bg-zinc-900 border-border/40 dark:!border-[#514532]/40 text-foreground dark:!text-[#dae2fd] placeholder:text-muted-foreground/50"
             />
           </div>
         </div>
@@ -1126,7 +1166,7 @@ export default function ChatPage() {
           {/* Channels */}
           <div className="pt-3">
             <div className="flex items-center justify-between px-4 pb-1">
-              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] !text-[#d6c4ac]/60">Channels</span>
+              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/60 dark:text-[#d6c4ac]/60">Channels</span>
               <button
                 onClick={() => setShowCreateChannel(true)}
                 className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
@@ -1146,7 +1186,7 @@ export default function ChatPage() {
                     "w-full flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-[5px] text-left transition-colors text-[13px] border-l-2",
                     activeChannelId === ch.id
                       ? "border-none bg-gradient-to-br from-[#ffd79b]/20 to-[#ffb300]/10 text-[#ffd79b] font-bold"
-                      : "border-transparent text-[#d6c4ac] hover:text-[#ffd79b] hover:bg-[#222a3d]/60"
+                      : "border-transparent text-muted-foreground dark:text-[#d6c4ac] hover:text-primary dark:hover:text-[#ffd79b] hover:bg-muted/60 dark:hover:bg-zinc-900/60"
                   )}
                 >
                   {ch.type === "private"
@@ -1166,7 +1206,7 @@ export default function ChatPage() {
           {/* Direct messages */}
           <div className="pt-4 pb-3">
             <div className="flex items-center justify-between px-4 pb-1">
-              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] !text-[#d6c4ac]/60">Direct Messages</span>
+              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/60 dark:text-[#d6c4ac]/60">Direct Messages</span>
             </div>
             <div className="px-2 space-y-0.5">
               {filteredDms.length === 0 ? (
@@ -1179,7 +1219,7 @@ export default function ChatPage() {
                     "w-full flex items-center gap-2 pl-2 pr-2 py-1.5 rounded-[5px] text-left transition-colors text-[13px] border-l-2",
                     activeChannelId === dm.id
                       ? "border-none bg-gradient-to-br from-[#ffd79b]/20 to-[#ffb300]/10 text-[#ffd79b] font-bold"
-                      : "border-transparent text-[#d6c4ac] hover:text-[#ffd79b] hover:bg-[#222a3d]/60"
+                      : "border-transparent text-muted-foreground dark:text-[#d6c4ac] hover:text-primary dark:hover:text-[#ffd79b] hover:bg-muted/60 dark:hover:bg-zinc-900/60"
                   )}
                 >
                   <div className="relative shrink-0">
@@ -1246,9 +1286,9 @@ export default function ChatPage() {
 
       {/* === MAIN + THREAD PANEL === */}
       <div className="flex-1 flex min-w-0">
-      <main className="flex-1 flex flex-col min-w-0 bg-[#0b1326]">
+      <main className="flex-1 flex flex-col min-w-0 bg-background dark:bg-black">
         {/* Header */}
-        <header className="h-14 px-5 flex items-center gap-3 shrink-0 bg-[#131b2e]/95 backdrop-blur-md sticky top-0 z-10 shadow-[0_2px_20px_rgba(6,14,32,0.3)]">
+        <header className="h-14 px-5 flex items-center gap-3 shrink-0 bg-card/95 dark:bg-zinc-950/95 backdrop-blur-md sticky top-0 z-10 shadow-[0_2px_20px_rgba(6,14,32,0.3)]">
           {activeChannel ? (
             <>
               {isActiveDM ? (
@@ -1330,11 +1370,9 @@ export default function ChatPage() {
           )}
         </header>
 
-        {/* Stories strip */}
-        <StoryStrip currentUser={user} />
 
         {/* Body — discovery / empty / join / messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar bg-[#0b1326]">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar bg-background dark:bg-black">
           {!activeChannelId && !showDiscovery ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-12">
               <div className="relative mb-8">
@@ -1343,7 +1381,7 @@ export default function ChatPage() {
                 </div>
                 <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary/30 ring-2 ring-background" />
               </div>
-              <h3 className="font-heading text-xl font-bold mb-2 tracking-tight !text-[#dae2fd]">No conversation selected</h3>
+              <h3 className="font-heading text-xl font-bold mb-2 tracking-tight text-foreground dark:text-[#dae2fd]">No conversation selected</h3>
               <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mb-8">
                 Pick a channel or start a direct message.
               </p>
@@ -1525,13 +1563,13 @@ export default function ChatPage() {
         {activeChannel && (
           <div
             className={cn(
-              "bg-[#0b1326] pt-2 shrink-0",
+              "bg-background dark:bg-black pt-2 shrink-0",
               inputDisabled && "opacity-60"
             )}
           >
             <div className="max-w-2xl mx-auto px-4 py-3">
               {replyTo && (
-                <div className="mb-2 flex items-center gap-2 px-3 py-1.5 bg-[#222a3d] rounded-xl border-l-2 border-[#ffd79b] text-[#d6c4ac] animate-in slide-in-from-bottom-2">
+                <div className="mb-2 flex items-center gap-2 px-3 py-1.5 bg-muted/60 dark:bg-zinc-900 rounded-xl border-l-2 border-[#ffd79b] text-muted-foreground dark:text-[#d6c4ac] animate-in slide-in-from-bottom-2">
                   <Reply className="h-3 w-3 text-primary shrink-0" />
                   <span className="text-xs text-muted-foreground">Replying to</span>
                   <span className="text-xs font-medium truncate flex-1">{replyTo.text?.slice(0, 80) || "a message"}</span>
@@ -1540,7 +1578,7 @@ export default function ChatPage() {
                   </button>
                 </div>
               )}
-              <div className="bg-[#222a3d] rounded-2xl overflow-hidden shadow-[0_0_0_1px_rgba(253,215,155,0.15)] focus-within:shadow-[0_0_0_1px_rgba(253,215,155,0.4),0_0_20px_rgba(255,179,0,0.08)]">
+              <div className="bg-muted/60 dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-[0_0_0_1px_rgba(253,215,155,0.15)] focus-within:shadow-[0_0_0_1px_rgba(253,215,155,0.4),0_0_20px_rgba(255,179,0,0.08)]">
                 {/* Formatting toolbar */}
                 <div className="flex items-center gap-0.5 px-3 pt-2 pb-1 border-b border-[#ffd79b]/10">
                   <FmtBtn icon={Bold} title="Bold" onClick={() => applyFormat('bold', inputRef.current, inputText, setInputText)} />
@@ -1586,7 +1624,7 @@ export default function ChatPage() {
                     onClick={() => fileInputRef.current?.click()}
                     disabled={inputDisabled}
                     title="Attach file"
-                    className="h-7 w-7 flex items-center justify-center rounded-full text-[#d6c4ac]/50 hover:text-[#ffd79b] hover:bg-white/10 transition-colors disabled:opacity-30"
+                    className="h-7 w-7 flex items-center justify-center rounded-full text-muted-foreground/60 dark:text-[#d6c4ac]/50 hover:text-primary dark:hover:text-[#ffd79b] hover:bg-muted dark:hover:bg-white/10 transition-colors disabled:opacity-30"
                   >
                     <Paperclip className="h-3.5 w-3.5" />
                   </button>
@@ -1595,7 +1633,7 @@ export default function ChatPage() {
                     onClick={() => setPickerOpen(true)}
                     disabled={inputDisabled}
                     title="Attach from Files"
-                    className="h-7 w-7 flex items-center justify-center rounded-full text-[#d6c4ac]/50 hover:text-[#ffd79b] hover:bg-white/10 transition-colors disabled:opacity-30"
+                    className="h-7 w-7 flex items-center justify-center rounded-full text-muted-foreground/60 dark:text-[#d6c4ac]/50 hover:text-primary dark:hover:text-[#ffd79b] hover:bg-muted dark:hover:bg-white/10 transition-colors disabled:opacity-30"
                   >
                     <FolderOpen className="h-3.5 w-3.5" />
                   </button>
