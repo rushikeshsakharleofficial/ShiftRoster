@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
-import { Sun, Moon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AnimatedThemeToggle } from "@/components/ui/animated-theme-toggle";
 
 export default function ThemeToggle() {
   const [dark, setDark] = useState(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("theme");
       if (saved) return saved === "dark";
-      return false; // default light
+      return false;
     }
     return false;
   });
@@ -23,15 +22,5 @@ export default function ThemeToggle() {
     }
   }, [dark]);
 
-  return (
-    <Button
-      data-testid="theme-toggle-btn"
-      variant="ghost"
-      size="icon"
-      onClick={() => setDark(!dark)}
-      className="h-9 w-9 rounded-lg"
-    >
-      {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-    </Button>
-  );
+  return <AnimatedThemeToggle isDark={dark} onToggle={() => setDark(!dark)} />;
 }
