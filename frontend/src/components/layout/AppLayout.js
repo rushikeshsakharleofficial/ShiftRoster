@@ -60,6 +60,7 @@ export default function AppLayout() {
   const { totalUnread: chatUnread } = useChat();
   const [myStatus, setMyStatus] = useState("active"); // active | break | leave
   const [profileOpen, setProfileOpen] = useState(false);
+  const [profileRequired, setProfileRequired] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ full_name: "", username: "", email: "", phone: "", mobile_alt: "", date_of_birth: "" });
   const [profileAvatar, setProfileAvatar] = useState(""); // current saved avatar
@@ -79,6 +80,10 @@ export default function AppLayout() {
       const key = `welcomed_${user.id}`;
       if (!localStorage.getItem(key)) {
         setWelcomeOpen(true);
+      }
+      if (!user.email || !user.phone || !user.date_of_birth) {
+        setProfileRequired(true);
+        setProfileOpen(true);
       }
     }
   }, [user?.id]);
@@ -215,6 +220,7 @@ export default function AppLayout() {
         await usersApi.update(user.id, payload);
       }
       await checkAuth();
+      setProfileRequired(false);
       setProfileOpen(false);
       window.location.reload();
     } catch (err) {
@@ -682,11 +688,14 @@ export default function AppLayout() {
         </header>
 
         {/* My Profile Dialog */}
-        <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-          <DialogContent className="max-w-sm">
+        <Dialog open={profileOpen} onOpenChange={profileRequired ? () => {} : setProfileOpen}>
+          <DialogContent className="max-w-sm" onPointerDownOutside={profileRequired ? (e) => e.preventDefault() : undefined} onEscapeKeyDown={profileRequired ? (e) => e.preventDefault() : undefined}>
             <DialogHeader>
-              <DialogTitle>My Profile</DialogTitle>
+              <DialogTitle>{profileRequired ? "Complete Your Profile" : "My Profile"}</DialogTitle>
             </DialogHeader>
+            {profileRequired && (
+              <p className="text-xs text-muted-foreground -mt-2 mb-1">Please fill in the required fields to continue using ShiftRoster.</p>
+            )}
             <div className="space-y-4 py-2">
               {/* Avatar */}
               <div className="flex flex-col items-center gap-2">
@@ -771,7 +780,7 @@ export default function AppLayout() {
               {profileError && <p className="text-xs text-destructive">{profileError}</p>}
             </div>
             <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setProfileOpen(false)}>Cancel</Button>
+              {!profileRequired && <Button variant="outline" size="sm" onClick={() => setProfileOpen(false)}>Cancel</Button>}
               <Button size="sm" onClick={handleProfileSave} disabled={profileSaving}>
                 {profileSaving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                 Save
