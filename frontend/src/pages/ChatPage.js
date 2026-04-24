@@ -539,11 +539,11 @@ function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, 
       <div className="border-t border-border/40 p-3 shrink-0 bg-background dark:bg-black space-y-2">
         <div className="bg-muted/60 dark:bg-zinc-900 rounded-xl overflow-hidden shadow-[0_0_0_1px_rgba(253,215,155,0.12)] focus-within:shadow-[0_0_0_1px_rgba(253,215,155,0.35)]">
           {/* Toolbar */}
-          <div className="flex items-center gap-0.5 px-2 pt-1.5 pb-1 border-b border-[#ffd79b]/10">
+          <div className="flex items-center gap-0.5 px-2 pt-1.5 pb-1 border-b border-border/30 dark:border-[#ffd79b]/10">
             <FmtBtn icon={Bold} title="Bold" onClick={() => applyFormat('bold', threadInputRef.current, text, setText)} />
             <FmtBtn icon={Italic} title="Italic" onClick={() => applyFormat('italic', threadInputRef.current, text, setText)} />
             <FmtBtn icon={Code} title="Inline code" onClick={() => applyFormat('code', threadInputRef.current, text, setText)} />
-            <div className="w-px h-3 bg-[#ffd79b]/15 mx-0.5" />
+            <div className="w-px h-3 bg-border/40 dark:bg-[#ffd79b]/15 mx-0.5" />
             <FmtBtn icon={Link} title="Link" onClick={() => applyFormat('link', threadInputRef.current, text, setText)} />
             <FmtBtn icon={List} title="Bullet list" onClick={() => applyFormat('ul', threadInputRef.current, text, setText)} />
             <FmtBtn icon={Quote} title="Blockquote" onClick={() => applyFormat('quote', threadInputRef.current, text, setText)} />
@@ -564,7 +564,7 @@ function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, 
             rows={1}
           />
           {/* Bottom row */}
-          <div className="flex items-center px-2 pb-1.5 pt-1 border-t border-[#ffd79b]/10">
+          <div className="flex items-center px-2 pb-1.5 pt-1 border-t border-border/30 dark:border-[#ffd79b]/10">
             <div className="flex-1" />
             <button
               onClick={() => { if (text.trim()) { onSend(text.trim(), rootMsg?.id, alsoInChannel); setText(""); setAlsoInChannel(false); } }}
@@ -1241,7 +1241,7 @@ export default function ChatPage() {
         </ScrollArea>
 
         {/* Footer */}
-        <div className="border-t border-border/20 px-2 py-2 shrink-0 flex items-center gap-1 backdrop-blur-sm !bg-[#0f1522]">
+        <div className="border-t border-border/20 px-2 py-2 shrink-0 flex items-center gap-1 backdrop-blur-sm bg-card dark:bg-zinc-950">
           <ThemeToggle />
           <Button
             variant="ghost"
@@ -1580,11 +1580,11 @@ export default function ChatPage() {
               )}
               <div className="bg-muted/60 dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-[0_0_0_1px_rgba(253,215,155,0.15)] focus-within:shadow-[0_0_0_1px_rgba(253,215,155,0.4),0_0_20px_rgba(255,179,0,0.08)]">
                 {/* Formatting toolbar */}
-                <div className="flex items-center gap-0.5 px-3 pt-2 pb-1 border-b border-[#ffd79b]/10">
+                <div className="flex items-center gap-0.5 px-3 pt-2 pb-1 border-b border-border/30 dark:border-[#ffd79b]/10">
                   <FmtBtn icon={Bold} title="Bold" onClick={() => applyFormat('bold', inputRef.current, inputText, setInputText)} />
                   <FmtBtn icon={Italic} title="Italic" onClick={() => applyFormat('italic', inputRef.current, inputText, setInputText)} />
                   <FmtBtn icon={Code} title="Inline code" onClick={() => applyFormat('code', inputRef.current, inputText, setInputText)} />
-                  <div className="w-px h-3 bg-[#ffd79b]/15 mx-1" />
+                  <div className="w-px h-3 bg-border/40 dark:bg-[#ffd79b]/15 mx-1" />
                   <FmtBtn icon={Link} title="Link" onClick={() => applyFormat('link', inputRef.current, inputText, setInputText)} />
                   <FmtBtn icon={List} title="Bullet list" onClick={() => applyFormat('ul', inputRef.current, inputText, setInputText)} />
                   <FmtBtn icon={ListOrdered} title="Numbered list" onClick={() => applyFormat('ol', inputRef.current, inputText, setInputText)} />
@@ -1618,7 +1618,7 @@ export default function ChatPage() {
                   className="w-full min-h-[40px] max-h-[160px] bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm py-2.5 px-3 resize-none custom-scrollbar rounded-none"
                 />
                 {/* Bottom action row */}
-                <div className="flex items-center gap-1 px-2 pb-2 pt-1 border-t border-[#ffd79b]/10">
+                <div className="flex items-center gap-1 px-2 pb-2 pt-1 border-t border-border/30 dark:border-[#ffd79b]/10">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
