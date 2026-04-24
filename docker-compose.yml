@@ -14,6 +14,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   # Backend (FastAPI)
   backend:
@@ -26,7 +31,8 @@ services:
       MONGO_URL: mongodb://${MONGO_USER:-shiftroster}:${MONGO_PASSWORD}@mongo:27017/?authSource=admin
       DB_NAME: shiftroster
       JWT_SECRET: ${JWT_SECRET}
-      SECURE_COOKIES: ${SECURE_COOKIES:-false}
+      SECURE_COOKIES: ${SECURE_COOKIES:-true}
+      APP_URL: ${APP_URL:-http://localhost}
       MSG_ENCRYPT_KEY: ${MSG_ENCRYPT_KEY}
     depends_on:
       mongo:
@@ -38,6 +44,11 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   # Frontend (React + Nginx static server — internal only)
   frontend:
@@ -49,6 +60,16 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   # Nginx Reverse Proxy — SSL termination, public entrypoint
   nginx:
@@ -73,6 +94,16 @@ services:
     depends_on:
       - frontend
       - backend
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
 
 
 volumes:
