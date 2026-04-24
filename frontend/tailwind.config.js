@@ -13,7 +13,10 @@ module.exports = {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		fontFamily: {
-  			geist: ['Geist', 'Inter', 'sans-serif'],
+  			sans: ['Outfit', 'system-ui', '-apple-system', 'sans-serif'],
+  			heading: ['Syne', 'system-ui', 'sans-serif'],
+  			mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+  			geist: ['Geist', 'Outfit', 'sans-serif'],
   		},
   		colors: {
   			sidebar: {

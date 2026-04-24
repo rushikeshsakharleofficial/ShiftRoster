@@ -224,27 +224,59 @@ export default function AppLayout() {
     return `${Math.floor(hrs / 24)}d ago`;
   };
 
-  const navItems = [
-    { to: "/", icon: LayoutDashboard, label: "Dashboard", show: true },
-    { to: "/shifts", icon: CalendarDays, label: "Shift Calendar", show: true },
-    { to: "/employees", icon: Users, label: "Employees", show: isAdmin || isManager },
-    { to: "/departments", icon: Building2, label: "Departments", show: isAdmin },
-    { to: "/manager-groups", icon: UserCog, label: "Manager Groups", show: isAdmin },
-    { to: "/leave", icon: ClipboardList, label: "Leave Management", show: isAdmin || isManager || level !== "L1" },
-    { to: "/attendance", icon: Clock, label: "Attendance", show: attendanceEnabled },
-    { to: "/swap-requests", icon: ArrowLeftRight, label: "Swap Requests", show: isAdmin || isManager || level !== "L1" },
-    { to: "/shift-templates", icon: LayoutTemplate, label: "Shift Templates", show: isAdmin || isManager },
-    { to: "/handovers", icon: ClipboardList, label: "Handovers", show: true },
-    { to: "/tasks", icon: ListChecks, label: "Tasks", show: true },
-    { to: "/sops", icon: FileText, label: "SOPs", show: true },
-    { to: "/files", icon: FolderOpen, label: "Files", show: true },
-    { to: "/sticky-notes", icon: StickyNote, label: "Sticky Notes", show: true },
-    { to: "/chat", icon: MessageSquare, label: "Chat", show: true, external: true },
-    { to: "/notifications", icon: Bell, label: "Notifications", show: true },
-    { to: "/reports", icon: BarChart3, label: "Reports", show: isAdmin || isManager },
-    { to: "/audit-log", icon: ScrollText, label: "Audit Log", show: isAdmin },
-    { to: "/settings", icon: Settings, label: "Settings", show: true },
-  ].filter((n) => n.show);
+  const navGroups = [
+    {
+      label: "Workspace",
+      items: [
+        { to: "/", icon: LayoutDashboard, label: "Dashboard", show: true },
+        { to: "/shifts", icon: CalendarDays, label: "Shift Calendar", show: true },
+        { to: "/shift-templates", icon: LayoutTemplate, label: "Templates", show: isAdmin || isManager },
+      ],
+    },
+    {
+      label: "People",
+      items: [
+        { to: "/employees", icon: Users, label: "Employees", show: isAdmin || isManager },
+        { to: "/departments", icon: Building2, label: "Departments", show: isAdmin },
+        { to: "/manager-groups", icon: UserCog, label: "Manager Groups", show: isAdmin },
+      ],
+    },
+    {
+      label: "Operations",
+      items: [
+        { to: "/leave", icon: ClipboardList, label: "Leave", show: isAdmin || isManager || level !== "L1" },
+        { to: "/attendance", icon: Clock, label: "Attendance", show: attendanceEnabled },
+        { to: "/swap-requests", icon: ArrowLeftRight, label: "Swap Requests", show: isAdmin || isManager || level !== "L1" },
+        { to: "/handovers", icon: ClipboardList, label: "Handovers", show: true },
+        { to: "/tasks", icon: ListChecks, label: "Tasks", show: true },
+      ],
+    },
+    {
+      label: "Knowledge",
+      items: [
+        { to: "/sops", icon: FileText, label: "SOPs", show: true },
+        { to: "/files", icon: FolderOpen, label: "Files", show: true },
+        { to: "/sticky-notes", icon: StickyNote, label: "Sticky Notes", show: true },
+      ],
+    },
+    {
+      label: "Comms",
+      items: [
+        { to: "/chat", icon: MessageSquare, label: "Chat", show: true, external: true },
+        { to: "/notifications", icon: Bell, label: "Notifications", show: true },
+      ],
+    },
+    {
+      label: "Admin",
+      items: [
+        { to: "/reports", icon: BarChart3, label: "Reports", show: isAdmin || isManager },
+        { to: "/audit-log", icon: ScrollText, label: "Audit Log", show: isAdmin },
+        { to: "/settings", icon: Settings, label: "Settings", show: true },
+      ],
+    },
+  ].map(g => ({ ...g, items: g.items.filter(i => i.show) })).filter(g => g.items.length > 0);
+
+  const navItems = navGroups.flatMap(g => g.items);
 
   const initials = user?.full_name
     ? user.full_name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase()
@@ -281,56 +313,78 @@ export default function AppLayout() {
         `}
       >
         {/* Logo */}
-        <div className="flex flex-row items-center gap-2 px-4 h-14 border-b border-border shrink-0">
-          {orgBrand.logo_url && (
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0 overflow-hidden">
-              <img src={orgBrand.logo_url} alt="logo" className="w-full h-full object-cover rounded-lg" />
-            </div>
+        <div className="flex flex-row items-center gap-2.5 px-4 h-14 border-b border-border/60 shrink-0">
+          <div className={`shrink-0 flex items-center justify-center rounded-md overflow-hidden ${orgBrand.logo_url ? "w-7 h-7" : "w-7 h-7 bg-primary"}`}>
+            {orgBrand.logo_url
+              ? <img src={orgBrand.logo_url} alt="logo" className="w-full h-full object-cover" />
+              : <span className="text-primary-foreground font-heading font-bold text-xs">SR</span>
+            }
+          </div>
+          {sidebarOpen && (
+            <span className="font-heading font-bold text-sm tracking-tight truncate">{orgBrand.name}</span>
           )}
-          {sidebarOpen && <span className="font-bold text-base tracking-tight truncate">{orgBrand.name}</span>}
         </div>
 
         {/* Nav & Team Status */}
         <ScrollArea className="flex-1">
-          <nav className="py-3 px-2 space-y-0.5">
-            {navItems.map((item) => (
-              item.external ? (
-                <button
-                  key={item.to}
-                  onClick={() => window.open(item.to, "_blank", "noopener,noreferrer")}
-                  className={`w-full flex flex-row items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-200 group text-muted-foreground hover:bg-accent hover:text-accent-foreground`}
-                >
-                  <item.icon className={`h-4 w-4 shrink-0 transition-transform duration-200 ${sidebarOpen ? "" : "mx-auto"} group-hover:scale-110`} />
-                  {sidebarOpen && <span className="truncate">{item.label}</span>}
-                  {item.to === "/chat" && chatUnread > 0 && sidebarOpen && (
-                    <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{chatUnread > 99 ? "99+" : chatUnread}</Badge>
-                  )}
-                </button>
-              ) : (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === "/"}
-                  onClick={() => setMobileSidebar(false)}
-                  className={({ isActive }) =>
-                    `flex flex-row items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-200 group ${
-                      isActive
-                        ? "bg-primary/10 text-primary font-medium shadow-sm ring-1 ring-primary/20"
-                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                    }`
-                  }
-                  data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-                >
-                  <item.icon className={`h-4 w-4 shrink-0 transition-transform duration-200 ${sidebarOpen ? "" : "mx-auto"} group-hover:scale-110`} />
-                  {sidebarOpen && <span className="truncate">{item.label}</span>}
-                  {item.to === "/notifications" && unreadCount > 0 && sidebarOpen && (
-                    <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{unreadCount}</Badge>
-                  )}
-                  {item.to === "/chat" && chatUnread > 0 && sidebarOpen && (
-                    <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5 animate-in zoom-in">{chatUnread > 99 ? "99+" : chatUnread}</Badge>
-                  )}
-                </NavLink>
-              )
+          <nav className="py-2 px-2">
+            {navGroups.map((group) => (
+              <div key={group.label} className="mb-1">
+                {sidebarOpen && (
+                  <div className="px-3 pt-3 pb-1">
+                    <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/50">
+                      {group.label}
+                    </span>
+                  </div>
+                )}
+                <div className="space-y-px">
+                  {group.items.map((item) => (
+                    item.external ? (
+                      <button
+                        key={item.to}
+                        onClick={() => window.open(item.to, "_blank", "noopener,noreferrer")}
+                        className="w-full flex flex-row items-center gap-2.5 pl-3 pr-2 py-1.5 rounded-[5px] text-[13px] transition-colors group text-muted-foreground hover:bg-accent/70 hover:text-foreground border-l-2 border-transparent"
+                      >
+                        <item.icon className={`h-[15px] w-[15px] shrink-0 ${sidebarOpen ? "" : "mx-auto"}`} />
+                        {sidebarOpen && <span className="truncate">{item.label}</span>}
+                        {item.to === "/chat" && chatUnread > 0 && sidebarOpen && (
+                          <span className="ml-auto font-mono text-[10px] bg-destructive text-destructive-foreground rounded-full px-1.5 py-0.5 leading-none">
+                            {chatUnread > 99 ? "99+" : chatUnread}
+                          </span>
+                        )}
+                      </button>
+                    ) : (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        end={item.to === "/"}
+                        onClick={() => setMobileSidebar(false)}
+                        className={({ isActive }) =>
+                          `flex flex-row items-center gap-2.5 pl-3 pr-2 py-1.5 rounded-[5px] text-[13px] transition-colors group border-l-2 ${
+                            isActive
+                              ? "border-primary bg-primary/8 text-primary font-semibold"
+                              : "border-transparent text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                          }`
+                        }
+                        data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                      >
+                        <item.icon className={`h-[15px] w-[15px] shrink-0 ${sidebarOpen ? "" : "mx-auto"}`} />
+                        {sidebarOpen && <span className="truncate">{item.label}</span>}
+                        {item.to === "/notifications" && unreadCount > 0 && sidebarOpen && (
+                          <span className="ml-auto font-mono text-[10px] bg-destructive text-destructive-foreground rounded-full px-1.5 py-0.5 leading-none">
+                            {unreadCount}
+                          </span>
+                        )}
+                        {item.to === "/chat" && chatUnread > 0 && sidebarOpen && (
+                          <span className="ml-auto font-mono text-[10px] bg-destructive text-destructive-foreground rounded-full px-1.5 py-0.5 leading-none">
+                            {chatUnread > 99 ? "99+" : chatUnread}
+                          </span>
+                        )}
+                      </NavLink>
+                    )
+                  ))}
+                </div>
+              </div>
             ))}
           </nav>
 
@@ -338,8 +392,8 @@ export default function AppLayout() {
           {sidebarOpen && (
             <div className="flex flex-col border-t border-border/50 min-h-0">
               <div className="px-5 py-3 flex items-center justify-between shrink-0">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Team Status</span>
-                <Badge variant="outline" className="text-[9px] h-4 px-1">{onlineUsers.length}</Badge>
+                <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/50">Team Status</span>
+                <span className="font-mono text-[10px] text-muted-foreground/60 tabular-nums">{onlineUsers.length}</span>
               </div>
               <div className="px-2 pb-4 space-y-0.5">
                 {onlineUsers.map((u) => (
