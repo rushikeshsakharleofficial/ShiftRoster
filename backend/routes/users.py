@@ -36,6 +36,7 @@ class CreateUserRequest(BaseModel):
     mfa_mandated: bool = False
     disappearing_timer: Optional[str] = None
     public_key: Optional[str] = None
+    date_of_birth: Optional[str] = None  # "YYYY-MM-DD"
 
 
 class UpdateUserRequest(BaseModel):
@@ -55,6 +56,7 @@ class UpdateUserRequest(BaseModel):
     mfa_mandated: Optional[bool] = None
     disappearing_timer: Optional[str] = None
     public_key: Optional[str] = None
+    date_of_birth: Optional[str] = None  # "YYYY-MM-DD"
 
 
 class ChangeLevelRequest(BaseModel):
@@ -142,6 +144,7 @@ class CreateUserRequest(BaseModel):
     mfa_mandated: bool = False
     disappearing_timer: Optional[str] = None
     public_key: Optional[str] = None
+    date_of_birth: Optional[str] = None  # "YYYY-MM-DD"
     send_welcome_email: bool = True
 
 
@@ -206,6 +209,7 @@ async def create_user(data: CreateUserRequest, request: Request):
         "department_id": data.department_id,
         "position_id": data.position_id,
         "hourly_rate": data.hourly_rate,
+        "date_of_birth": data.date_of_birth,
         "employment_type": data.employment_type,
         "skills": data.skills,
         "status": status,

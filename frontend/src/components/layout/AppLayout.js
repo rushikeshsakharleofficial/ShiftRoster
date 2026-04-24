@@ -4,6 +4,8 @@ import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import AnnouncementBanner from "@/components/layout/AnnouncementBanner";
+import BirthdayBanner from "@/components/layout/BirthdayBanner";
+import { useBirthdayCheck } from "@/hooks/useBirthdayCheck";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -59,7 +61,7 @@ export default function AppLayout() {
   const [myStatus, setMyStatus] = useState("active"); // active | break | leave
   const [profileOpen, setProfileOpen] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
-  const [profileForm, setProfileForm] = useState({ full_name: "", username: "", phone: "", mobile_alt: "" });
+  const [profileForm, setProfileForm] = useState({ full_name: "", username: "", phone: "", mobile_alt: "", date_of_birth: "" });
   const [profileAvatar, setProfileAvatar] = useState(""); // current saved avatar
   const [profileAvatarFile, setProfileAvatarFile] = useState(null); // pending file (not yet uploaded)
   const [profileAvatarPreview, setProfileAvatarPreview] = useState(""); // local blob preview
@@ -70,6 +72,7 @@ export default function AppLayout() {
   const isManager = user?.system_role === "manager";
   const isEmployee = user?.system_role === "employee";
   const level = user?.employee_level;
+  const { isBirthday, isDismissed, dismiss } = useBirthdayCheck(user);
 
   useEffect(() => {
     if (user?.id) {
@@ -163,7 +166,7 @@ export default function AppLayout() {
   }, [user?.id]);
 
   const openProfile = () => {
-    setProfileForm({ full_name: user?.full_name || "", username: user?.username || "", phone: user?.phone || "", mobile_alt: user?.mobile_alt || "" });
+    setProfileForm({ full_name: user?.full_name || "", username: user?.username || "", phone: user?.phone || "", mobile_alt: user?.mobile_alt || "", date_of_birth: user?.date_of_birth || "" });
     setProfileAvatar(user?.avatar_url || "");
     setProfileAvatarFile(null);
     setProfileAvatarPreview("");
@@ -194,6 +197,7 @@ export default function AppLayout() {
       if (profileForm.username.trim()) payload.username = profileForm.username.trim().toLowerCase();
       payload.phone = profileForm.phone.trim();
       payload.mobile_alt = profileForm.mobile_alt.trim();
+      if (profileForm.date_of_birth) payload.date_of_birth = profileForm.date_of_birth;
       if (Object.keys(payload).length > 0) {
         await usersApi.update(user.id, payload);
       }
@@ -729,6 +733,15 @@ export default function AppLayout() {
                   />
                 </div>
               </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Date of Birth</Label>
+                <Input
+                  type="date"
+                  value={profileForm.date_of_birth}
+                  onChange={(e) => setProfileForm(f => ({ ...f, date_of_birth: e.target.value }))}
+                  className="h-8 text-sm"
+                />
+              </div>
               {profileError && <p className="text-xs text-destructive">{profileError}</p>}
             </div>
             <DialogFooter>
@@ -740,6 +753,9 @@ export default function AppLayout() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Birthday banner — shown only to the birthday user */}
+        {isBirthday && !isDismissed && <BirthdayBanner user={user} onDismiss={dismiss} />}
 
         {/* Page content */}
         <main className={`flex-1 flex flex-col min-h-0 w-full ${isFullBleed ? "" : "p-0"}`}>
