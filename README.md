@@ -1,4 +1,4 @@
-# ShiftRoster — Operational OS for Mission-Critical Teams
+# ShiftRoster — Open-Source Shift Scheduling & Team Operations Platform
 
 [![CI/CD](https://github.com/rushikeshsakharleofficial/ShiftRoster/actions/workflows/deploy.yml/badge.svg)](https://github.com/rushikeshsakharleofficial/ShiftRoster/actions/workflows/deploy.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
@@ -7,13 +7,21 @@
 [![MongoDB 7](https://img.shields.io/badge/Database-MongoDB%207-47A248.svg?style=flat&logo=mongodb)](https://www.mongodb.com/)
 [![Vite 6](https://img.shields.io/badge/Build-Vite%206-646CFF.svg?style=flat&logo=vite)](https://vitejs.dev/)
 
-**ShiftRoster** is a self-hosted, open-source operational platform for shift-based teams. It combines scheduling, encrypted messaging, document management, task tracking, and identity in a single deployable Docker stack — no third-party SaaS dependencies.
+**ShiftRoster** is a self-hosted, open-source operational platform for shift-based teams — hospitals, warehouses, security ops, manufacturing, and any 24/7 operation. One Docker Compose stack replaces your scheduling spreadsheet, WhatsApp group, shared Google Drive, and task tracker with a unified, encrypted, audited workspace.
+
+> **No SaaS dependency. No per-seat cost. Runs on your own server.**
+
+---
+
+![Dashboard](docs/screenshots/dashboard.png)
 
 ---
 
 ## Table of Contents
 
+- [Why ShiftRoster](#why-shiftroster)
 - [Features](#features)
+- [Screenshots](#screenshots)
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
@@ -25,70 +33,116 @@
 
 ---
 
+## Why ShiftRoster
+
+Most shift management tools are either:
+- **Too simple** — scheduling only, no comms or document management
+- **Too expensive** — enterprise SaaS with per-seat pricing
+- **Too fragmented** — 4–5 tools stitched together with Zapier
+
+ShiftRoster puts scheduling, encrypted messaging, SOPs, file management, task handovers, and attendance in one place — self-hosted, open source, zero recurring cost.
+
+**Who uses it:** Security operations centers, hospital departments, manufacturing floors, logistics hubs, IT on-call teams, any team running 24/7 rotational shifts.
+
+---
+
 ## Features
 
-### Shift Scheduling
-- Interactive calendar with drag-and-drop shift management
+### Intelligent Shift Scheduling
+- Interactive drag-and-drop calendar (day, week, month views)
 - RRULE-based recurrence engine for repeating shifts
-- Shift templates for reusable patterns
+- Reusable shift templates
 - Automated conflict detection on assignment
+- Public holiday management
 - Swap request workflow with manager approval
-- Leave management with department-scoped review
+- Leave management with multi-level approval
 
-### Encrypted Team Messaging
+### End-to-End Encrypted Team Messaging
 - Real-time channels (public/private) and direct messages
-- **End-to-End Encryption (E2EE)** — P-256 ECDH key exchange + AES-256-GCM payloads
-- BIP39 mnemonic backup for key recovery
-- Thread replies, message reactions, file attachments
-- Compact slide-over panel mode + full-screen mode
-- Stories (disappear after 24 hours)
-- WebSocket-based typing indicators and presence
+- **E2EE**: P-256 ECDH key exchange + AES-256-GCM message payloads
+- BIP39 mnemonic backup for private key recovery
+- Thread replies, emoji reactions, file attachments
+- Compact slide-over panel (stays open while you work) + full-screen mode
+- 24-hour disappearing Stories
+- WebSocket typing indicators, read receipts, presence
 
-### File Manager
-- Private and shared (org-wide) scoped storage
+### Centralized File Manager
+- Private and org-wide shared storage scopes
 - Native in-browser previews: PDF, DOCX, XLSX, Markdown, JSON, images, video, audio
-- Folder hierarchy with drag-and-drop upload
-- Admin-configurable max file size
-- Attach files from library directly in chat
+- Folder hierarchy, upload progress, drag-and-drop
+- Admin-configurable max file size limit
+- Attach library files directly in chat
 
 ### Standard Operating Procedures (SOPs)
-- Rich TipTap editor (documents, presentations, spreadsheets, checklists)
-- Version history with revert
-- Proposal → approval workflow for non-privileged users
-- Acknowledgement tracking per user
-- PDF export, CSV import/export for spreadsheet type
-- DOMPurify-sanitized HTML rendering
+- Rich editor: documents (Tiptap), presentations (slides), spreadsheets, checklists
+- Version history with one-click revert
+- Proposal → approval workflow for non-admin users
+- Acknowledgement tracking per team member
+- PDF and CSV export
 
-### Task & Handover Management
-- Structured shift handover logbook with task cascading
-- Tasks assignable to users, with transfer and completion tracking
-- Notes per task, pending count badge
+### Task & Shift Handover
+- Structured digital handover logbook
+- Task cascading across shift transitions — zero information loss
+- Task assignment, transfer, notes, completion tracking
 
 ### Attendance & Presence
-- Clock-in / clock-out with shift assignment awareness
-- Extend shift functionality
-- WebSocket-driven real-time online user presence
+- Clock-in/clock-out tied to active shift assignments
+- Extend-shift functionality for overruns
+- Real-time online user presence (WebSocket)
+- Late/absence reporting
 
-### Notifications & Announcements
-- In-app notification feed with unread badge
-- Org-wide announcements with active/inactive toggle
-- Security alerts for MFA changes, password resets
-
-### Identity & Access Control
-- Role-based system roles: `admin`, `manager`, `employee`
-- Manager Groups: scope managers to specific departments
+### Enterprise Identity & Access
+- Roles: `admin`, `manager`, `employee`
+- Manager Groups: scope managers to specific departments only
 - IAM groups with resource-action permission rules
-- Multi-Factor Authentication (TOTP) with backup codes
+- Multi-Factor Authentication (TOTP + backup codes)
 - Admin-mandated MFA enforcement
-- LDAP/Active Directory sync
+- LDAP / Active Directory sync
 - Slack OIDC and Google OIDC single sign-on
 - Manager nomination workflow
 
-### Reporting
-- Attendance overview, charts, and CSV export
-- Shift coverage analysis
-- Department breakdown
-- Audit log for all admin actions
+### Reporting & Audit
+- Attendance overview, trend charts, CSV export
+- Shift coverage reports by department
+- Immutable audit log — every admin action recorded with actor and diff
+- Notification feed with security alerts
+
+---
+
+## Screenshots
+
+### Dashboard
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Shift Calendar
+![Shift Calendar](docs/screenshots/shifts.png)
+
+### Encrypted Team Chat
+![Team Chat](docs/screenshots/chat.png)
+
+### File Manager
+![File Manager](docs/screenshots/file-manager.png)
+
+### Standard Operating Procedures
+![SOPs](docs/screenshots/sops.png)
+
+### Task Management
+![Tasks](docs/screenshots/tasks.png)
+
+### Attendance Tracking
+![Attendance](docs/screenshots/attendance.png)
+
+### Leave Management
+![Leave Management](docs/screenshots/leave.png)
+
+### Reports
+![Reports](docs/screenshots/reports.png)
+
+### Employee Directory
+![Employees](docs/screenshots/employees.png)
+
+### Settings & Configuration
+![Settings](docs/screenshots/settings.png)
 
 ---
 
@@ -99,17 +153,18 @@
 | Backend framework | FastAPI 0.115 (Python 3.11+) |
 | Database | MongoDB 7 + Motor async driver |
 | Real-time | WebSocket — presence, chat events, typing |
-| Auth | PyJWT (HTTP-only cookies), Bcrypt, PyOTP |
-| Encryption | Python Cryptography (Fernet/AES-256-GCM), WebCrypto API |
+| Auth | PyJWT (HTTP-only cookies), Bcrypt, PyOTP (TOTP MFA) |
+| Encryption | Python Cryptography (Fernet/AES-256-GCM) + WebCrypto API |
 | Frontend framework | React 19 + Vite 6 |
 | Routing | React Router 7 |
 | Styling | Tailwind CSS 3 + shadcn/ui + Radix UI |
 | Animation | Framer Motion |
-| Rich text | Tiptap |
+| Rich text | Tiptap (document editor) |
 | File parsing | mammoth (DOCX), ExcelJS (XLSX), JSZip |
 | HTML sanitization | DOMPurify |
-| Reverse proxy | Nginx (SSL termination, rate limiting) |
+| Reverse proxy | Nginx (SSL termination, rate limiting, CSP headers) |
 | Containerization | Docker + Docker Compose |
+| CI/CD | GitHub Actions (self-hosted runner) |
 
 ---
 
@@ -126,9 +181,9 @@ ShiftRoster/
 │   │   ├── shifts.py        # Shifts, recurrence, conflict detection
 │   │   ├── users.py         # User management, avatars, presence
 │   │   ├── iam.py           # IAM groups and permission rules
-│   │   ├── operations.py    # Organization settings, LDAP, branding
-│   │   └── ...              # Leave, attendance, tasks, handovers, etc.
-│   ├── tasks/               # Background jobs (purging, reminders)
+│   │   ├── operations.py    # Org settings, LDAP, branding
+│   │   └── ...              # Leave, attendance, tasks, handovers, reports
+│   ├── tasks/               # Background jobs (data purging, reminders)
 │   ├── server.py            # App entrypoint, WebSocket handler
 │   ├── auth_utils.py        # JWT, MFA, permission helpers
 │   ├── presence_manager.py  # WebSocket presence tracking
@@ -150,6 +205,7 @@ ShiftRoster/
 │   ├── entrypoint.sh        # Dynamic nginx config (HTTP/HTTPS, rate limiting, CSP)
 │   └── Dockerfile
 │
+├── docs/screenshots/        # README screenshots
 └── docker-compose.yml
 ```
 
@@ -159,7 +215,7 @@ ShiftRoster/
 
 ### Prerequisites
 - Docker + Docker Compose
-- A domain name (for HTTPS) or `localhost` for local testing
+- A Linux server with at least 1 GB RAM
 
 ### 1. Clone and configure
 
@@ -206,6 +262,7 @@ Set in `.env`:
 ```
 DOMAIN=yourdomain.com
 PROTOCOL=https
+APP_URL=https://yourdomain.com
 ```
 
 ---
@@ -217,41 +274,46 @@ PROTOCOL=https
 | `JWT_SECRET` | ✅ | — | JWT signing secret, min 32 chars |
 | `MONGO_PASSWORD` | ✅ | — | MongoDB root password |
 | `MSG_ENCRYPT_KEY` | ✅ | — | Fernet key for DB field encryption |
-| `APP_URL` | ✅ (for email) | `http://localhost` | Public URL — used in password reset links |
-| `SECURE_COOKIES` | — | `true` | Set to `false` only for local HTTP dev |
+| `APP_URL` | ✅ for email | `http://localhost` | Public URL — used in password reset links |
+| `SECURE_COOKIES` | — | `true` | Set `false` only for local HTTP dev |
 | `MONGO_USER` | — | `shiftroster` | MongoDB username |
 | `DOMAIN` | — | `localhost` | Nginx server name |
 | `PROTOCOL` | — | `http` | `http` or `https` |
 
-> **`APP_URL` must be set** before enabling SMTP or password reset emails. Reset links default to `http://localhost` otherwise.
+> **`APP_URL` must be set** before enabling SMTP or password reset emails. Without it, reset links default to `http://localhost`.
 
 ---
 
 ## Security
 
-### What's protected
-- **SQL/NoSQL injection**: MongoDB queries use parameterized ObjectId lookups; no string interpolation in queries
-- **XSS**: All user-authored HTML (SOP slides, DOCX previews) sanitized with DOMPurify before rendering
-- **Path traversal**: File deletion validates paths are contained within `UPLOADS_DIR` before `unlink()`
-- **File upload**: Extension blocklist + MIME whitelist on all upload endpoints; avatar uploads restricted to `{.jpg,.jpeg,.png,.gif,.webp}`
-- **Authentication**: HTTP-only, Secure, SameSite=Lax cookies; refresh token rotation; MFA (TOTP)
-- **Password reset**: Reset links built from server-controlled `APP_URL` env var — never from request headers
-- **Rate limiting**: Nginx applies `5r/m` on auth endpoints (login, MFA, forgot-password), `30r/s` on general API
-- **CSP**: `script-src 'self' 'unsafe-inline'` — `unsafe-eval` removed
-- **Audit trail**: All admin actions logged with actor, entity, and diff
+### Protections in place
+
+| Threat | Mitigation |
+|---|---|
+| XSS | DOMPurify sanitizes all user-authored HTML (SOPs, DOCX previews) |
+| Path traversal | File deletion validates containment within `UPLOADS_DIR` |
+| Malicious uploads | Extension blocklist + MIME whitelist on all upload endpoints |
+| Host header injection | Password reset links use server-controlled `APP_URL` env var |
+| Brute force | Nginx rate limiting: 5 req/min on auth endpoints |
+| Session hijack | HTTP-only Secure cookies, refresh token rotation |
+| Privilege escalation | MFA reset restricted to `admin` role only, org-scoped |
+| Data exposure | Immutable audit log on all admin actions |
+| Dependency CVEs | pip-audit + npm audit in CI on every push |
 
 ### Known limitations
-- Backend container runs as root (Docker named volume is root-owned; non-root requires `gosu` entrypoint). Acceptable on a private/internal network behind nginx.
-- CSP still allows `unsafe-inline` — removing it requires nonce-based CSP (frontend refactor). Tracked for a future release.
-- MIME type validation trusts client-supplied `Content-Type` header; no magic-byte check (`python-magic` not installed). Extension blocklist is the primary guard.
+
+- **Backend runs as root** inside the container — the `backend_uploads` Docker named volume is root-owned. Acceptable on a private/internal network behind nginx. To harden: implement a `gosu`-based entrypoint to drop privileges after `chown`.
+- **CSP allows `unsafe-inline`** — removing it requires nonce-based CSP (frontend refactor). Tracked.
+- **MIME validation is client-supplied** — no magic-byte check. Extension blocklist is the primary guard.
 
 ### Security configuration checklist
-- [ ] Set `JWT_SECRET` to 32+ random chars
-- [ ] Set `SECURE_COOKIES=true` (default)
-- [ ] Set `APP_URL` to your public domain
-- [ ] Place SSL certs in `./ssl/` and set `PROTOCOL=https`
-- [ ] Configure SMTP in org settings for email-based password reset
-- [ ] Enable MFA mandate for admin/manager roles in Settings → Security
+
+- [ ] `JWT_SECRET` set to 32+ random chars
+- [ ] `SECURE_COOKIES=true` (default)
+- [ ] `APP_URL` set to public domain
+- [ ] SSL certs in `./ssl/`, `PROTOCOL=https`
+- [ ] SMTP configured in Settings for password reset emails
+- [ ] MFA mandate enabled for admin/manager in Settings → Security
 
 ---
 
@@ -266,7 +328,7 @@ pip install -r requirements.txt
 uvicorn server:app --reload --port 8000
 ```
 
-Environment needed locally:
+Create `backend/.env`:
 ```
 MONGO_URL=mongodb://localhost:27017
 DB_NAME=shiftroster_dev
@@ -283,7 +345,10 @@ npm run dev       # dev server on :3000
 npm run build     # production build → ./build/
 ```
 
-Set `REACT_APP_BACKEND_URL=http://localhost:8000` in `frontend/.env.local`.
+Create `frontend/.env.local`:
+```
+REACT_APP_BACKEND_URL=http://localhost:8000
+```
 
 ### Run tests
 
@@ -299,23 +364,27 @@ cd frontend && npm run test
 
 ## CI/CD
 
-Pushes to `master` trigger:
-1. **Code Review** — flake8 (syntax errors), bandit (security scan), pip-audit (CVE check), npm audit, frontend build check
-2. **Version Bump** — auto-increments patch version in `package.json`
-3. **Deploy** — self-hosted runner on production server runs `docker compose up -d --build`
+Every push to `master` triggers:
+1. **Code Review** — flake8 (syntax), bandit (security), pip-audit (CVEs), npm audit, frontend build
+2. **Version Bump** — auto-increments patch version
+3. **Deploy** — self-hosted runner runs `docker compose up -d --build` on the production server
 
 ---
 
 ## Contributing
 
-1. Fork the repo and create a feature branch
-2. Follow the Midnight Shift design system (amber primary, Syne/Outfit fonts, Linear-style sidebar)
-3. Backend: add tests for new routes in `backend/tests/integration/`
-4. Frontend: no `console.log` in production code (stripped by Vite build)
-5. Open a PR against `master`
+1. Fork and create a feature branch from `master`
+2. Follow the Midnight Shift design system: amber primary (`hsl(38,92%,46%)`), Syne/Outfit fonts, Linear-style sidebar
+3. Backend: add integration tests in `backend/tests/integration/` for new routes
+4. Frontend: no `console.log` in production code (stripped at build time)
+5. Open a PR — CI must pass before merge
 
 ---
 
 ## License
 
 Licensed under the [Apache License 2.0](https://opensource.org/licenses/Apache-2.0).
+
+---
+
+*Built for elite operations teams. Self-hosted. Encrypted. Audited.*
