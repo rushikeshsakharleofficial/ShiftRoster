@@ -32,7 +32,10 @@ import {
   FileText, Download, Zap, LogIn, Loader2, Paperclip, FolderOpen,
   ChevronUp, User2, Settings, SquarePen, Pencil, Trash2, Check,
   Reply, Copy, Flag, MessageSquareDashed,
+  Bold, Italic, Code, Link, List, ListOrdered, Quote,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import MediaMenu from "@/components/chat/MediaMenu";
 import { StoryStrip } from "@/components/chat/StoryStrip";
 import ThemeToggle from "@/components/layout/ThemeToggle";
@@ -49,6 +52,61 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const BACKEND_URL = import.meta.env.REACT_APP_BACKEND_URL;
+
+// Applies markdown formatting around selected text in a textarea
+function applyFormat(type, textareaEl, value, setValue) {
+  if (!textareaEl) return;
+  const start = textareaEl.selectionStart;
+  const end = textareaEl.selectionEnd;
+  const selected = value.substring(start, end);
+  const map = {
+    bold:      ['**', '**', 'bold text'],
+    italic:    ['*',  '*',  'italic'],
+    code:      ['`',  '`',  'code'],
+    codeblock: ['```\n', '\n```', 'code here'],
+    link:      ['[',  '](url)', 'link text'],
+    ul:        ['- ', '', 'item'],
+    ol:        ['1. ', '', 'item'],
+    quote:     ['> ', '', 'quote'],
+  };
+  const [pre, post, placeholder] = map[type] || ['', '', ''];
+  const text = selected || placeholder;
+  const newValue = value.substring(0, start) + pre + text + post + value.substring(end);
+  setValue(newValue);
+  setTimeout(() => {
+    textareaEl.focus();
+    textareaEl.setSelectionRange(start + pre.length, start + pre.length + text.length);
+  }, 0);
+}
+
+// Shared markdown render config (no raw HTML passthrough - react-markdown safe by default)
+const mdComponents = {
+  p: ({ children }) => <span className="leading-relaxed">{children}</span>,
+  code: ({ inline, children }) =>
+    inline
+      ? <code className="px-1 py-0.5 rounded bg-black/20 font-mono text-[11px]">{children}</code>
+      : <pre className="mt-1 p-2 rounded bg-black/30 text-[11px] font-mono overflow-x-auto whitespace-pre-wrap"><code>{children}</code></pre>,
+  a: ({ href, children }) =>
+    <a href={href} className="underline underline-offset-2 opacity-80 hover:opacity-100" target="_blank" rel="noopener noreferrer">{children}</a>,
+  ul: ({ children }) => <ul className="list-disc list-inside mt-0.5 space-y-0.5">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal list-inside mt-0.5 space-y-0.5">{children}</ol>,
+  blockquote: ({ children }) => <blockquote className="border-l-2 border-current/40 pl-2 opacity-75 italic">{children}</blockquote>,
+  strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+};
+
+function FmtBtn({ icon: Icon, title, onClick }) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => { e.preventDefault(); onClick(); }}
+      title={title}
+      className="h-6 w-6 flex items-center justify-center rounded hover:bg-white/10 text-[#d6c4ac]/50 hover:text-[#ffd79b] transition-colors"
+    >
+      <Icon className="h-3 w-3" />
+    </button>
+  );
+}
 
 // --- Sub-components ---
 
@@ -268,7 +326,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                                "rounded-2xl", isLast && "rounded-bl-[4px]")
                         )}
                       >
-                        {displayText}
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{displayText}</ReactMarkdown>
                         {msg.edited && <span className="text-[10px] opacity-50 ml-1.5 font-mono">(edited)</span>}
                       </div>
                     ))}
@@ -397,6 +455,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
 function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, onClose, onSend }) {
   const [text, setText] = useState("");
   const [alsoInChannel, setAlsoInChannel] = useState(false);
+  const threadInputRef = useRef(null);
   const replies = (allMessages || []).filter(m => m.reply_to?.id === rootMsg?.id && !m.deleted_at);
   const rootText = decryptedCache?.[rootMsg?.id] ?? rootMsg?.text;
   const rootName = rootMsg?.sender_name || "Unknown";
@@ -460,7 +519,7 @@ function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, 
                       ? "bg-gradient-to-br from-[#ffd79b] to-[#ffb300] text-[#432c00] rounded-br-[3px]"
                       : "bg-[#171f33] text-[#dae2fd] rounded-bl-[3px]"
                   )}>
-                    {msgText}
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{msgText}</ReactMarkdown>
                   </div>
                   <span className="text-[9px] font-mono text-muted-foreground/40 mt-0.5">
                     {msg.created_at ? format(new Date(msg.created_at), "HH:mm") : ""}
@@ -473,10 +532,22 @@ function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, 
       </ScrollArea>
 
       {/* Thread composer */}
-      <div className="border-t border-border/40 p-3 shrink-0 bg-background/95 backdrop-blur-md space-y-2">
-        <div className="flex gap-2 items-end bg-[#222a3d] rounded-xl px-3 py-2 shadow-[0_0_0_1px_rgba(253,215,155,0.12)] focus-within:shadow-[0_0_0_1px_rgba(253,215,155,0.35)]">
+      <div className="border-t border-border/40 p-3 shrink-0 bg-[#0b1326] space-y-2">
+        <div className="bg-[#222a3d] rounded-xl overflow-hidden shadow-[0_0_0_1px_rgba(253,215,155,0.12)] focus-within:shadow-[0_0_0_1px_rgba(253,215,155,0.35)]">
+          {/* Toolbar */}
+          <div className="flex items-center gap-0.5 px-2 pt-1.5 pb-1 border-b border-[#ffd79b]/10">
+            <FmtBtn icon={Bold} title="Bold" onClick={() => applyFormat('bold', threadInputRef.current, text, setText)} />
+            <FmtBtn icon={Italic} title="Italic" onClick={() => applyFormat('italic', threadInputRef.current, text, setText)} />
+            <FmtBtn icon={Code} title="Inline code" onClick={() => applyFormat('code', threadInputRef.current, text, setText)} />
+            <div className="w-px h-3 bg-[#ffd79b]/15 mx-0.5" />
+            <FmtBtn icon={Link} title="Link" onClick={() => applyFormat('link', threadInputRef.current, text, setText)} />
+            <FmtBtn icon={List} title="Bullet list" onClick={() => applyFormat('ul', threadInputRef.current, text, setText)} />
+            <FmtBtn icon={Quote} title="Blockquote" onClick={() => applyFormat('quote', threadInputRef.current, text, setText)} />
+          </div>
+          {/* Textarea */}
           <Textarea
-            className="flex-1 text-sm resize-none bg-transparent border-0 focus-visible:ring-0 p-0 min-h-[34px] max-h-20 placeholder:text-muted-foreground/40"
+            ref={threadInputRef}
+            className="w-full text-sm resize-none bg-transparent border-0 focus-visible:ring-0 px-3 py-2 min-h-[34px] max-h-20 placeholder:text-muted-foreground/40 rounded-none"
             placeholder="Reply in thread…"
             value={text}
             onChange={e => setText(e.target.value)}
@@ -488,13 +559,17 @@ function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, 
             }}
             rows={1}
           />
-          <button
-            onClick={() => { if (text.trim()) { onSend(text.trim(), rootMsg?.id, alsoInChannel); setText(""); setAlsoInChannel(false); } }}
-            disabled={!text.trim()}
-            className="h-7 w-7 rounded-full bg-primary flex items-center justify-center disabled:opacity-30 transition-opacity shrink-0"
-          >
-            <Send className="h-3 w-3 text-primary-foreground" />
-          </button>
+          {/* Bottom row */}
+          <div className="flex items-center px-2 pb-1.5 pt-1 border-t border-[#ffd79b]/10">
+            <div className="flex-1" />
+            <button
+              onClick={() => { if (text.trim()) { onSend(text.trim(), rootMsg?.id, alsoInChannel); setText(""); setAlsoInChannel(false); } }}
+              disabled={!text.trim()}
+              className="h-6 w-6 rounded-full bg-gradient-to-br from-[#ffd79b] to-[#ffb300] text-[#432c00] flex items-center justify-center disabled:opacity-30 transition-opacity shrink-0"
+            >
+              <Send className="h-3 w-3" />
+            </button>
+          </div>
         </div>
         {/* Slack-style "also send to channel" toggle */}
         <label className="flex items-center gap-2 cursor-pointer group px-1">
@@ -1465,27 +1540,19 @@ export default function ChatPage() {
                   </button>
                 </div>
               )}
-              <div className="flex items-end gap-2 bg-[#222a3d] rounded-2xl px-3 py-2.5 shadow-[0_0_0_1px_rgba(253,215,155,0.15)] focus-within:shadow-[0_0_0_1px_rgba(253,215,155,0.4),0_0_20px_rgba(255,179,0,0.08)]">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 rounded-full text-muted-foreground hover:bg-[#2d3449] shrink-0"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={inputDisabled}
-                  title="Attach file"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 rounded-full text-muted-foreground hover:bg-[#2d3449] shrink-0"
-                  onClick={() => setPickerOpen(true)}
-                  disabled={inputDisabled}
-                  title="Attach from Files"
-                >
-                  <FolderOpen className="h-4 w-4" />
-                </Button>
+              <div className="bg-[#222a3d] rounded-2xl overflow-hidden shadow-[0_0_0_1px_rgba(253,215,155,0.15)] focus-within:shadow-[0_0_0_1px_rgba(253,215,155,0.4),0_0_20px_rgba(255,179,0,0.08)]">
+                {/* Formatting toolbar */}
+                <div className="flex items-center gap-0.5 px-3 pt-2 pb-1 border-b border-[#ffd79b]/10">
+                  <FmtBtn icon={Bold} title="Bold" onClick={() => applyFormat('bold', inputRef.current, inputText, setInputText)} />
+                  <FmtBtn icon={Italic} title="Italic" onClick={() => applyFormat('italic', inputRef.current, inputText, setInputText)} />
+                  <FmtBtn icon={Code} title="Inline code" onClick={() => applyFormat('code', inputRef.current, inputText, setInputText)} />
+                  <div className="w-px h-3 bg-[#ffd79b]/15 mx-1" />
+                  <FmtBtn icon={Link} title="Link" onClick={() => applyFormat('link', inputRef.current, inputText, setInputText)} />
+                  <FmtBtn icon={List} title="Bullet list" onClick={() => applyFormat('ul', inputRef.current, inputText, setInputText)} />
+                  <FmtBtn icon={ListOrdered} title="Numbered list" onClick={() => applyFormat('ol', inputRef.current, inputText, setInputText)} />
+                  <FmtBtn icon={Quote} title="Blockquote" onClick={() => applyFormat('quote', inputRef.current, inputText, setInputText)} />
+                </div>
+                {/* Text area */}
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -1493,28 +1560,46 @@ export default function ChatPage() {
                   multiple
                   onChange={handleFileSelect}
                 />
-
-                <div className="flex-1 flex items-end min-h-[40px]">
-                  <Textarea
-                    ref={inputRef}
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
-                      }
-                    }}
-                    placeholder={
-                      activeChannel
-                        ? `Message ${isActiveDM ? activeChannel.name : "#" + activeChannel.name}`
-                        : "Select a channel"
+                <Textarea
+                  ref={inputRef}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
                     }
+                  }}
+                  placeholder={
+                    activeChannel
+                      ? `Message ${isActiveDM ? activeChannel.name : "#" + activeChannel.name}`
+                      : "Select a channel"
+                  }
+                  disabled={inputDisabled}
+                  rows={1}
+                  className="w-full min-h-[40px] max-h-[160px] bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm py-2.5 px-3 resize-none custom-scrollbar rounded-none"
+                />
+                {/* Bottom action row */}
+                <div className="flex items-center gap-1 px-2 pb-2 pt-1 border-t border-[#ffd79b]/10">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
                     disabled={inputDisabled}
-                    rows={1}
-                    className="flex-1 min-h-[40px] max-h-[160px] bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm py-2.5 px-4 resize-none custom-scrollbar"
-                  />
-                  <div className="pb-1 pr-1.5 shrink-0">
+                    title="Attach file"
+                    className="h-7 w-7 flex items-center justify-center rounded-full text-[#d6c4ac]/50 hover:text-[#ffd79b] hover:bg-white/10 transition-colors disabled:opacity-30"
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPickerOpen(true)}
+                    disabled={inputDisabled}
+                    title="Attach from Files"
+                    className="h-7 w-7 flex items-center justify-center rounded-full text-[#d6c4ac]/50 hover:text-[#ffd79b] hover:bg-white/10 transition-colors disabled:opacity-30"
+                  >
+                    <FolderOpen className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="shrink-0">
                     <MediaMenu
                       onEmojiSelect={handleEmojiSelect}
                       onGifSelect={() => {}}
@@ -1522,16 +1607,16 @@ export default function ChatPage() {
                       disabled={inputDisabled}
                     />
                   </div>
+                  <div className="flex-1" />
+                  <Button
+                    size="icon"
+                    onClick={handleSend}
+                    disabled={inputDisabled || (!inputText.trim() && pendingFiles.length === 0)}
+                    className="h-7 w-7 rounded-full shadow-lg shrink-0 bg-gradient-to-br from-[#ffd79b] to-[#ffb300] text-[#432c00] border-0 hover:opacity-90 disabled:opacity-30"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
-
-                <Button
-                  size="icon"
-                  onClick={handleSend}
-                  disabled={inputDisabled || (!inputText.trim() && pendingFiles.length === 0)}
-                  className="h-9 w-9 rounded-full shadow-lg shrink-0 bg-gradient-to-br from-[#ffd79b] to-[#ffb300] text-[#432c00] border-0 hover:opacity-90 disabled:opacity-30"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
               </div>
 
               {pendingFiles.length > 0 && (
