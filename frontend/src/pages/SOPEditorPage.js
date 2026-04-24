@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import DOMPurify from "dompurify";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { sopsApi, usersApi } from "@/lib/api";
@@ -941,7 +942,7 @@ function PresentationEditor({ content, onChange, editable }) {
           <div className={`h-full flex flex-col p-16 ${textColor}`}>
             <h1 className="text-5xl font-bold mb-8 leading-tight">{active?.title}</h1>
             <div className={`flex-1 overflow-auto text-xl prose max-w-none ${light ? "" : "prose-invert"}`}
-              dangerouslySetInnerHTML={{ __html: active?.body || "" }} />
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(active?.body || "") }} />
           </div>
         </div>
         </div>
@@ -1067,7 +1068,7 @@ function PresentationEditor({ content, onChange, editable }) {
 
             <div className={`flex-1 overflow-auto prose prose-sm max-w-none ${light ? "" : "prose-invert"} focus:outline-none`}>
               {editable ? <EditorContent editor={slideEditor} /> : (
-                <div dangerouslySetInnerHTML={{ __html: active?.body || '<p class="opacity-40">Empty slide</p>' }} />
+                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(active?.body || '<p class="opacity-40">Empty slide</p>') }} />
               )}
             </div>
           </div>
