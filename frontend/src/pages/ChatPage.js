@@ -31,7 +31,7 @@ import {
   LayoutDashboard, Globe, ShieldCheck,
   FileText, Download, Zap, LogIn, Loader2, Paperclip, FolderOpen,
   ChevronUp, User2, Settings, SquarePen, Pencil, Trash2, Check,
-  Reply, Copy, Flag,
+  Reply, Copy, Flag, MessageSquareDashed,
 } from "lucide-react";
 import MediaMenu from "@/components/chat/MediaMenu";
 import { StoryStrip } from "@/components/chat/StoryStrip";
@@ -159,7 +159,7 @@ const isOnlyEmojis = (text) => {
 
 // Renders a contiguous block of messages from the same author. Avatar + name
 // appear once at the top; subsequent bubbles are tightly stacked.
-function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete, onReply, decryptedCache }) {
+function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete, onReply, onOpenThread, decryptedCache }) {
   const first = messages[0];
   const cached = userCache?.[first.sender_username] || userCache?.[first.sender_id];
   const displayName =
@@ -246,7 +246,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                         className={cn(
                           "px-4 py-2.5 text-[13.5px] leading-relaxed",
                           isOwn
-                            ? cn("bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/20",
+                            ? cn("bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20",
                                "rounded-2xl", isLast && "rounded-br-[4px]")
                             : cn("bg-muted/70 text-foreground border border-border/30 backdrop-blur-sm",
                                "rounded-2xl", isLast && "rounded-bl-[4px]")
@@ -266,6 +266,11 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                         className="p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                         title="Reply"
                       ><Reply className="h-3 w-3" /></button>
+                      <button
+                        onClick={() => onOpenThread && onOpenThread(msg)}
+                        className="p-1 rounded-full hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                        title="Open thread"
+                      ><MessageSquareDashed className="h-3 w-3" /></button>
                       {displayText && (
                         <button
                           onClick={() => { navigator.clipboard.writeText(displayText); toast.success("Copied"); }}
@@ -321,6 +326,113 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
   );
 }
 
+// --- Thread Panel ---
+function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, onClose, onSend }) {
+  const [text, setText] = useState("");
+  const replies = (allMessages || []).filter(m => m.reply_to_id === rootMsg?.id && !m.deleted_at);
+  const rootText = decryptedCache?.[rootMsg?.id] ?? rootMsg?.text;
+  const rootName = rootMsg?.sender_name || "Unknown";
+
+  return (
+    <div className="w-[300px] shrink-0 border-l border-border/40 flex flex-col bg-background dark:bg-[#0a0c0f]">
+      {/* Header */}
+      <div className="h-14 flex items-center justify-between px-4 border-b border-border/40 shrink-0 bg-background/95 backdrop-blur-md">
+        <div className="flex items-center gap-2">
+          <MessageSquareDashed className="h-4 w-4 text-primary" />
+          <span className="font-heading text-sm font-semibold">Thread</span>
+          {replies.length > 0 && (
+            <span className="font-mono text-[10px] text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded-full">
+              {replies.length}
+            </span>
+          )}
+        </div>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors rounded-md p-1 hover:bg-muted">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Root message */}
+      <div className="px-4 py-3 border-b border-border/30 bg-primary/5 shrink-0">
+        <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-muted-foreground/60 mb-1">{rootName}</p>
+        <p className="text-sm text-foreground leading-relaxed">{rootText}</p>
+        <span className="text-[9px] font-mono text-muted-foreground/40 mt-1.5 block">
+          {rootMsg?.created_at ? format(new Date(rootMsg.created_at), "MMM d, HH:mm") : ""}
+        </span>
+      </div>
+
+      {/* Section label */}
+      <div className="px-4 pt-3 pb-1 shrink-0">
+        <span className="text-[9.5px] font-mono uppercase tracking-[0.12em] text-muted-foreground/50">
+          {replies.length === 0 ? "Start the thread" : `${replies.length} ${replies.length === 1 ? "reply" : "replies"}`}
+        </span>
+      </div>
+
+      {/* Replies */}
+      <ScrollArea className="flex-1">
+        <div className="px-3 pb-3 space-y-3">
+          {replies.length === 0 && (
+            <p className="text-xs text-muted-foreground/40 text-center py-6 italic">No replies yet</p>
+          )}
+          {replies.map(msg => {
+            const isOwn = msg.sender_id === user?.id;
+            const name = msg.sender_name || "Unknown";
+            const msgText = decryptedCache?.[msg.id] ?? msg.text;
+            return (
+              <div key={msg.id} className={cn("flex gap-2", isOwn && "flex-row-reverse")}>
+                <Avatar className="h-6 w-6 shrink-0 mt-0.5">
+                  <AvatarFallback className={cn("text-[8px] font-bold text-white", getAvatarColor(name))}>
+                    {name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className={cn("flex flex-col max-w-[78%]", isOwn && "items-end")}>
+                  <span className="text-[10px] font-semibold mb-0.5 text-foreground">{isOwn ? "You" : name}</span>
+                  <div className={cn(
+                    "px-3 py-1.5 text-[12.5px] rounded-xl leading-relaxed",
+                    isOwn
+                      ? "bg-primary/90 text-primary-foreground rounded-br-[3px]"
+                      : "bg-muted/70 border border-border/30 text-foreground rounded-bl-[3px]"
+                  )}>
+                    {msgText}
+                  </div>
+                  <span className="text-[9px] font-mono text-muted-foreground/40 mt-0.5">
+                    {msg.created_at ? format(new Date(msg.created_at), "HH:mm") : ""}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </ScrollArea>
+
+      {/* Thread composer */}
+      <div className="border-t border-border/40 p-3 shrink-0 bg-background/95 backdrop-blur-md">
+        <div className="flex gap-2 items-end bg-muted/50 rounded-xl px-3 py-2 border border-border/40">
+          <Textarea
+            className="flex-1 text-sm resize-none bg-transparent border-0 focus-visible:ring-0 p-0 min-h-[34px] max-h-20 placeholder:text-muted-foreground/40"
+            placeholder="Reply in thread…"
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (text.trim()) { onSend(text.trim(), rootMsg?.id); setText(""); }
+              }
+            }}
+            rows={1}
+          />
+          <button
+            onClick={() => { if (text.trim()) { onSend(text.trim(), rootMsg?.id); setText(""); } }}
+            disabled={!text.trim()}
+            className="h-7 w-7 rounded-full bg-primary flex items-center justify-center disabled:opacity-30 transition-opacity shrink-0"
+          >
+            <Send className="h-3 w-3 text-primary-foreground" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Main Component ---
 export default function ChatPage() {
   const { channelId: urlChannelId } = useParams();
@@ -347,6 +459,7 @@ export default function ChatPage() {
   const [pendingFiles, setPendingFiles] = useState([]);
   const [replyTo, setReplyTo] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [threadMsg, setThreadMsg] = useState(null);
 
   const handleFileSelect = (e) => {
     const MAX_FILES = 10;
@@ -852,7 +965,7 @@ export default function ChatPage() {
           {/* Channels */}
           <div className="pt-3">
             <div className="flex items-center justify-between px-4 pb-1">
-              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50 dark:text-white/30">Channels</span>
+              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/50">Channels</span>
               <button
                 onClick={() => setShowCreateChannel(true)}
                 className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
@@ -869,18 +982,18 @@ export default function ChatPage() {
                   key={ch.id}
                   onClick={() => onChannelClick(ch.id)}
                   className={cn(
-                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150",
+                    "w-full flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-[5px] text-left transition-colors text-[13px] border-l-2",
                     activeChannelId === ch.id
-                      ? "bg-primary/10 text-foreground font-semibold dark:bg-gradient-to-r dark:from-indigo-500/20 dark:to-purple-500/10 dark:text-white dark:ring-1 dark:ring-indigo-500/30"
-                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white/80"
+                      ? "border-primary bg-primary/8 text-foreground font-semibold"
+                      : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground dark:text-white/50 dark:hover:text-white/80"
                   )}
                 >
                   {ch.type === "private"
-                    ? <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground dark:text-indigo-400/60" />
-                    : <Hash className="h-3.5 w-3.5 shrink-0 text-muted-foreground dark:text-indigo-400/60" />}
-                  <span className="flex-1 truncate text-[13px]">{ch.name}</span>
+                    ? <Lock className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                    : <Hash className="h-3.5 w-3.5 shrink-0 opacity-50" />}
+                  <span className="flex-1 truncate">{ch.name}</span>
                   {unreadCounts[ch.id] > 0 && (
-                    <span className="h-4 min-w-[16px] px-1 rounded-full bg-indigo-500 text-white text-[10px] flex items-center justify-center font-bold shadow-lg shadow-indigo-500/40">
+                    <span className="font-mono text-[10px] bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 leading-none">
                       {unreadCounts[ch.id]}
                     </span>
                   )}
@@ -892,7 +1005,7 @@ export default function ChatPage() {
           {/* Direct messages */}
           <div className="pt-4 pb-3">
             <div className="flex items-center justify-between px-4 pb-1">
-              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50 dark:text-white/30">Direct Messages</span>
+              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/50">Direct Messages</span>
             </div>
             <div className="px-2 space-y-0.5">
               {filteredDms.length === 0 ? (
@@ -902,10 +1015,10 @@ export default function ChatPage() {
                   key={dm.id}
                   onClick={() => onChannelClick(dm.id)}
                   className={cn(
-                    "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all duration-150",
+                    "w-full flex items-center gap-2 pl-2 pr-2 py-1.5 rounded-[5px] text-left transition-colors text-[13px] border-l-2",
                     activeChannelId === dm.id
-                      ? "bg-primary/10 text-foreground font-semibold dark:bg-gradient-to-r dark:from-indigo-500/20 dark:to-purple-500/10 dark:text-white dark:ring-1 dark:ring-indigo-500/30"
-                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white/80"
+                      ? "border-primary bg-primary/8 text-foreground font-semibold"
+                      : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground dark:text-white/50 dark:hover:text-white/80"
                   )}
                 >
                   <div className="relative shrink-0">
@@ -970,7 +1083,8 @@ export default function ChatPage() {
         </div>
       </aside>
 
-      {/* === MAIN — chat surface === */}
+      {/* === MAIN + THREAD PANEL === */}
+      <div className="flex-1 flex min-w-0">
       <main className="flex-1 flex flex-col min-w-0 bg-background dark:bg-[#0e1117]">
         {/* Header */}
         <header className="h-14 border-b border-border/40 px-5 flex items-center gap-3 shrink-0 bg-background/90 dark:bg-[#0e1117]/90 backdrop-blur-md sticky top-0 z-10">
@@ -1063,19 +1177,19 @@ export default function ChatPage() {
           {!activeChannelId && !showDiscovery ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-12">
               <div className="relative mb-8">
-                <div className="w-20 h-20 rounded-2xl bg-indigo-500/10 flex items-center justify-center ring-1 ring-indigo-500/20">
-                  <MessageSquare className="h-9 w-9 text-indigo-400/60" />
+                <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center ring-1 ring-primary/20">
+                  <MessageSquare className="h-9 w-9 text-primary/60" />
                 </div>
-                <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-indigo-500/30 ring-2 ring-background" />
+                <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary/30 ring-2 ring-background" />
               </div>
-              <h3 className="text-xl font-semibold mb-2 tracking-tight">No conversation selected</h3>
+              <h3 className="font-heading text-xl font-bold mb-2 tracking-tight">No conversation selected</h3>
               <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mb-8">
                 Pick a channel or start a direct message.
               </p>
               <div className="flex items-center gap-3">
                 <Button
                   onClick={() => setShowCreateChannel(true)}
-                  className="rounded-xl h-9 px-5 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white border-0"
+                  className="rounded-md h-9 px-5 text-xs font-semibold"
                 >
                   <Plus className="h-3.5 w-3.5 mr-1.5" /> New Channel
                 </Button>
@@ -1221,6 +1335,7 @@ export default function ChatPage() {
                       onEdit={editMessage}
                       onDelete={deleteMessage}
                       onReply={(msg) => setReplyTo(msg)}
+                      onOpenThread={(msg) => setThreadMsg(msg)}
                       decryptedCache={decryptedCache}
                     />
                   );
@@ -1369,6 +1484,22 @@ export default function ChatPage() {
           </div>
         )}
       </main>
+
+      {/* Thread panel */}
+      {threadMsg && (
+        <MessageThread
+          rootMsg={threadMsg}
+          allMessages={currentMessages}
+          user={user}
+          userCache={userCache}
+          decryptedCache={decryptedCache}
+          onClose={() => setThreadMsg(null)}
+          onSend={(text, parentId) => {
+            sendMessage({ text, reply_to_id: parentId });
+          }}
+        />
+      )}
+      </div>
 
       {/* Create Channel dialog */}
       <Dialog open={showCreateChannel} onOpenChange={setShowCreateChannel}>
