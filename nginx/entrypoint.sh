@@ -11,7 +11,18 @@ SSL_KEY="${SSL_KEY:-/etc/nginx/ssl/key.pem}"
 COMMON_LOCATIONS='
     client_max_body_size 110m;
 
+    location ~* ^/api/auth/(login|forgot-password|verify-mfa) {
+        limit_req zone=api_auth burst=3 nodelay;
+        proxy_pass '"$BACKEND_URL"';
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location /api {
+        limit_req zone=api_general burst=50 nodelay;
         proxy_pass '"$BACKEND_URL"';
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -42,6 +53,9 @@ COMMON_LOCATIONS='
 if [ "$PROTOCOL" = "https" ] && [ -f "$SSL_CERT" ] && [ -f "$SSL_KEY" ]; then
     echo "Generating HTTPS nginx config for domain: $DOMAIN"
     cat > /etc/nginx/conf.d/default.conf << CONF
+limit_req_zone \$binary_remote_addr zone=api_general:10m rate=30r/s;
+limit_req_zone \$binary_remote_addr zone=api_auth:10m rate=5r/m;
+
 # HTTP ? HTTPS redirect
 server {
     listen 80;
@@ -67,7 +81,7 @@ server {
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: http: https:; connect-src 'self' http: https: ws: wss:; worker-src 'self' blob:; media-src 'self' blob: data:;" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: http: https:; connect-src 'self' http: https: ws: wss:; worker-src 'self' blob:; media-src 'self' blob: data:;" always;
 
 ${COMMON_LOCATIONS}
 }
@@ -75,6 +89,9 @@ CONF
 else
     echo "Generating HTTP nginx config for domain: $DOMAIN"
     cat > /etc/nginx/conf.d/default.conf << CONF
+limit_req_zone \$binary_remote_addr zone=api_general:10m rate=30r/s;
+limit_req_zone \$binary_remote_addr zone=api_auth:10m rate=5r/m;
+
 server {
     listen 80;
     listen 443 ssl;
@@ -89,7 +106,7 @@ server {
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: http: https:; connect-src 'self' http: https: ws: wss:; worker-src 'self' blob:; media-src 'self' blob: data:;" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: http: https:; connect-src 'self' http: https: ws: wss:; worker-src 'self' blob:; media-src 'self' blob: data:;" always;
 
 ${COMMON_LOCATIONS}
 }
