@@ -61,7 +61,7 @@ export default function AppLayout() {
   const [myStatus, setMyStatus] = useState("active"); // active | break | leave
   const [profileOpen, setProfileOpen] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
-  const [profileForm, setProfileForm] = useState({ full_name: "", username: "", phone: "", mobile_alt: "", date_of_birth: "" });
+  const [profileForm, setProfileForm] = useState({ full_name: "", username: "", email: "", phone: "", mobile_alt: "", date_of_birth: "" });
   const [profileAvatar, setProfileAvatar] = useState(""); // current saved avatar
   const [profileAvatarFile, setProfileAvatarFile] = useState(null); // pending file (not yet uploaded)
   const [profileAvatarPreview, setProfileAvatarPreview] = useState(""); // local blob preview
@@ -166,7 +166,7 @@ export default function AppLayout() {
   }, [user?.id]);
 
   const openProfile = () => {
-    setProfileForm({ full_name: user?.full_name || "", username: user?.username || "", phone: user?.phone || "", mobile_alt: user?.mobile_alt || "", date_of_birth: user?.date_of_birth || "" });
+    setProfileForm({ full_name: user?.full_name || "", username: user?.username || "", email: user?.email || "", phone: user?.phone || "", mobile_alt: user?.mobile_alt || "", date_of_birth: user?.date_of_birth || "" });
     setProfileAvatar(user?.avatar_url || "");
     setProfileAvatarFile(null);
     setProfileAvatarPreview("");
@@ -183,6 +183,14 @@ export default function AppLayout() {
 
   const handleProfileSave = async () => {
     setProfileError("");
+    if (!profileForm.email.trim()) {
+      setProfileError("Email is required.");
+      return;
+    }
+    if (!profileForm.phone.trim()) {
+      setProfileError("Mobile Number is required.");
+      return;
+    }
     if (!profileForm.date_of_birth) {
       setProfileError("Date of Birth is required.");
       return;
@@ -199,6 +207,7 @@ export default function AppLayout() {
       const payload = {};
       if (profileForm.full_name.trim()) payload.full_name = profileForm.full_name.trim();
       if (profileForm.username.trim()) payload.username = profileForm.username.trim().toLowerCase();
+      payload.email = profileForm.email.trim();
       payload.phone = profileForm.phone.trim();
       payload.mobile_alt = profileForm.mobile_alt.trim();
       if (profileForm.date_of_birth) payload.date_of_birth = profileForm.date_of_birth;
@@ -716,13 +725,25 @@ export default function AppLayout() {
                   onChange={(e) => setProfileForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, "") }))}
                   placeholder="e.g. john.doe"
                 />
+              </div>
+              {/* Email */}
+              <div className="space-y-1">
+                <Label className="text-xs">Email <span className="text-destructive">*</span></Label>
+                <Input
+                  type="email"
+                  required
+                  value={profileForm.email}
+                  onChange={(e) => setProfileForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="you@example.com"
+                />
                 <p className="text-[11px] text-muted-foreground">Used for @mentions and login. Letters, numbers, dots, underscores only.</p>
               </div>
               {/* Mobile numbers */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">Mobile Number</Label>
+                  <Label className="text-xs">Mobile Number <span className="text-destructive">*</span></Label>
                   <Input
+                    required
                     value={profileForm.phone}
                     onChange={(e) => setProfileForm(f => ({ ...f, phone: e.target.value }))}
                     placeholder="+1 555 000 0000"
