@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { notificationsApi, orgApi, usersApi } from "@/lib/api";
+import ChatPage from "@/pages/ChatPage";
 import { useChat } from "@/contexts/ChatContext";
 import { getAvatarColor, cn } from "@/lib/utils";
 import FlipClock from "@/components/ui/flip-clock";
@@ -25,7 +26,7 @@ import {
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
   BarChart3, ScrollText, Settings, LogOut, Menu, X, Check, LayoutTemplate,
   MessageSquare, Coffee, Plane, CircleDot, UserCircle, Camera, Loader2, ListChecks, FileText, FolderOpen,
-  Sparkles, CalendarCheck2, ShieldCheck, MessageCircle
+  Sparkles, CalendarCheck2, ShieldCheck, MessageCircle, Maximize2
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -45,6 +46,7 @@ export default function AppLayout() {
   const isFullBleed = location.pathname.startsWith("/chat");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebar, setMobileSidebar] = useState(false);
+  const [chatPanelOpen, setChatPanelOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
@@ -361,8 +363,12 @@ export default function AppLayout() {
                     item.external ? (
                       <button
                         key={item.to}
-                        onClick={() => window.open(item.to, "_blank", "noopener,noreferrer")}
-                        className="w-full flex flex-row items-center gap-2.5 pl-3 pr-2 py-1.5 rounded-[5px] text-[13px] transition-colors group text-muted-foreground hover:bg-accent/70 hover:text-foreground border-l-2 border-transparent"
+                        onClick={() => setChatPanelOpen((o) => !o)}
+                        className={`w-full flex flex-row items-center gap-2.5 pl-3 pr-2 py-1.5 rounded-[5px] text-[13px] transition-colors group border-l-2 ${
+                          chatPanelOpen
+                            ? "border-primary bg-primary/8 text-primary font-semibold"
+                            : "border-transparent text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                        }`}
                       >
                         <item.icon className={`h-[15px] w-[15px] shrink-0 ${sidebarOpen ? "" : "mx-auto"}`} />
                         {sidebarOpen && <span className="truncate">{item.label}</span>}
@@ -790,6 +796,43 @@ export default function AppLayout() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* === COMPACT CHAT PANEL === */}
+      {chatPanelOpen && (
+        <div className="fixed inset-y-0 right-0 z-50 flex flex-col w-[560px] border-l border-border/60 bg-background shadow-[-8px_0_32px_rgba(0,0,0,0.12)] dark:shadow-[-8px_0_32px_rgba(0,0,0,0.5)]">
+          {/* Panel chrome */}
+          <div className="h-11 flex items-center justify-between px-4 border-b border-border/60 bg-card shrink-0">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold">Team Chat</span>
+            </div>
+            <div className="flex items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                title="Open full screen"
+                onClick={() => { setChatPanelOpen(false); navigate("/chat"); }}
+              >
+                <Maximize2 className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                title="Close"
+                onClick={() => setChatPanelOpen(false)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+          {/* Chat content (compact — sidebar hidden) */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <ChatPage compact />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

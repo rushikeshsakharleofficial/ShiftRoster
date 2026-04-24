@@ -600,7 +600,7 @@ function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, 
 }
 
 // --- Main Component ---
-export default function ChatPage() {
+export default function ChatPage({ compact = false }) {
   const { channelId: urlChannelId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -771,14 +771,15 @@ export default function ChatPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // URL sync
+  // URL sync — skip in compact panel mode (no route param)
   useEffect(() => {
+    if (compact) return;
     if (!urlChannelId) {
       setActiveChannelId(null);
     } else if (urlChannelId !== activeChannelId) {
       setActiveChannelId(urlChannelId);
     }
-  }, [urlChannelId, activeChannelId, setActiveChannelId]);
+  }, [compact, urlChannelId, activeChannelId, setActiveChannelId]);
 
   useEffect(() => {
     if (activeChannelId) {
@@ -874,7 +875,7 @@ export default function ChatPage() {
           const color = getAvatarColor(newMsg.sender_name || "");
           toast.custom((id) => (
             <div
-              onClick={() => { navigate(`/chat/${channelId}`); toast.dismiss(id); }}
+              onClick={() => { if (!compact) navigate(`/chat/${channelId}`); else setActiveChannelId(channelId); toast.dismiss(id); }}
               className="flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border shadow-lg cursor-pointer hover:bg-muted/60 transition-colors w-80 max-w-full"
             >
               <span className={cn("h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-sm font-bold text-white", color)}>{initials}</span>
@@ -1052,7 +1053,7 @@ export default function ChatPage() {
       await leaveChannel(id);
       toast.success("Left channel");
       loadChannels();
-      if (activeChannelId === id) navigate("/chat");
+      if (activeChannelId === id) { if (compact) setActiveChannelId(null); else navigate("/chat"); }
     } catch (err) {
       toast.error("Failed to leave channel");
     }
@@ -1102,7 +1103,7 @@ export default function ChatPage() {
   };
 
   const onChannelClick = (id) => {
-    navigate(`/chat/${id}`);
+    if (!compact) navigate(`/chat/${id}`);
     setActiveChannelId(id);
     setShowDiscovery(false);
   };
@@ -1113,8 +1114,8 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
-      {/* === LEFT ASIDE — fixed 280px === */}
-      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border/20 bg-card dark:bg-zinc-950 shadow-[2px_0_24px_rgba(6,14,32,0.15)] dark:shadow-[2px_0_24px_rgba(6,14,32,0.4)]">
+      {/* === LEFT ASIDE — fixed 280px (hidden in compact panel mode) === */}
+      {!compact && <aside className="w-[280px] shrink-0 flex flex-col border-r border-border/20 bg-card dark:bg-zinc-950 shadow-[2px_0_24px_rgba(6,14,32,0.15)] dark:shadow-[2px_0_24px_rgba(6,14,32,0.4)]">
         {/* Top: title + quick actions */}
         <div className="h-14 px-4 flex items-center justify-between border-b border-border/20 shrink-0">
           <h2 className="text-base font-semibold tracking-tight text-foreground dark:text-[#dae2fd]">Messages</h2>
@@ -1283,7 +1284,7 @@ export default function ChatPage() {
           </DropdownMenu>
           </div>
         </div>
-      </aside>
+      </aside>}
 
       {/* === MAIN + THREAD PANEL === */}
       <div className="flex-1 flex min-w-0">
