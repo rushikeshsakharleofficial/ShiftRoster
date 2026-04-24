@@ -24,7 +24,8 @@ import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
   BarChart3, ScrollText, Settings, LogOut, Menu, X, Check, LayoutTemplate,
-  MessageSquare, Coffee, Plane, CircleDot, UserCircle, Camera, Loader2, ListChecks, FileText, FolderOpen
+  MessageSquare, Coffee, Plane, CircleDot, UserCircle, Camera, Loader2, ListChecks, FileText, FolderOpen,
+  Sparkles, CalendarCheck2, ShieldCheck, MessageCircle
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -55,6 +56,7 @@ export default function AppLayout() {
   const { totalUnread: chatUnread } = useChat();
   const [myStatus, setMyStatus] = useState("active"); // active | break | leave
   const [profileOpen, setProfileOpen] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ full_name: "", username: "" });
   const [profileAvatar, setProfileAvatar] = useState(""); // current saved avatar
   const [profileAvatarFile, setProfileAvatarFile] = useState(null); // pending file (not yet uploaded)
@@ -66,6 +68,20 @@ export default function AppLayout() {
   const isManager = user?.system_role === "manager";
   const isEmployee = user?.system_role === "employee";
   const level = user?.employee_level;
+
+  useEffect(() => {
+    if (user?.id) {
+      const key = `welcomed_${user.id}`;
+      if (!localStorage.getItem(key)) {
+        setWelcomeOpen(true);
+      }
+    }
+  }, [user?.id]);
+
+  const dismissWelcome = () => {
+    if (user?.id) localStorage.setItem(`welcomed_${user.id}`, "1");
+    setWelcomeOpen(false);
+  };
 
   const fetchNotifs = async () => {
     try {
@@ -698,6 +714,60 @@ export default function AppLayout() {
           </div>
         </main>
       </div>
+
+      {/* ── Welcome modal — first login only ── */}
+      <Dialog open={welcomeOpen} onOpenChange={(o) => { if (!o) dismissWelcome(); }}>
+        <DialogContent className="max-w-md p-0 overflow-hidden gap-0">
+          {/* Header gradient band */}
+          <div className="relative bg-primary px-6 pt-8 pb-6">
+            <div className="absolute inset-0 opacity-20"
+              style={{ backgroundImage: "radial-gradient(ellipse 120% 80% at 80% 0%, white 0%, transparent 60%)" }} />
+            <div className="relative flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-primary-foreground/15 flex items-center justify-center shrink-0">
+                <Sparkles className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <div>
+                <p className="text-primary-foreground/70 text-xs font-mono uppercase tracking-widest">Welcome to</p>
+                <h2 className="font-heading text-xl font-bold text-primary-foreground leading-tight">
+                  {orgBrand.name || "ShiftRoster"}
+                </h2>
+              </div>
+            </div>
+            <p className="relative mt-4 text-primary-foreground/80 text-sm leading-relaxed">
+              Hi {user?.full_name?.split(" ")[0] || "there"} — your workspace is ready. Here's what you can do:
+            </p>
+          </div>
+
+          {/* Feature highlights */}
+          <div className="px-6 py-5 space-y-4">
+            {[
+              { icon: CalendarCheck2, color: "text-amber-500", label: "Schedule shifts", desc: "View and manage your shift calendar, swap requests, and leave." },
+              { icon: FileText,       color: "text-blue-500",  label: "SOPs & Files",   desc: "Access standard operating procedures and shared file storage." },
+              { icon: MessageCircle,  color: "text-emerald-500", label: "Team Chat",    desc: "Message teammates, share files, and stay in sync." },
+              { icon: ShieldCheck,    color: "text-purple-500", label: "Tasks & Reports", desc: "Track assignments and view attendance and performance data." },
+            ].map(({ icon: Icon, color, label, desc }) => (
+              <div key={label} className="flex items-start gap-3">
+                <div className={`mt-0.5 shrink-0 ${color}`}>
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">{label}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="px-6 pb-6">
+            <Button className="w-full" onClick={dismissWelcome}>
+              Get started
+            </Button>
+            <p className="text-center text-[11px] text-muted-foreground mt-3">
+              This message only shows once. Find help anytime in Settings.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
