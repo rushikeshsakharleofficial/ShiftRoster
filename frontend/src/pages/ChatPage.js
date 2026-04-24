@@ -598,17 +598,6 @@ export default function ChatPage() {
     [messages, activeChannelId]
   );
 
-  // Count thread replies per root message id: {[rootMsgId]: count}
-  const threadReplyCounts = useMemo(() => {
-    const counts = {};
-    for (const msg of currentMessages) {
-      if (msg.deleted_at) continue;
-      const parentId = msg.reply_to?.id;
-      if (parentId) counts[parentId] = (counts[parentId] || 0) + 1;
-    }
-    return counts;
-  }, [currentMessages]);
-
   // Group consecutive same-sender, same-day messages into blocks.
   const messageBlocks = useMemo(() => {
     const blocks = [];
@@ -1052,8 +1041,8 @@ export default function ChatPage() {
                   className={cn(
                     "w-full flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-[5px] text-left transition-colors text-[13px] border-l-2",
                     activeChannelId === ch.id
-                      ? "border-primary bg-primary/8 text-foreground font-semibold !text-white !bg-white/10 !border-primary"
-                      : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground dark:text-white/50 dark:hover:text-white/80 !text-white/55 hover:!text-white/80 hover:!bg-white/[0.06]"
+                      ? "border-primary bg-primary/8 text-foreground font-semibold"
+                      : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground dark:text-white/50 dark:hover:text-white/80"
                   )}
                 >
                   {ch.type === "private"
@@ -1073,7 +1062,7 @@ export default function ChatPage() {
           {/* Direct messages */}
           <div className="pt-4 pb-3">
             <div className="flex items-center justify-between px-4 pb-1">
-              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/50 !text-white/30">Direct Messages</span>
+              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/50">Direct Messages</span>
             </div>
             <div className="px-2 space-y-0.5">
               {filteredDms.length === 0 ? (
@@ -1085,8 +1074,8 @@ export default function ChatPage() {
                   className={cn(
                     "w-full flex items-center gap-2 pl-2 pr-2 py-1.5 rounded-[5px] text-left transition-colors text-[13px] border-l-2",
                     activeChannelId === dm.id
-                      ? "border-primary bg-primary/8 text-foreground font-semibold !text-white !bg-white/10 !border-primary"
-                      : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground dark:text-white/50 dark:hover:text-white/80 !text-white/55 hover:!text-white/80 hover:!bg-white/[0.06]"
+                      ? "border-primary bg-primary/8 text-foreground font-semibold"
+                      : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground dark:text-white/50 dark:hover:text-white/80"
                   )}
                 >
                   <div className="relative shrink-0">
@@ -1406,7 +1395,7 @@ export default function ChatPage() {
                       onOpenThread={(msg) => setThreadMsg(msg)}
                       decryptedCache={decryptedCache}
                       onReact={(msgId, emoji) => reactToMessage(msgId, emoji)}
-                      threadReplyCounts={threadReplyCounts}
+                      threadReplyCount={0}
                     />
                   );
                 })}
