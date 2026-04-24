@@ -159,7 +159,7 @@ const isOnlyEmojis = (text) => {
 
 // Renders a contiguous block of messages from the same author. Avatar + name
 // appear once at the top; subsequent bubbles are tightly stacked.
-function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete, onReply, onOpenThread, decryptedCache, onReact, threadReplyCount }) {
+function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete, onReply, onOpenThread, decryptedCache, onReact, threadReplyCounts }) {
   const first = messages[0];
   const cached = userCache?.[first.sender_username] || userCache?.[first.sender_id];
   const displayName =
@@ -333,7 +333,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                       fileType={msg.file_type}
                     />
                   )}
-                  {threadReplyCount > 0 && (
+                  {(threadReplyCounts?.[msg.id] ?? 0) > 0 && (
                     <button
                       onClick={() => onOpenThread && onOpenThread(msg)}
                       className={cn(
@@ -342,33 +342,29 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                       )}
                     >
                       <MessageSquareDashed className="h-3 w-3" />
-                      {threadReplyCount} {threadReplyCount === 1 ? "reply" : "replies"}
+                      {threadReplyCounts[msg.id]} {threadReplyCounts[msg.id] === 1 ? "reply" : "replies"}
                     </button>
                   )}
-                  {msg.reactions && msg.reactions.length > 0 && (() => {
-                    const grouped = {};
-                    msg.reactions.forEach(r => { grouped[r.emoji] = (grouped[r.emoji] || []); grouped[r.emoji].push(r); });
-                    return (
-                      <div className={cn("flex gap-1 flex-wrap mt-1", isOwn ? "justify-end" : "justify-start")}>
-                        {Object.entries(grouped).map(([emoji, users]) => {
-                          const iMine = users.some(r => r.user_id === user?.id);
-                          return (
-                            <button key={emoji}
-                              onClick={() => onReact && onReact(msg.id, emoji)}
-                              className={cn(
-                                "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono border transition-colors",
-                                iMine
-                                  ? "bg-primary/15 border-primary/40 text-primary"
-                                  : "bg-muted/50 border-border/40 text-muted-foreground hover:border-primary/30"
-                              )}
-                            >
-                              {emoji} {users.length}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
+                  {msg.reactions && msg.reactions.filter(r => r.user_ids?.length > 0).length > 0 && (
+                    <div className={cn("flex gap-1 flex-wrap mt-1", isOwn ? "justify-end" : "justify-start")}>
+                      {msg.reactions.filter(r => r.user_ids?.length > 0).map((r) => {
+                        const iMine = r.user_ids?.includes(String(user?.id));
+                        return (
+                          <button key={r.emoji}
+                            onClick={() => onReact && onReact(msg.id, r.emoji)}
+                            className={cn(
+                              "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono border transition-colors",
+                              iMine
+                                ? "bg-primary/15 border-primary/40 text-primary"
+                                : "bg-muted/50 border-border/40 text-muted-foreground hover:border-primary/30"
+                            )}
+                          >
+                            {r.emoji} {r.user_ids.length}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </>
               )}
               {isLast && !isEditing && (
@@ -601,6 +597,17 @@ export default function ChatPage() {
     () => messages[activeChannelId] || [],
     [messages, activeChannelId]
   );
+
+  // Count thread replies per root message id: {[rootMsgId]: count}
+  const threadReplyCounts = useMemo(() => {
+    const counts = {};
+    for (const msg of currentMessages) {
+      if (msg.deleted_at) continue;
+      const parentId = msg.reply_to?.id;
+      if (parentId) counts[parentId] = (counts[parentId] || 0) + 1;
+    }
+    return counts;
+  }, [currentMessages]);
 
   // Group consecutive same-sender, same-day messages into blocks.
   const messageBlocks = useMemo(() => {
@@ -973,10 +980,10 @@ export default function ChatPage() {
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
       {/* === LEFT ASIDE — fixed 280px === */}
-      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border/10 bg-[#1a1614] dark:bg-[#0f0d0c]">
+      <aside className="w-[280px] shrink-0 flex flex-col border-r border-border/20 bg-card dark:bg-gradient-to-b dark:from-[#0f1117] dark:to-[#141720]">
         {/* Top: title + quick actions */}
         <div className="h-14 px-4 flex items-center justify-between border-b border-border/20 shrink-0">
-          <h2 className="text-base font-semibold tracking-tight dark:text-white/90 !text-white/90">Messages</h2>
+          <h2 className="text-base font-semibold tracking-tight dark:text-white/90">Messages</h2>
           <div className="flex items-center gap-0.5">
             <Button
               variant="ghost"
@@ -1016,7 +1023,7 @@ export default function ChatPage() {
               placeholder="Search"
               value={chatListFilter}
               onChange={(e) => setChatListFilter(e.target.value)}
-              className="pl-8 h-8 text-xs rounded-lg bg-muted/40 border-transparent dark:bg-white/5 dark:border-white/10 dark:text-white/80 dark:placeholder:text-white/30 focus-visible:bg-background dark:focus-visible:bg-white/10 !bg-white/[0.08] !border-white/10 !text-white/80 placeholder:!text-white/30"
+              className="pl-8 h-8 text-xs rounded-lg bg-muted/40 border-transparent dark:bg-white/5 dark:border-white/10 dark:text-white/80 dark:placeholder:text-white/30 focus-visible:bg-background dark:focus-visible:bg-white/10"
             />
           </div>
         </div>
@@ -1026,7 +1033,7 @@ export default function ChatPage() {
           {/* Channels */}
           <div className="pt-3">
             <div className="flex items-center justify-between px-4 pb-1">
-              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/50 !text-white/30">Channels</span>
+              <span className="text-[9.5px] font-mono font-medium uppercase tracking-[0.12em] text-muted-foreground/50">Channels</span>
               <button
                 onClick={() => setShowCreateChannel(true)}
                 className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
@@ -1399,7 +1406,7 @@ export default function ChatPage() {
                       onOpenThread={(msg) => setThreadMsg(msg)}
                       decryptedCache={decryptedCache}
                       onReact={(msgId, emoji) => reactToMessage(msgId, emoji)}
-                      threadReplyCount={0}
+                      threadReplyCounts={threadReplyCounts}
                     />
                   );
                 })}
