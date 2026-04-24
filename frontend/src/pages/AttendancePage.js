@@ -94,10 +94,16 @@ export default function AttendancePage() {
 
   if (enabled === false) {
     return (
-      <div data-testid="attendance-page" className="flex flex-col items-center justify-center py-24 text-center gap-3">
-        <Clock className="h-12 w-12 text-muted-foreground opacity-30" />
-        <p className="text-lg font-medium">Attendance tracking is not enabled</p>
-        <p className="text-sm text-muted-foreground">A manager or admin can activate it in Settings.</p>
+      <div data-testid="attendance-page" className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Attendance</h1>
+          <p className="text-muted-foreground text-sm mt-1">Track clock-in and clock-out for your team</p>
+        </div>
+        <div className="flex flex-col items-center justify-center py-20 text-center gap-3 rounded-md border border-dashed border-border">
+          <Clock className="h-12 w-12 text-muted-foreground opacity-30" />
+          <p className="text-base font-medium">Attendance tracking is not enabled</p>
+          <p className="text-sm text-muted-foreground">A manager or admin can activate it in Settings.</p>
+        </div>
       </div>
     );
   }
