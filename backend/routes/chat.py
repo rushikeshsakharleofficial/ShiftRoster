@@ -8,6 +8,7 @@ from auth_utils import get_current_user, create_notification
 from msg_crypto import encrypt_text, decrypt_text
 import uuid
 import os
+import aiofiles
 from pathlib import Path
 
 MAX_MESSAGE_LEN = 50_000
@@ -1365,14 +1366,13 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
     # Stream to disk (avoid loading full file in memory)
     total_bytes = 0
     try:
-        with open(save_path, "wb") as f:
+        async with aiofiles.open(save_path, "wb") as f:
             while chunk := await file.read(CHUNK_SIZE):
                 total_bytes += len(chunk)
                 if total_bytes > MAX_FILE_BYTES:
-                    f.close()
                     save_path.unlink(missing_ok=True)
                     raise HTTPException(400, "File too large (max 100 MB)")
-                f.write(chunk)
+                await f.write(chunk)
     except HTTPException:
         raise
     except Exception:

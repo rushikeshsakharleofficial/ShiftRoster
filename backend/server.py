@@ -235,7 +235,7 @@ async def initial_setup(data: SetupRequest):
         })
 
     masked_email = f"{email[:2]}***@{email.split('@')[1]}"
-    logger.info(f"Initial setup completed: org={data.org_name}, admin={masked_email}")
+    logger.info("Initial setup completed by %s", masked_email)
     return {"message": "Setup completed successfully", "org_id": org_id}
 
 
@@ -444,10 +444,12 @@ async def startup():
                 "updated_at": datetime.now(tz.utc),
             })
 
-    # Start background tasks
-    asyncio.create_task(run_purging_task())
-    asyncio.create_task(run_due_date_reminders())
-    asyncio.create_task(run_ldap_sync_task())
+    # Start background tasks — keep strong refs to prevent GC
+    _bg_tasks: set = set()
+    for _coro in [run_purging_task(), run_due_date_reminders(), run_ldap_sync_task()]:
+        _t = asyncio.create_task(_coro)
+        _bg_tasks.add(_t)
+        _t.add_done_callback(_bg_tasks.discard)
 
     logger.info("ShiftRoster API started successfully")
 

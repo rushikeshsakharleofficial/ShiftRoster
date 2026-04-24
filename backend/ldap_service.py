@@ -15,16 +15,20 @@ from db import db
 
 try:
     from cryptography.fernet import Fernet, InvalidToken
+    _FERNET_AVAILABLE = True
 except ImportError:  # pragma: no cover - startup dependency guard
     Fernet = None
     InvalidToken = Exception
+    _FERNET_AVAILABLE = False
 
 try:
     from ldap3 import ALL, Connection, Server, Tls
     from ldap3.core.exceptions import LDAPException
+    _LDAP3_AVAILABLE = True
 except ImportError:  # pragma: no cover - endpoint returns a clear error
     ALL = Connection = Server = Tls = None
     LDAPException = Exception
+    _LDAP3_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +55,9 @@ DEFAULT_LDAP_SETTINGS = {
 
 
 def _require_dependencies():
-    if Connection is None:
+    if not _LDAP3_AVAILABLE:
         raise HTTPException(status_code=500, detail="LDAP support is not installed on the server")
-    if Fernet is None:
+    if not _FERNET_AVAILABLE:
         raise HTTPException(status_code=500, detail="Credential encryption support is not installed on the server")
 
 

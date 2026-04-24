@@ -7,6 +7,7 @@ from db import db
 from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit, create_notification
 import uuid
 import logging
+import aiofiles
 from pathlib import Path
 import os
 
@@ -109,14 +110,13 @@ async def upload_sop_file(file: UploadFile = File(...), user=Depends(get_current
     save_path = UPLOADS_DIR / unique_name
     total_bytes = 0
     try:
-        with open(save_path, "wb") as f:
+        async with aiofiles.open(save_path, "wb") as f:
             while chunk := await file.read(_CHUNK):
                 total_bytes += len(chunk)
                 if total_bytes > MAX_SOP_FILE_BYTES:
-                    f.close()
                     save_path.unlink(missing_ok=True)
                     raise HTTPException(400, "File too large (max 50 MB)")
-                f.write(chunk)
+                await f.write(chunk)
     except HTTPException:
         raise
     except Exception:

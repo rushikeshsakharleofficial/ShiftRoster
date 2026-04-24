@@ -5,6 +5,7 @@ from db import db
 from auth_utils import get_current_user
 import uuid
 import os
+import aiofiles
 from pathlib import Path
 
 router = APIRouter(prefix="/api/stories", tags=["stories"])
@@ -85,14 +86,13 @@ async def upload_story(request: Request, file: UploadFile = File(...)):
     save_path = UPLOADS_DIR / unique_name
     total = 0
     try:
-        with open(save_path, "wb") as f:
+        async with aiofiles.open(save_path, "wb") as f:
             while chunk := await file.read(CHUNK_SIZE):
                 total += len(chunk)
                 if total > MAX_FILE_BYTES:
-                    f.close()
                     save_path.unlink(missing_ok=True)
                     raise HTTPException(400, "File too large (max 50 MB)")
-                f.write(chunk)
+                await f.write(chunk)
     except HTTPException:
         raise
     except Exception:

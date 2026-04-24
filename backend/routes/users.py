@@ -8,6 +8,7 @@ from db import db
 from auth_utils import get_current_user, serialize_doc, serialize_list, hash_password, log_audit, get_manager_dept_ids
 from presence_manager import presence
 from pathlib import Path
+import asyncio
 import uuid
 import os
 
@@ -557,8 +558,7 @@ async def upload_avatar(user_id: str, request: Request, file: UploadFile = File(
         raise HTTPException(status_code=400, detail="Only jpg, jpeg, png, gif, webp images allowed")
     unique_name = f"avatar_{uuid.uuid4().hex}{ext}"
     save_path = UPLOADS_DIR / unique_name
-    with open(save_path, "wb") as f:
-        f.write(content)
+    await asyncio.to_thread(save_path.write_bytes, content)
 
     avatar_url = f"/uploads/{unique_name}"
     try:

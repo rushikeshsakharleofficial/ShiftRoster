@@ -7,6 +7,7 @@ from bson import ObjectId
 from pathlib import Path
 import uuid
 import os
+import aiofiles
 
 from db import db
 from auth_utils import get_current_user, serialize_doc, serialize_list, log_audit
@@ -229,14 +230,13 @@ async def upload_file(
 
     total_bytes = 0
     try:
-        with open(save_path, "wb") as f:
+        async with aiofiles.open(save_path, "wb") as f:
             while chunk := await file.read(_CHUNK):
                 total_bytes += len(chunk)
                 if total_bytes > max_bytes:
-                    f.close()
                     save_path.unlink(missing_ok=True)
                     raise HTTPException(413, f"File too large (max {max_bytes // (1024 * 1024)} MB)")
-                f.write(chunk)
+                await f.write(chunk)
     except HTTPException:
         raise
     except Exception:
