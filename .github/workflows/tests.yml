@@ -60,7 +60,7 @@ jobs:
           coverage report --fail-under=80 || echo "Coverage below 80%, but continuing..."
 
       - name: Upload backend coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457  # v3
         with:
           files: ./backend/coverage.xml
           flags: backend
@@ -94,7 +94,7 @@ jobs:
           npm run test:coverage
 
       - name: Upload frontend coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457  # v3
         with:
           files: ./frontend/coverage/coverage-final.json
           flags: frontend

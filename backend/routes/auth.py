@@ -730,7 +730,7 @@ async def slack_callback(
     if not user:
         if not slack.get("auto_provision", True):
             return fail("slack_user_not_found")
-        rand_pass = "".join(random.choices(string.ascii_letters + string.digits, k=24))
+        rand_pass = secrets.token_urlsafe(18)
         new_user = {
             "org_id": org_id,
             "email": email,
@@ -934,7 +934,7 @@ async def google_callback(
     if not user:
         if not google.get("auto_provision", True):
             return fail("google_user_not_found")
-        rand_pass = "".join(random.choices(string.ascii_letters + string.digits, k=24))
+        rand_pass = secrets.token_urlsafe(18)
         new_user = {
             "org_id": org_id,
             "email": email,
