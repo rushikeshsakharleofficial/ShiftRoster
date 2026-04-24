@@ -62,6 +62,7 @@ class ChannelCreate(BaseModel):
 class MessageCreate(BaseModel):
     text: str = ""
     reply_to_id: Optional[str] = None
+    also_in_channel: bool = False   # if True, thread reply shows in main chat too
     file_url: Optional[str] = None
     file_name: Optional[str] = None
     file_size: Optional[int] = None
@@ -645,6 +646,13 @@ async def get_channel_messages(
         except Exception:
             pass
 
+    # Exclude thread replies (reply_to set) unless also_in_channel=True
+    query["$or"] = [
+        {"reply_to": None},
+        {"reply_to": {"$exists": False}},
+        {"also_in_channel": True},
+    ]
+
     messages = await db.chat_messages.find(query).sort("created_at", -1).limit(limit).to_list(limit)
     messages.reverse()
 
@@ -721,6 +729,7 @@ async def send_channel_message(channel_id: str, data: MessageCreate, request: Re
         "text": encrypt_text(text),
         "type": "file" if data.file_url and not text else "text",
         "reply_to": reply_to,
+        "also_in_channel": data.also_in_channel if reply_to else False,
         "reactions": [],
         "is_encrypted": data.is_encrypted,
         "ciphertext": data.ciphertext,
@@ -1142,6 +1151,7 @@ async def send_dm_message(dm_id: str, data: MessageCreate, request: Request):
         "text": encrypt_text(text),
         "type": "file" if data.file_url and not text else "text",
         "reply_to": reply_to,
+        "also_in_channel": data.also_in_channel if reply_to else False,
         "reactions": [],
         "is_encrypted": data.is_encrypted,
         "ciphertext": data.ciphertext,

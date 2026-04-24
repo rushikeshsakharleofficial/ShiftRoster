@@ -345,6 +345,16 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
                       {threadReplyCounts[msg.id]} {threadReplyCounts[msg.id] === 1 ? "reply" : "replies"}
                     </button>
                   )}
+                  {/* Thread badge — shown on replies with "also send to channel" */}
+                  {msg.also_in_channel && msg.reply_to && (
+                    <span className={cn(
+                      "flex items-center gap-1 mt-1 text-[10px] font-mono text-muted-foreground/60",
+                      isOwn ? "self-end" : "self-start"
+                    )}>
+                      <MessageSquareDashed className="h-2.5 w-2.5" />
+                      replied in thread
+                    </span>
+                  )}
                   {msg.reactions && msg.reactions.filter(r => r.user_ids?.length > 0).length > 0 && (
                     <div className={cn("flex gap-1 flex-wrap mt-1", isOwn ? "justify-end" : "justify-start")}>
                       {msg.reactions.filter(r => r.user_ids?.length > 0).map((r) => {
@@ -386,6 +396,7 @@ function MessageGroup({ messages, isOwn, user, userCache, isDM, onEdit, onDelete
 // --- Thread Panel ---
 function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, onClose, onSend }) {
   const [text, setText] = useState("");
+  const [alsoInChannel, setAlsoInChannel] = useState(false);
   const replies = (allMessages || []).filter(m => m.reply_to?.id === rootMsg?.id && !m.deleted_at);
   const rootText = decryptedCache?.[rootMsg?.id] ?? rootMsg?.text;
   const rootName = rootMsg?.sender_name || "Unknown";
@@ -462,7 +473,7 @@ function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, 
       </ScrollArea>
 
       {/* Thread composer */}
-      <div className="border-t border-border/40 p-3 shrink-0 bg-background/95 backdrop-blur-md">
+      <div className="border-t border-border/40 p-3 shrink-0 bg-background/95 backdrop-blur-md space-y-2">
         <div className="flex gap-2 items-end bg-muted/50 rounded-xl px-3 py-2 border border-border/40">
           <Textarea
             className="flex-1 text-sm resize-none bg-transparent border-0 focus-visible:ring-0 p-0 min-h-[34px] max-h-20 placeholder:text-muted-foreground/40"
@@ -472,19 +483,37 @@ function MessageThread({ rootMsg, allMessages, user, userCache, decryptedCache, 
             onKeyDown={e => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                if (text.trim()) { onSend(text.trim(), rootMsg?.id); setText(""); }
+                if (text.trim()) { onSend(text.trim(), rootMsg?.id, alsoInChannel); setText(""); setAlsoInChannel(false); }
               }
             }}
             rows={1}
           />
           <button
-            onClick={() => { if (text.trim()) { onSend(text.trim(), rootMsg?.id); setText(""); } }}
+            onClick={() => { if (text.trim()) { onSend(text.trim(), rootMsg?.id, alsoInChannel); setText(""); setAlsoInChannel(false); } }}
             disabled={!text.trim()}
             className="h-7 w-7 rounded-full bg-primary flex items-center justify-center disabled:opacity-30 transition-opacity shrink-0"
           >
             <Send className="h-3 w-3 text-primary-foreground" />
           </button>
         </div>
+        {/* Slack-style "also send to channel" toggle */}
+        <label className="flex items-center gap-2 cursor-pointer group px-1">
+          <div
+            onClick={() => setAlsoInChannel(v => !v)}
+            className={cn(
+              "w-8 h-4 rounded-full transition-colors shrink-0 relative",
+              alsoInChannel ? "bg-primary" : "bg-muted-foreground/25"
+            )}
+          >
+            <span className={cn(
+              "absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform",
+              alsoInChannel ? "translate-x-4" : "translate-x-0.5"
+            )} />
+          </div>
+          <span className="text-[11px] text-muted-foreground group-hover:text-foreground transition-colors">
+            Also send to channel
+          </span>
+        </label>
       </div>
     </div>
   );
@@ -1553,8 +1582,8 @@ export default function ChatPage() {
           userCache={userCache}
           decryptedCache={decryptedCache}
           onClose={() => setThreadMsg(null)}
-          onSend={(text, parentId) => {
-            sendMessage(activeChannelId, text, parentId, !isActiveDM);
+          onSend={(text, parentId, alsoInCh) => {
+            sendMessage(activeChannelId, text, parentId, !isActiveDM, null, { also_in_channel: alsoInCh || false });
           }}
         />
       )}
