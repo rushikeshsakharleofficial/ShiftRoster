@@ -1495,7 +1495,7 @@ export default function ChatPage() {
           decryptedCache={decryptedCache}
           onClose={() => setThreadMsg(null)}
           onSend={(text, parentId) => {
-            sendMessage({ text, reply_to_id: parentId });
+            sendMessage(activeChannelId, text, parentId, !isActiveDM);
           }}
         />
       )}
