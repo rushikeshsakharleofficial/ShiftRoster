@@ -266,7 +266,7 @@ export const chatApi = {
   listChannels: () => api.get("/chat/channels"),
   createChannel: (data) => api.post("/chat/channels", data),
   searchChannels: (q) => api.get(`/chat/channels/search?q=${encodeURIComponent(q)}`),
-  getChannel: (id) => api.get(`/chat/chat/channels/${id}`),
+  getChannel: (id) => api.get(`/chat/channels/${id}`),
   joinChannel: (id) => api.post(`/chat/channels/${id}/join`),
   leaveChannel: (id) => api.post(`/chat/channels/${id}/leave`),
   muteChannel: (id, data) => api.post(`/chat/channels/${id}/mute`, data),
