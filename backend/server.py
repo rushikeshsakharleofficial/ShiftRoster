@@ -15,7 +15,7 @@ if _missing:
 if len(os.getenv("JWT_SECRET", "")) < 32:
     raise RuntimeError("JWT_SECRET must be at least 32 characters")
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
