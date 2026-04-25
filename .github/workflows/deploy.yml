@@ -93,7 +93,7 @@ jobs:
           MSG_ENCRYPT_KEY: dbJHQ4q_hRmS3gHRPsSbTLOWFkNHGu1MBphMcG3GbGg=
         run: |
           cd backend
-          pytest tests/unit -v --override-ini="addopts=" -x
+          pytest tests/unit -v --override-ini="addopts=" --noconftest -x
 
   docker-build-check:
     name: Docker Build Check (Gate)
