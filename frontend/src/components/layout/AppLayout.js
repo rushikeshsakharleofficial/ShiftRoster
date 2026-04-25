@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import ProfileEditDialog from "@/components/layout/ProfileEditDialog";
 import { version as APP_VERSION } from "../../../package.json";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,7 +28,7 @@ import {
   LayoutDashboard, Users, Building2, UserCog, CalendarDays,
   ClipboardList, Clock, ArrowLeftRight, StickyNote, Bell,
   BarChart3, ScrollText, Settings, LogOut, Menu, X, Check, LayoutTemplate,
-  MessageSquare, Coffee, Plane, CircleDot, UserCircle, Camera, Loader2, ListChecks, FileText, FolderOpen,
+  MessageSquare, Coffee, Plane, CircleDot, UserCircle, Camera, ListChecks, FileText, FolderOpen,
   Sparkles, CalendarCheck2, ShieldCheck, MessageCircle, Maximize2
 } from "lucide-react";
 import {
@@ -62,13 +63,6 @@ export default function AppLayout() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileRequired, setProfileRequired] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
-  const [profileForm, setProfileForm] = useState({ full_name: "", username: "", email: "", phone: "", mobile_alt: "", date_of_birth: "" });
-  const [profileAvatar, setProfileAvatar] = useState(""); // current saved avatar
-  const [profileAvatarFile, setProfileAvatarFile] = useState(null); // pending file (not yet uploaded)
-  const [profileAvatarPreview, setProfileAvatarPreview] = useState(""); // local blob preview
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileError, setProfileError] = useState("");
-  const profileAvatarRef = useRef(null);
   const isAdmin = user?.system_role === "admin";
   const isManager = user?.system_role === "manager";
   const isEmployee = user?.system_role === "employee";
@@ -169,66 +163,6 @@ export default function AppLayout() {
       console.error("WebSocket setup failed:", err);
     }
   }, [user?.id]);
-
-  const openProfile = () => {
-    setProfileForm({ full_name: user?.full_name || "", username: user?.username || "", email: user?.email || "", phone: user?.phone || "", mobile_alt: user?.mobile_alt || "", date_of_birth: user?.date_of_birth || "" });
-    setProfileAvatar(user?.avatar_url || "");
-    setProfileAvatarFile(null);
-    setProfileAvatarPreview("");
-    setProfileError("");
-    setProfileOpen(true);
-  };
-
-  const handleProfileAvatarChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setProfileAvatarFile(file);
-    setProfileAvatarPreview(URL.createObjectURL(file));
-  };
-
-  const handleProfileSave = async () => {
-    setProfileError("");
-    if (!profileForm.email.trim()) {
-      setProfileError("Email is required.");
-      return;
-    }
-    if (!profileForm.phone.trim()) {
-      setProfileError("Mobile Number is required.");
-      return;
-    }
-    if (!profileForm.date_of_birth) {
-      setProfileError("Date of Birth is required.");
-      return;
-    }
-    setProfileSaving(true);
-    try {
-      // Upload avatar first if a new file was selected
-      if (profileAvatarFile) {
-        const fd = new FormData();
-        fd.append("file", profileAvatarFile);
-        await usersApi.uploadAvatar(user.id, fd);
-      }
-      // Update profile fields
-      const payload = {};
-      if (profileForm.full_name.trim()) payload.full_name = profileForm.full_name.trim();
-      if (profileForm.username.trim()) payload.username = profileForm.username.trim().toLowerCase();
-      payload.email = profileForm.email.trim();
-      payload.phone = profileForm.phone.trim();
-      payload.mobile_alt = profileForm.mobile_alt.trim();
-      if (profileForm.date_of_birth) payload.date_of_birth = profileForm.date_of_birth;
-      if (Object.keys(payload).length > 0) {
-        await usersApi.update(user.id, payload);
-      }
-      await checkAuth();
-      setProfileRequired(false);
-      setProfileOpen(false);
-      window.location.reload();
-    } catch (err) {
-      setProfileError(err?.response?.data?.detail || "Save failed");
-    } finally {
-      setProfileSaving(false);
-    }
-  };
 
   const handleLogout = async () => {
     await logout();
@@ -660,7 +594,7 @@ export default function AppLayout() {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={openProfile}>
+                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setProfileOpen(true)}>
                     <Avatar className="h-7 w-7 ring-1 ring-border">
                       {user?.avatar_url && (
                         <AvatarImage src={`${BACKEND_URL || ""}${user.avatar_url}`} />
@@ -688,78 +622,17 @@ export default function AppLayout() {
         </header>
 
         {/* My Profile Dialog */}
-        <Dialog open={profileOpen} onOpenChange={profileRequired ? () => {} : setProfileOpen}>
-          <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto" onPointerDownOutside={profileRequired ? (e) => e.preventDefault() : undefined} onEscapeKeyDown={profileRequired ? (e) => e.preventDefault() : undefined}>
-            <DialogHeader>
-              <DialogTitle>{profileRequired ? "Complete Your Profile" : "My Profile"}</DialogTitle>
-            </DialogHeader>
-            {profileRequired && (
-              <p className="text-xs text-muted-foreground -mt-2 mb-1">Please fill in the required fields to continue using ShiftRoster.</p>
-            )}
-            <div className="space-y-2 py-1">
-              {/* Avatar */}
-              <div className="flex items-center gap-3">
-                <div className="relative shrink-0">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={profileAvatarPreview || (profileAvatar ? `${BACKEND_URL || ""}${profileAvatar}` : "")} />
-                    <AvatarFallback className={`text-sm font-semibold ${getAvatarColor(user?.username || user?.full_name)}`}>
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <button
-                    type="button"
-                    onClick={() => profileAvatarRef.current?.click()}
-                    className="absolute bottom-0 right-0 h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:bg-primary/90"
-                  >
-                    <Camera className="h-2.5 w-2.5" />
-                  </button>
-                  <input ref={profileAvatarRef} type="file" accept="image/*" className="hidden" onChange={handleProfileAvatarChange} />
-                </div>
-                <p className="text-[11px] text-muted-foreground">Click camera to change avatar</p>
-              </div>
-              {/* Full name + Username row */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-0.5">
-                  <Label className="text-[11px]">Full Name</Label>
-                  <Input className="h-7 text-xs" value={profileForm.full_name} onChange={(e) => setProfileForm(f => ({ ...f, full_name: e.target.value }))} placeholder="Your full name" />
-                </div>
-                <div className="space-y-0.5">
-                  <Label className="text-[11px]">Username</Label>
-                  <Input className="h-7 text-xs" value={profileForm.username} onChange={(e) => setProfileForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, "") }))} placeholder="john.doe" />
-                </div>
-              </div>
-              {/* Email */}
-              <div className="space-y-0.5">
-                <Label className="text-[11px]">Email <span className="text-destructive">*</span></Label>
-                <Input className="h-7 text-xs" type="email" required value={profileForm.email} onChange={(e) => setProfileForm(f => ({ ...f, email: e.target.value }))} placeholder="you@example.com" />
-              </div>
-              {/* Mobile numbers */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-0.5">
-                  <Label className="text-[11px]">Mobile <span className="text-destructive">*</span></Label>
-                  <Input className="h-7 text-xs" required value={profileForm.phone} onChange={(e) => setProfileForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 555 000 0000" />
-                </div>
-                <div className="space-y-0.5">
-                  <Label className="text-[11px]">Alt Mobile <span className="text-muted-foreground font-normal">(opt)</span></Label>
-                  <Input className="h-7 text-xs" value={profileForm.mobile_alt} onChange={(e) => setProfileForm(f => ({ ...f, mobile_alt: e.target.value }))} placeholder="+1 555 000 0001" />
-                </div>
-              </div>
-              {/* Date of Birth */}
-              <div className="space-y-0.5">
-                <Label className="text-[11px]">Date of Birth <span className="text-destructive">*</span></Label>
-                <Input className="h-7 text-xs" type="date" required value={profileForm.date_of_birth} onChange={(e) => setProfileForm(f => ({ ...f, date_of_birth: e.target.value }))} />
-              </div>
-              {profileError && <p className="text-xs text-destructive">{profileError}</p>}
-            </div>
-            <DialogFooter>
-              {!profileRequired && <Button variant="outline" size="sm" onClick={() => setProfileOpen(false)}>Cancel</Button>}
-              <Button size="sm" onClick={handleProfileSave} disabled={profileSaving}>
-                {profileSaving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                Save
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <ProfileEditDialog
+          open={profileOpen}
+          onOpenChange={setProfileOpen}
+          user={user}
+          required={profileRequired}
+          onSave={async () => {
+            await checkAuth();
+            setProfileRequired(false);
+            window.location.reload();
+          }}
+        />
 
         {/* Birthday banner — shown only to the birthday user */}
         {isBirthday && !isDismissed && <BirthdayBanner user={user} onDismiss={dismiss} />}
