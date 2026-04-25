@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useCharacterLimit } from "@/hooks/use-character-limit";
 import { useImageUpload } from "@/hooks/use-image-upload";
 import { Button } from "@/components/ui/button";
@@ -97,7 +97,7 @@ function AvatarUpload({ user, onFileSelected, previewUrl }) {
 
 export default function ProfileEditDialog({ open, onOpenChange, user, onSave, required = false }) {
   const maxLength = 180;
-  const { value: bio, characterCount, handleChange: handleBioChange, maxLength: bioLimit } = useCharacterLimit({
+  const { value: bio, characterCount, handleChange: handleBioChange, maxLength: bioLimit, reset: resetBio } = useCharacterLimit({
     maxLength,
     initialValue: user?.bio || "",
   });
@@ -115,8 +115,8 @@ export default function ProfileEditDialog({ open, onOpenChange, user, onSave, re
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Reset form when dialog opens with fresh user data
-  useEffect(() => {
+  // Pre-fill form synchronously before browser paints (prevents flash of empty fields)
+  useLayoutEffect(() => {
     if (open) {
       setForm({
         full_name: user?.full_name || "",
@@ -124,13 +124,14 @@ export default function ProfileEditDialog({ open, onOpenChange, user, onSave, re
         email: user?.email || "",
         phone: user?.phone || "",
         mobile_alt: user?.mobile_alt || "",
-        date_of_birth: user?.date_of_birth || "",
+        date_of_birth: (user?.date_of_birth || "").slice(0, 10),
       });
+      resetBio(user?.bio || "");
       setAvatarFile(null);
       setAvatarPreview("");
       setError("");
     }
-  }, [open, user]);
+  }, [open]);
 
   const handleAvatarSelected = (file) => {
     setAvatarFile(file);

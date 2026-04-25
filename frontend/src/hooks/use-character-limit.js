@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 
 export function useCharacterLimit({ maxLength, initialValue = "" }) {
   const [value, setValue] = useState(initialValue);
@@ -12,5 +12,11 @@ export function useCharacterLimit({ maxLength, initialValue = "" }) {
     }
   };
 
-  return { value, characterCount, handleChange, maxLength };
+  const reset = useCallback((newValue = "") => {
+    const clamped = newValue.slice(0, maxLength);
+    setValue(clamped);
+    setCharacterCount(clamped.length);
+  }, [maxLength]);
+
+  return { value, characterCount, handleChange, maxLength, reset };
 }
