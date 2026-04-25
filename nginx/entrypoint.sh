@@ -21,6 +21,19 @@ COMMON_LOCATIONS='
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    location ~* ^/api/files/[^/]+/download {
+        proxy_pass '"$BACKEND_URL"';
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Range $http_range;
+        proxy_set_header If-Range $http_if_range;
+        proxy_buffering off;
+        proxy_read_timeout 3600;
+    }
+
     location /api {
         limit_req zone=api_general burst=50 nodelay;
         proxy_pass '"$BACKEND_URL"';

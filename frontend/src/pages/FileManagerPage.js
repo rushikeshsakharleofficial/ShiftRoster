@@ -96,6 +96,11 @@ const getKind = (file) => {
   if (ext === "pptx") return "pptx";
   if (ext === "docx") return "docx";
   if (ext === "xlsx") return "xlsx";
+  if (ext === "pdf") return "pdf";
+  if (["jpg","jpeg","png","gif","webp","bmp","svg","ico","avif","tiff","tif"].includes(ext)) return "image";
+  if (["mp4","webm","ogg","ogv","mov","avi","mkv","m4v","flv"].includes(ext)) return "video";
+  if (["mp3","wav","flac","aac","m4a","ogg","oga","opus","wma"].includes(ext)) return "audio";
+  if (["txt","log","conf","ini","env","yaml","yml","toml","xml","htm","html","sh","bash"].includes(ext)) return "text";
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("video/")) return "video";
   if (mime.startsWith("audio/")) return "audio";
