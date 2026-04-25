@@ -62,9 +62,73 @@ jobs:
         env:
           CI: false   # treat warnings as non-fatal
 
+  backend-tests:
+    name: Backend Tests (Gate)
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: password
+        options: >-
+          --health-cmd mongosh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run unit & integration tests
+        env:
+          MONGO_URL: mongodb://root:password@localhost:27017
+          DB_NAME: shift_roster_test
+          TEST_MONGO_URL: mongodb://root:password@localhost:27017
+          TEST_DB_NAME: shift_roster_test
+          JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+        run: |
+          cd backend
+          pytest tests/unit tests/integration -v \
+            --override-ini="addopts=" \
+            --ignore=tests/e2e \
+            -x
+
+  docker-build-check:
+    name: Docker Build Check (Gate)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        run: docker build ./backend -t shiftroster-backend:ci --no-cache
+
+      - name: Build frontend image
+        run: docker build ./frontend -t shiftroster-frontend:ci --no-cache
+
   version-bump:
     name: Bump Version
-    needs: review
+    needs: [review, backend-tests, docker-build-check]
     runs-on: ubuntu-latest
     permissions:
       contents: write
