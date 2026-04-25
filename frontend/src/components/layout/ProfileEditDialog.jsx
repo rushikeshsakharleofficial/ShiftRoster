@@ -1,6 +1,5 @@
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useState, useLayoutEffect, useRef } from "react";
 import { useCharacterLimit } from "@/hooks/use-character-limit";
-import { useImageUpload } from "@/hooks/use-image-upload";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,47 +13,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ImagePlus, X, Loader2 } from "lucide-react";
+import { ImagePlus, Loader2 } from "lucide-react";
 import { usersApi } from "@/lib/api";
 import { getAvatarColor } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const BACKEND_URL = import.meta.env.REACT_APP_BACKEND_URL;
-
-function ProfileBg({ currentBgUrl }) {
-  const [hideDefault, setHideDefault] = useState(false);
-  const { previewUrl, fileInputRef, handleThumbnailClick, handleFileChange, handleRemove } = useImageUpload();
-  const currentImage = previewUrl || (!hideDefault ? currentBgUrl : null);
-
-  return (
-    <div className="h-28">
-      <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-muted">
-        {currentImage && (
-          <img className="h-full w-full object-cover" src={currentImage} alt="Profile background" />
-        )}
-        <div className="absolute inset-0 flex items-center justify-center gap-2">
-          <button
-            type="button"
-            className="z-50 flex size-9 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white outline-offset-2 transition-colors hover:bg-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
-            onClick={handleThumbnailClick}
-          >
-            <ImagePlus size={15} />
-          </button>
-          {currentImage && (
-            <button
-              type="button"
-              className="z-50 flex size-9 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white outline-offset-2 transition-colors hover:bg-black/80"
-              onClick={() => { handleRemove(); setHideDefault(true); }}
-            >
-              <X size={15} />
-            </button>
-          )}
-        </div>
-        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
-      </div>
-    </div>
-  );
-}
 
 function AvatarUpload({ user, onFileSelected, previewUrl }) {
   const fileInputRef = useRef(null);
@@ -65,13 +29,13 @@ function AvatarUpload({ user, onFileSelected, previewUrl }) {
   const currentImage = previewUrl || (user?.avatar_url ? `${BACKEND_URL || ""}${user.avatar_url}` : "");
 
   return (
-    <div className="-mt-10 px-6">
-      <div className="relative flex size-20 items-center justify-center overflow-hidden rounded-full border-4 border-background bg-muted shadow-sm">
+    <div className="flex flex-col items-center pt-6 pb-2">
+      <div className="relative flex size-24 items-center justify-center overflow-hidden rounded-full border-4 border-background bg-muted shadow-md">
         {currentImage ? (
           <img src={currentImage} className="h-full w-full object-cover" alt="Avatar" />
         ) : (
           <Avatar className="h-full w-full">
-            <AvatarFallback className={`text-lg font-semibold ${getAvatarColor(user?.username || user?.full_name)}`}>
+            <AvatarFallback className={`text-xl font-semibold ${getAvatarColor(user?.username || user?.full_name)}`}>
               {initials}
             </AvatarFallback>
           </Avatar>
@@ -91,6 +55,7 @@ function AvatarUpload({ user, onFileSelected, previewUrl }) {
           accept="image/*"
         />
       </div>
+      <p className="mt-2 text-xs text-muted-foreground">Click camera to change photo</p>
     </div>
   );
 }
@@ -190,7 +155,6 @@ export default function ProfileEditDialog({ open, onOpenChange, user, onSave, re
         </DialogDescription>
 
         <div className="overflow-y-auto max-h-[70vh]">
-          <ProfileBg currentBgUrl={null} />
           <AvatarUpload user={user} onFileSelected={handleAvatarSelected} previewUrl={avatarPreview} />
 
           <div className="px-6 pb-4 pt-4">
