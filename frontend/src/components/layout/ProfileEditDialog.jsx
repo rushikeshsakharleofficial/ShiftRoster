@@ -1,4 +1,6 @@
 import { useState, useLayoutEffect, useRef } from "react";
+import ReactCrop, { centerCrop, makeAspectCrop } from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
 import { useCharacterLimit } from "@/hooks/use-character-limit";
 import { Button } from "@/components/ui/button";
 import {
@@ -81,6 +83,11 @@ export default function ProfileEditDialog({ open, onOpenChange, user, onSave, re
   const [avatarPreview, setAvatarPreview] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [cropSrc, setCropSrc] = useState("");
+  const [cropOpen, setCropOpen] = useState(false);
+  const [crop, setCrop] = useState(null);
+  const [completedCrop, setCompletedCrop] = useState(null);
+  const imgRef = useRef(null);
 
   // Pre-fill form synchronously before browser paints (prevents flash of empty fields)
   useLayoutEffect(() => {
@@ -102,12 +109,52 @@ export default function ProfileEditDialog({ open, onOpenChange, user, onSave, re
   }, [open]);
 
   const handleAvatarSelected = (file) => {
-    setAvatarFile(file);
     const url = URL.createObjectURL(file);
-    setAvatarPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return url;
-    });
+    setCropSrc(url);
+    setCropOpen(true);
+  };
+
+  const onImageLoad = (e) => {
+    const { width, height } = e.currentTarget;
+    const c = centerCrop(
+      makeAspectCrop({ unit: "%", width: 80 }, 1, width, height),
+      width, height
+    );
+    setCrop(c);
+  };
+
+  const handleCropConfirm = async () => {
+    const img = imgRef.current;
+    if (!img || !completedCrop) return;
+
+    const canvas = document.createElement("canvas");
+    const size = 400;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+
+    const scaleX = img.naturalWidth / img.width;
+    const scaleY = img.naturalHeight / img.height;
+
+    ctx.drawImage(
+      img,
+      completedCrop.x * scaleX,
+      completedCrop.y * scaleY,
+      completedCrop.width * scaleX,
+      completedCrop.height * scaleY,
+      0, 0, size, size
+    );
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const croppedFile = new File([blob], "avatar.jpg", { type: "image/jpeg" });
+      setAvatarFile(croppedFile);
+      const preview = URL.createObjectURL(blob);
+      setAvatarPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return preview; });
+      setCropOpen(false);
+      if (cropSrc) URL.revokeObjectURL(cropSrc);
+      setCropSrc("");
+    }, "image/jpeg", 0.92);
   };
 
   const handleSave = async () => {
@@ -145,6 +192,45 @@ export default function ProfileEditDialog({ open, onOpenChange, user, onSave, re
 
   return (
     <Dialog open={open} onOpenChange={required ? () => {} : onOpenChange}>
+      {/* Avatar Crop Dialog */}
+      {cropOpen && (
+        <Dialog open={cropOpen} onOpenChange={(v) => { if (!v) { setCropOpen(false); if (cropSrc) URL.revokeObjectURL(cropSrc); setCropSrc(""); } }}>
+          <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+            <DialogHeader className="px-6 pt-4 pb-0">
+              <DialogTitle className="text-base">Crop Photo</DialogTitle>
+              <DialogDescription className="sr-only">Adjust the crop area to a square then confirm.</DialogDescription>
+            </DialogHeader>
+            <div className="px-6 py-4 flex items-center justify-center bg-muted/40 min-h-[280px]">
+              {cropSrc && (
+                <ReactCrop
+                  crop={crop}
+                  onChange={(_, pct) => setCrop(pct)}
+                  onComplete={(c) => setCompletedCrop(c)}
+                  aspect={1}
+                  circularCrop
+                  minWidth={50}
+                >
+                  <img
+                    ref={imgRef}
+                    src={cropSrc}
+                    onLoad={onImageLoad}
+                    alt="Crop preview"
+                    style={{ maxHeight: "320px", maxWidth: "100%" }}
+                  />
+                </ReactCrop>
+              )}
+            </div>
+            <DialogFooter className="border-t border-border px-6 py-3">
+              <Button type="button" variant="outline" onClick={() => { setCropOpen(false); if (cropSrc) URL.revokeObjectURL(cropSrc); setCropSrc(""); }}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={handleCropConfirm} disabled={!completedCrop}>
+                Apply
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       <DialogContent
         className="flex flex-col gap-0 overflow-y-visible p-0 sm:max-w-lg [&>button:last-child]:top-3.5"
         onPointerDownOutside={required ? (e) => e.preventDefault() : undefined}
