@@ -90,6 +90,7 @@ jobs:
           MONGO_URL: mongodb://localhost:27017
           DB_NAME: shift_roster_test
           JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+          MSG_ENCRYPT_KEY: dbJHQ4q_hRmS3gHRPsSbTLOWFkNHGu1MBphMcG3GbGg=
         run: |
           cd backend
           pytest tests/unit -v --override-ini="addopts=" -x
