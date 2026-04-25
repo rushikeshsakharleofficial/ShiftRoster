@@ -37,6 +37,7 @@ class CreateUserRequest(BaseModel):
     disappearing_timer: Optional[str] = None
     public_key: Optional[str] = None
     date_of_birth: Optional[str] = None  # "YYYY-MM-DD"
+    accent_color: Optional[str] = None
 
 
 class UpdateUserRequest(BaseModel):
@@ -57,6 +58,7 @@ class UpdateUserRequest(BaseModel):
     disappearing_timer: Optional[str] = None
     public_key: Optional[str] = None
     date_of_birth: Optional[str] = None  # "YYYY-MM-DD"
+    accent_color: Optional[str] = None  # e.g. "blue", "emerald", etc.
 
 
 class ChangeLevelRequest(BaseModel):
@@ -146,6 +148,7 @@ class CreateUserRequest(BaseModel):
     public_key: Optional[str] = None
     date_of_birth: str  # "YYYY-MM-DD", required
     send_welcome_email: bool = True
+    accent_color: Optional[str] = None
 
 
 @router.post("")
@@ -220,6 +223,7 @@ async def create_user(data: CreateUserRequest, request: Request):
         "password_setup_expires": setup_expires,
         "disappearing_timer": data.disappearing_timer,
         "public_key": data.public_key,
+        "accent_color": data.accent_color,
         "created_by": current["id"],
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
@@ -367,9 +371,18 @@ async def update_user(user_id: str, data: UpdateUserRequest, request: Request):
     if current["system_role"] not in ("admin", "manager") and current["id"] != user_id:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    update = {k: v for k, v in data.model_dump().items() if v is not None}
+    raw = data.model_dump()
+    # accent_color is allowed to be explicitly null (to clear it); all other None fields are dropped
+    update = {k: v for k, v in raw.items() if v is not None or k == "accent_color"}
+    # Drop keys that were never sent (still None and not accent_color)
+    update = {k: v for k, v in update.items() if not (v is None and k != "accent_color")}
     if not update:
         raise HTTPException(status_code=400, detail="No fields to update")
+
+    # Validate accent_color
+    VALID_ACCENT_COLORS = {"amber", "blue", "emerald", "gold", "coral", "purple", "indigo", "rose"}
+    if "accent_color" in update and update["accent_color"] is not None and update["accent_color"] not in VALID_ACCENT_COLORS:
+        raise HTTPException(status_code=400, detail="Invalid accent_color")
 
     # Only admin can change system_role
     if "system_role" in update and current["system_role"] != "admin":

@@ -17,6 +17,7 @@ import { ImagePlus, Loader2 } from "lucide-react";
 import { usersApi } from "@/lib/api";
 import { getAvatarColor } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ACCENT_COLORS, applyAccentColor, getRandomAccentId } from "@/lib/accent-colors";
 
 const BACKEND_URL = import.meta.env.REACT_APP_BACKEND_URL;
 
@@ -74,6 +75,7 @@ export default function ProfileEditDialog({ open, onOpenChange, user, onSave, re
     phone: user?.phone || "",
     mobile_alt: user?.mobile_alt || "",
     date_of_birth: user?.date_of_birth || "",
+    accent_color: user?.accent_color || localStorage.getItem("accent_color") || getRandomAccentId(),
   });
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState("");
@@ -90,6 +92,7 @@ export default function ProfileEditDialog({ open, onOpenChange, user, onSave, re
         phone: user?.phone || "",
         mobile_alt: user?.mobile_alt || "",
         date_of_birth: (user?.date_of_birth || "").slice(0, 10),
+        accent_color: user?.accent_color || localStorage.getItem("accent_color") || getRandomAccentId(),
       });
       resetBio(user?.bio || "");
       setAvatarFile(null);
@@ -128,8 +131,10 @@ export default function ProfileEditDialog({ open, onOpenChange, user, onSave, re
       payload.mobile_alt = form.mobile_alt.trim();
       if (form.date_of_birth) payload.date_of_birth = form.date_of_birth;
       if (bio.trim()) payload.bio = bio.trim();
+      payload.accent_color = form.accent_color;
       await usersApi.update(user.id, payload);
       await onSave?.();
+      applyAccentColor(form.accent_color);
       onOpenChange(false);
     } catch (err) {
       setError(err?.response?.data?.detail || "Save failed");
@@ -264,6 +269,27 @@ export default function ProfileEditDialog({ open, onOpenChange, user, onSave, re
                 <p className="text-right text-xs text-muted-foreground">
                   <span className="tabular-nums">{bioLimit - characterCount}</span> characters left
                 </p>
+              </div>
+
+              {/* Accent Color */}
+              <div className="space-y-1.5">
+                <Label>Accent Color</Label>
+                <div className="flex flex-wrap gap-2 pt-0.5">
+                  {ACCENT_COLORS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      title={c.label}
+                      onClick={() => setForm(f => ({ ...f, accent_color: c.id }))}
+                      className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        form.accent_color === c.id ? "border-foreground scale-110" : "border-transparent"
+                      }`}
+                      style={{ backgroundColor: c.hex }}
+                      aria-label={c.label}
+                      aria-pressed={form.accent_color === c.id}
+                    />
+                  ))}
+                </div>
               </div>
 
               {error && <p className="text-xs text-destructive">{error}</p>}

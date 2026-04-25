@@ -196,12 +196,12 @@ html.low-dpi.dark {
 /* Ambient mesh background — subtle amber + purple nodes */
 html:not(.dark) body {
   background-image:
-    radial-gradient(ellipse 70% 50% at 15% 25%, hsl(38 92% 46% / 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 50% at 15% 25%, hsl(var(--primary) / 0.06) 0%, transparent 60%),
     radial-gradient(ellipse 50% 60% at 85% 75%, hsl(262 80% 58% / 0.04) 0%, transparent 55%);
 }
 html.dark body {
   background-image:
-    radial-gradient(ellipse 60% 40% at 10% 20%, hsl(40 95% 55% / 0.05) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 10% 20%, hsl(var(--primary) / 0.05) 0%, transparent 55%),
     radial-gradient(ellipse 45% 50% at 90% 80%, hsl(262 80% 58% / 0.04) 0%, transparent 50%);
 }
 

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { authApi, cryptoApi, formatApiError } from "@/lib/api";
 import { initCrypto } from "@/lib/crypto";
+import { applyAccentColor, applyStoredAccentColor, getRandomAccentId } from "@/lib/accent-colors";
 
 const AuthContext = createContext(null);
 
@@ -12,6 +13,14 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await authApi.me();
       setUser(data);
+      const colorId = data?.accent_color || (() => {
+        const stored = localStorage.getItem("accent_color");
+        if (stored) return stored;
+        const r = getRandomAccentId();
+        localStorage.setItem("accent_color", r);
+        return r;
+      })();
+      applyAccentColor(colorId);
       if (data?.id) {
         // forcePub=true when server has no public_key yet (catches publish-failed-on-first-gen)
         initCrypto(data.id, (jwk) => cryptoApi.publishKey(jwk), !data.public_key).catch(console.error);
@@ -36,6 +45,14 @@ export function AuthProvider({ children }) {
     }
 
     setUser(data);
+    const colorId = data?.accent_color || (() => {
+      const stored = localStorage.getItem("accent_color");
+      if (stored) return stored;
+      const r = getRandomAccentId();
+      localStorage.setItem("accent_color", r);
+      return r;
+    })();
+    applyAccentColor(colorId);
     if (data?.id) {
       initCrypto(data.id, (jwk) => cryptoApi.publishKey(jwk), !data.public_key).catch(console.error);
     }
@@ -44,6 +61,14 @@ export function AuthProvider({ children }) {
 
   const completeMfaLogin = (data) => {
     setUser(data);
+    const colorId = data?.accent_color || (() => {
+      const stored = localStorage.getItem("accent_color");
+      if (stored) return stored;
+      const r = getRandomAccentId();
+      localStorage.setItem("accent_color", r);
+      return r;
+    })();
+    applyAccentColor(colorId);
     if (data?.id) {
       initCrypto(data.id, (jwk) => cryptoApi.publishKey(jwk), !data.public_key).catch(console.error);
     }
