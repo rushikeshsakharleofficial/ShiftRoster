@@ -23,6 +23,21 @@ const EMPTY_FORM = {
   send_welcome_email: true,
 };
 
+const formatDateForDisplay = (value) => {
+  if (!value) return "";
+  const datePart = String(value).slice(0, 10);
+  const match = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : datePart;
+};
+
+const normalizeDateOfBirth = (value) => {
+  const trimmed = String(value || "").trim();
+  let match = trimmed.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+  match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? trimmed : "";
+};
+
 export default function EmployeesPage() {
   const { user } = useAuth();
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -59,8 +74,9 @@ export default function EmployeesPage() {
   useEffect(() => { loadData(); }, [search, roleFilter, deptFilter]);
 
   const handleCreate = async () => {
-    if (!form.date_of_birth) {
-      toast.error("Date of birth is required");
+    const dateOfBirth = normalizeDateOfBirth(form.date_of_birth);
+    if (!dateOfBirth) {
+      toast.error("Enter date of birth as DD-MM-YYYY");
       return;
     }
     if (form.password && form.password.length < 12) {
@@ -69,7 +85,7 @@ export default function EmployeesPage() {
     }
     setSaving(true);
     try {
-      const payload = { ...form };
+      const payload = { ...form, date_of_birth: dateOfBirth };
       if (!payload.username) delete payload.username; // server auto-generates
       if (!payload.password) delete payload.password; // server generates setup token
       
@@ -85,9 +101,15 @@ export default function EmployeesPage() {
   };
 
   const handleUpdate = async () => {
+    const dateOfBirth = form.date_of_birth ? normalizeDateOfBirth(form.date_of_birth) : "";
+    if (form.date_of_birth && !dateOfBirth) {
+      toast.error("Enter date of birth as DD-MM-YYYY");
+      return;
+    }
     setSaving(true);
     try {
       const { password, email, ...updateData } = form;
+      if (dateOfBirth) updateData.date_of_birth = dateOfBirth;
       if (!updateData.username) delete updateData.username;
       await usersApi.update(showEdit, updateData);
       toast.success("Employee updated");
@@ -192,7 +214,7 @@ export default function EmployeesPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Employees</h1>
           <p className="text-sm text-muted-foreground">{total} team members</p>
         </div>
-        <Button data-testid="create-employee-btn" onClick={() => setShowCreate(true)}>
+        <Button data-testid="create-employee-btn" onClick={() => { setForm(EMPTY_FORM); setShowEdit(null); setShowCreate(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Add Employee
         </Button>
       </div>
@@ -307,7 +329,7 @@ export default function EmployeesPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => { setForm({ ...emp, password: "", username: emp.username || "", date_of_birth: (emp.date_of_birth || "").slice(0, 10) }); setShowEdit(emp.id); }}>
+                        <DropdownMenuItem onClick={() => { setForm({ ...emp, password: "", username: emp.username || "", date_of_birth: formatDateForDisplay(emp.date_of_birth) }); setShowEdit(emp.id); }}>
                           <Pencil className="h-3 w-3 mr-2" /> Edit
                         </DropdownMenuItem>
                         {(user?.system_role === "admin" || user?.system_role === "manager") && emp.mfa_enabled && (
@@ -331,7 +353,7 @@ export default function EmployeesPage() {
       </Card>
 
       {/* Create/Edit Dialog */}
-      <Dialog open={showCreate || !!showEdit} onOpenChange={() => { setShowCreate(false); setShowEdit(null); }}>
+      <Dialog open={showCreate || !!showEdit} onOpenChange={() => { setShowCreate(false); setShowEdit(null); setForm(EMPTY_FORM); }}>
         <DialogContent data-testid="employee-dialog" className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{showEdit ? "Edit Employee" : "Add Employee"}</DialogTitle>
@@ -365,7 +387,7 @@ export default function EmployeesPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Full Name</Label>
                 <Input data-testid="emp-name-input" value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} />
@@ -406,7 +428,7 @@ export default function EmployeesPage() {
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Role</Label>
                 <Select value={form.system_role} onValueChange={v => setForm({...form, system_role: v})}>
@@ -432,7 +454,7 @@ export default function EmployeesPage() {
                 </div>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Department</Label>
                 <Select value={form.department_id || "none"} onValueChange={v => setForm({...form, department_id: v === "none" ? "" : v})}>
@@ -456,11 +478,14 @@ export default function EmployeesPage() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Date of Birth</Label>
                 <Input
-                  type="date"
+                  data-testid="emp-dob-input"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="DD-MM-YYYY"
                   value={form.date_of_birth || ""}
                   onChange={e => setForm({ ...form, date_of_birth: e.target.value })}
                 />
@@ -476,7 +501,7 @@ export default function EmployeesPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCreate(false); setShowEdit(null); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowCreate(false); setShowEdit(null); setForm(EMPTY_FORM); }}>Cancel</Button>
             <Button data-testid="emp-save-btn" onClick={showEdit ? handleUpdate : handleCreate} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (showEdit ? "Update" : "Create")}
             </Button>
