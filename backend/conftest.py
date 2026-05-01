@@ -213,7 +213,7 @@ async def admin_token(async_client: AsyncClient, test_admin_user: dict):
         }
     )
     if response.status_code == 200:
-        return response.json()["access_token"]
+        return response.cookies.get("access_token")
     return None
 
 
@@ -228,7 +228,7 @@ async def manager_token(async_client: AsyncClient, test_manager_user: dict):
         }
     )
     if response.status_code == 200:
-        return response.json()["access_token"]
+        return response.cookies.get("access_token")
     return None
 
 
@@ -243,5 +243,5 @@ async def employee_token(async_client: AsyncClient, test_employee_user: dict):
         }
     )
     if response.status_code == 200:
-        return response.json()["access_token"]
+        return response.cookies.get("access_token")
     return None

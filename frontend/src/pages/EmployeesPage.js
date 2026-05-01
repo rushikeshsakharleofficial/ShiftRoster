@@ -19,6 +19,7 @@ const API_URL = import.meta.env.REACT_APP_BACKEND_URL || "";
 const EMPTY_FORM = {
   email: "", password: "", full_name: "", username: "", phone: "", mobile_alt: "",
   system_role: "employee", employee_level: "L1", department_id: "", employment_type: "full_time",
+  date_of_birth: "",
   send_welcome_email: true,
 };
 
@@ -58,6 +59,10 @@ export default function EmployeesPage() {
   useEffect(() => { loadData(); }, [search, roleFilter, deptFilter]);
 
   const handleCreate = async () => {
+    if (!form.date_of_birth) {
+      toast.error("Date of birth is required");
+      return;
+    }
     if (form.password && form.password.length < 12) {
       toast.error("Password must be at least 12 characters");
       return;
@@ -204,7 +209,7 @@ export default function EmployeesPage() {
             className="pl-9"
           />
         </div>
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
+        <Select value={roleFilter || "all"} onValueChange={(value) => setRoleFilter(value === "all" ? "" : value)}>
           <SelectTrigger className="w-[140px]" data-testid="role-filter">
             <SelectValue placeholder="All Roles" />
           </SelectTrigger>
@@ -215,7 +220,7 @@ export default function EmployeesPage() {
             <SelectItem value="employee">Employee</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={deptFilter} onValueChange={setDeptFilter}>
+        <Select value={deptFilter || "all"} onValueChange={(value) => setDeptFilter(value === "all" ? "" : value)}>
           <SelectTrigger className="w-[160px]" data-testid="dept-filter">
             <SelectValue placeholder="All Depts" />
           </SelectTrigger>
@@ -302,7 +307,7 @@ export default function EmployeesPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => { setForm({ ...emp, password: "", username: emp.username || "" }); setShowEdit(emp.id); }}>
+                        <DropdownMenuItem onClick={() => { setForm({ ...emp, password: "", username: emp.username || "", date_of_birth: (emp.date_of_birth || "").slice(0, 10) }); setShowEdit(emp.id); }}>
                           <Pencil className="h-3 w-3 mr-2" /> Edit
                         </DropdownMenuItem>
                         {(user?.system_role === "admin" || user?.system_role === "manager") && emp.mfa_enabled && (
@@ -452,6 +457,14 @@ export default function EmployeesPage() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Date of Birth</Label>
+                <Input
+                  type="date"
+                  value={form.date_of_birth || ""}
+                  onChange={e => setForm({ ...form, date_of_birth: e.target.value })}
+                />
+              </div>
               <div className="space-y-1.5">
                 <Label>Mobile Number</Label>
                 <Input data-testid="emp-phone-input" value={form.phone || ""} onChange={e => setForm({...form, phone: e.target.value})} placeholder="+1 555 000 0000" />

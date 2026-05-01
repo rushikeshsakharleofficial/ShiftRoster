@@ -47,7 +47,7 @@ export default function SetupPasswordPage() {
     setError("");
     setLoading(true);
     try {
-      await authApi.post("/setup-password", { token, password });
+      await authApi.setupPassword({ token, password });
       setSuccess(true);
       toast.success("Password set successfully!");
       setTimeout(() => navigate("/login"), 3000);

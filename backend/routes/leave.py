@@ -40,6 +40,15 @@ class LeaveReview(BaseModel):
 async def list_availability(request: Request, user_id: Optional[str] = None):
     current = await get_current_user(request)
     uid = user_id or current["id"]
+    if user_id and user_id != current["id"]:
+        if current["system_role"] not in ("admin", "manager"):
+            raise HTTPException(status_code=403, detail="Access denied")
+        try:
+            target = await db.users.find_one({"_id": ObjectId(user_id), "org_id": current.get("org_id")}, {"_id": 1})
+        except Exception:
+            target = None
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
     avail = await db.availability.find({"user_id": uid}).to_list(10)
     return serialize_list(avail)
 
@@ -76,6 +85,15 @@ async def delete_availability(avail_id: str, request: Request):
 async def list_blocks(request: Request, user_id: Optional[str] = None):
     current = await get_current_user(request)
     uid = user_id or current["id"]
+    if user_id and user_id != current["id"]:
+        if current["system_role"] not in ("admin", "manager"):
+            raise HTTPException(status_code=403, detail="Access denied")
+        try:
+            target = await db.users.find_one({"_id": ObjectId(user_id), "org_id": current.get("org_id")}, {"_id": 1})
+        except Exception:
+            target = None
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
     blocks = await db.availability_blocks.find({"user_id": uid}).to_list(50)
     return serialize_list(blocks)
 
@@ -206,12 +224,12 @@ async def review_leave(leave_id: str, data: LeaveReview, request: Request):
     if data.status not in ("approved", "rejected"):
         raise HTTPException(status_code=400, detail="Status must be approved or rejected")
 
-    leave = await db.leave_requests.find_one({"_id": ObjectId(leave_id)})
+    leave = await db.leave_requests.find_one({"_id": ObjectId(leave_id), "org_id": current.get("org_id")})
     if not leave:
         raise HTTPException(status_code=404, detail="Leave request not found")
 
     await db.leave_requests.update_one(
-        {"_id": ObjectId(leave_id)},
+        {"_id": ObjectId(leave_id), "org_id": current.get("org_id")},
         {"$set": {
             "status": data.status,
             "reviewed_by": current["id"],

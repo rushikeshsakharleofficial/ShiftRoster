@@ -194,9 +194,12 @@ class SwapReview(BaseModel):
 async def list_swaps(request: Request):
     current = await get_current_user(request)
     if current["system_role"] in ("admin", "manager"):
-        query = {}
+        query = {"org_id": current.get("org_id")}
     else:
-        query = {"$or": [{"requester_id": current["id"]}, {"target_id": current["id"]}]}
+        query = {
+            "org_id": current.get("org_id"),
+            "$or": [{"requester_id": current["id"]}, {"target_id": current["id"]}],
+        }
 
     swaps = await db.swap_requests.find(query).sort("created_at", -1).to_list(100)
     result = []
@@ -282,12 +285,24 @@ async def review_swap(swap_id: str, data: SwapReview, request: Request):
 @router.get("/attendance")
 async def list_attendance(request: Request, user_id: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None):
     current = await get_current_user(request)
+    org_user_docs = await db.users.find(
+        {"org_id": current.get("org_id")},
+        {"_id": 1},
+    ).to_list(5000)
+    org_user_ids = [str(u["_id"]) for u in org_user_docs]
+
     query = {}
 
     if current["system_role"] in ("admin", "manager"):
-        if user_id:
-            query["user_id"] = user_id
+        if user_id and user_id not in org_user_ids:
+            raise HTTPException(status_code=404, detail="User not found")
+        allowed_ids = [user_id] if user_id else org_user_ids
+        if not allowed_ids:
+            return []
+        query["user_id"] = {"$in": allowed_ids}
     else:
+        if user_id and user_id != current["id"]:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
         query["user_id"] = current["id"]
 
     if start_date:
@@ -327,6 +342,7 @@ async def clock_in(request: Request):
         raise HTTPException(status_code=400, detail="Already clocked in")
 
     doc = {
+        "org_id": current.get("org_id"),
         "user_id": current["id"],
         "shift_id": body.get("shift_id"),
         "clock_in": datetime.now(timezone.utc),
@@ -404,7 +420,9 @@ async def extend_shift(data: ExtendShiftRequest, request: Request):
     # Also extend the associated shift end_time if shift_id is present
     if log.get("shift_id"):
         try:
-            shift = await db.shifts.find_one({"_id": ObjectId(log["shift_id"])})
+            shift = await db.shifts.find_one(
+                {"_id": ObjectId(log["shift_id"]), "org_id": current.get("org_id")}
+            )
             if shift and shift.get("end_time"):
                 from datetime import datetime as dt
                 end_dt = shift["end_time"] if isinstance(shift["end_time"], datetime) else dt.fromisoformat(shift["end_time"].replace("Z", "+00:00"))
@@ -592,7 +610,15 @@ async def report_attendance(request: Request, start_date: Optional[str] = None, 
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    query = {}
+    org_user_docs = await db.users.find(
+        {"org_id": current.get("org_id")},
+        {"_id": 1},
+    ).to_list(5000)
+    org_user_ids = [str(u["_id"]) for u in org_user_docs]
+    if not org_user_ids:
+        return []
+
+    query = {"user_id": {"$in": org_user_ids}}
     if start_date:
         query["clock_in"] = {"$gte": datetime.fromisoformat(start_date)}
     if end_date:
@@ -823,7 +849,14 @@ async def export_csv(request: Request, report_type: str = "attendance"):
 
     if report_type == "attendance":
         writer.writerow(["Employee", "Clock In", "Clock Out", "Status", "Method", "Break (min)"])
-        logs = await db.attendance_logs.find().sort("clock_in", -1).to_list(1000)
+        org_user_docs = await db.users.find(
+            {"org_id": current.get("org_id")},
+            {"_id": 1},
+        ).to_list(5000)
+        org_user_ids = [str(u["_id"]) for u in org_user_docs]
+        logs = await db.attendance_logs.find(
+            {"user_id": {"$in": org_user_ids}}
+        ).sort("clock_in", -1).to_list(1000)
         for l in logs:
             user = await db.users.find_one({"_id": ObjectId(l["user_id"])}, {"full_name": 1})
             name = user.get("full_name", "") if user else ""
@@ -887,14 +920,27 @@ async def attendance_chart_data(request: Request, days: int = 14):
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
+    org_user_docs = await db.users.find(
+        {"org_id": current.get("org_id")},
+        {"_id": 1},
+    ).to_list(5000)
+    org_user_ids = [str(u["_id"]) for u in org_user_docs]
+
     chart_data = []
     now = datetime.now(timezone.utc)
     for i in range(days - 1, -1, -1):
         day = now - timedelta(days=i)
         day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
         day_end = day_start + timedelta(days=1)
-        count = await db.attendance_logs.count_documents({"clock_in": {"$gte": day_start, "$lt": day_end}})
-        late = await db.attendance_logs.count_documents({"clock_in": {"$gte": day_start, "$lt": day_end}, "status": "late"})
+        count = await db.attendance_logs.count_documents({
+            "user_id": {"$in": org_user_ids},
+            "clock_in": {"$gte": day_start, "$lt": day_end},
+        })
+        late = await db.attendance_logs.count_documents({
+            "user_id": {"$in": org_user_ids},
+            "clock_in": {"$gte": day_start, "$lt": day_end},
+            "status": "late",
+        })
         chart_data.append({
             "date": day_start.strftime("%Y-%m-%d"),
             "label": day_start.strftime("%b %d"),

@@ -1,5 +1,7 @@
 
 import asyncio
+import os
+import secrets
 from db import db
 from auth_utils import hash_password
 from datetime import datetime, timezone
@@ -26,10 +28,14 @@ async def create_admin():
     # Check if admin exists
     admin = await db.users.find_one({"email": "admin@shiftmaster.com"})
     if not admin:
+        admin_password = os.getenv("CREATE_ADMIN_PASSWORD")
+        if not admin_password:
+            admin_password = secrets.token_urlsafe(16)
+            print("CREATE_ADMIN_PASSWORD not set. Generated admin password:", admin_password)
         await db.users.insert_one({
             "email": "admin@shiftmaster.com",
             "username": "admin",
-            "password_hash": hash_password("admin123"),
+            "password_hash": hash_password(admin_password),
             "full_name": "Admin User",
             "system_role": "admin",
             "org_id": oid,

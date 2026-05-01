@@ -227,7 +227,7 @@ async def test_private_scope_hidden_from_other_user(
         "/api/auth/login",
         json={"email": other["email"], "password": "Other@123456"},
     )
-    other_token = login.json()["access_token"]
+    other_token = login.cookies.get("access_token")
 
     # First employee uploads a private folder
     await async_client.post(
@@ -276,7 +276,7 @@ async def test_shared_scope_visible_to_org(
         "/api/auth/login",
         json={"email": other["email"], "password": "Other@123456"},
     )
-    other_token = login.json()["access_token"]
+    other_token = login.cookies.get("access_token")
 
     # Employee #1 creates a shared folder
     await async_client.post(

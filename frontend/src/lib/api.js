@@ -50,6 +50,7 @@ export const authApi = {
   logout: () => api.post("/auth/logout"),
   me: () => api.get("/auth/me"),
   refresh: () => api.post("/auth/refresh"),
+  setupPassword: (data) => api.post("/auth/setup-password", data),
   // MFA
   verifyMfa: (data) => api.post("/auth/verify-mfa", data),
   setupMfa: (data, mfaToken) => {

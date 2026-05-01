@@ -67,11 +67,14 @@ async def update_department(dept_id: str, data: DepartmentUpdate, request: Reque
     if not update:
         raise HTTPException(status_code=400, detail="No fields to update")
 
-    result = await db.departments.update_one({"_id": ObjectId(dept_id)}, {"$set": update})
+    result = await db.departments.update_one(
+        {"_id": ObjectId(dept_id), "org_id": current.get("org_id")},
+        {"$set": update},
+    )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Department not found")
 
-    updated = await db.departments.find_one({"_id": ObjectId(dept_id)})
+    updated = await db.departments.find_one({"_id": ObjectId(dept_id), "org_id": current.get("org_id")})
     await log_audit(current.get("org_id"), current["id"], "update", "department", dept_id)
     return serialize_doc(updated)
 
@@ -82,7 +85,7 @@ async def delete_department(dept_id: str, request: Request):
     if current["system_role"] != "admin":
         raise HTTPException(status_code=403, detail="Only admin can delete departments")
 
-    result = await db.departments.delete_one({"_id": ObjectId(dept_id)})
+    result = await db.departments.delete_one({"_id": ObjectId(dept_id), "org_id": current.get("org_id")})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Department not found")
     await log_audit(current.get("org_id"), current["id"], "delete", "department", dept_id)
@@ -121,7 +124,7 @@ async def delete_position(pos_id: str, request: Request):
     if current["system_role"] != "admin":
         raise HTTPException(status_code=403, detail="Only admin can delete positions")
 
-    result = await db.positions.delete_one({"_id": ObjectId(pos_id)})
+    result = await db.positions.delete_one({"_id": ObjectId(pos_id), "org_id": current.get("org_id")})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Position not found")
     return {"message": "Position deleted"}

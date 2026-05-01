@@ -80,11 +80,14 @@ async def update_group(group_id: str, data: GroupUpdate, request: Request):
     if not update:
         raise HTTPException(status_code=400, detail="No fields to update")
 
-    result = await db.manager_groups.update_one({"_id": ObjectId(group_id)}, {"$set": update})
+    result = await db.manager_groups.update_one(
+        {"_id": ObjectId(group_id), "org_id": current.get("org_id")},
+        {"$set": update},
+    )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Group not found")
 
-    updated = await db.manager_groups.find_one({"_id": ObjectId(group_id)})
+    updated = await db.manager_groups.find_one({"_id": ObjectId(group_id), "org_id": current.get("org_id")})
     return serialize_doc(updated)
 
 
@@ -94,7 +97,9 @@ async def delete_group(group_id: str, request: Request):
     if current["system_role"] != "admin":
         raise HTTPException(status_code=403, detail="Only admin can delete manager groups")
 
-    await db.manager_groups.delete_one({"_id": ObjectId(group_id)})
+    result = await db.manager_groups.delete_one({"_id": ObjectId(group_id), "org_id": current.get("org_id")})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Group not found")
     await db.manager_group_members.delete_many({"group_id": group_id})
     await db.manager_group_departments.delete_many({"group_id": group_id})
 
@@ -108,10 +113,18 @@ async def add_member(group_id: str, request: Request):
     if current["system_role"] != "admin":
         raise HTTPException(status_code=403, detail="Only admin can add members")
 
+    group = await db.manager_groups.find_one({"_id": ObjectId(group_id), "org_id": current.get("org_id")})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
     body = await request.json()
     user_id = body.get("user_id")
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id required")
+
+    target_user = await db.users.find_one({"_id": ObjectId(user_id), "org_id": current.get("org_id")}, {"_id": 1})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
 
     existing = await db.manager_group_members.find_one({"group_id": group_id, "user_id": user_id})
     if existing:
@@ -132,6 +145,10 @@ async def remove_member(group_id: str, user_id: str, request: Request):
     if current["system_role"] != "admin":
         raise HTTPException(status_code=403, detail="Only admin can remove members")
 
+    group = await db.manager_groups.find_one({"_id": ObjectId(group_id), "org_id": current.get("org_id")}, {"_id": 1})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
     await db.manager_group_members.delete_one({"group_id": group_id, "user_id": user_id})
     return {"message": "Member removed"}
 
@@ -142,10 +159,18 @@ async def add_department(group_id: str, request: Request):
     if current["system_role"] != "admin":
         raise HTTPException(status_code=403, detail="Only admin can manage group departments")
 
+    group = await db.manager_groups.find_one({"_id": ObjectId(group_id), "org_id": current.get("org_id")})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
     body = await request.json()
     dept_id = body.get("department_id")
     if not dept_id:
         raise HTTPException(status_code=400, detail="department_id required")
+
+    target_dept = await db.departments.find_one({"_id": ObjectId(dept_id), "org_id": current.get("org_id")}, {"_id": 1})
+    if not target_dept:
+        raise HTTPException(status_code=404, detail="Department not found")
 
     existing = await db.manager_group_departments.find_one({"group_id": group_id, "department_id": dept_id})
     if existing:
@@ -163,6 +188,10 @@ async def remove_department(group_id: str, dept_id: str, request: Request):
     current = await get_current_user(request)
     if current["system_role"] != "admin":
         raise HTTPException(status_code=403, detail="Only admin can manage group departments")
+
+    group = await db.manager_groups.find_one({"_id": ObjectId(group_id), "org_id": current.get("org_id")}, {"_id": 1})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
 
     await db.manager_group_departments.delete_one({"group_id": group_id, "department_id": dept_id})
     return {"message": "Department removed from group"}

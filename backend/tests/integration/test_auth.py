@@ -15,7 +15,8 @@ async def test_login_success(async_client, test_admin_user):
     )
     assert response.status_code == 200
     data = response.json()
-    assert "access_token" in data
+    assert "email" in data
+    assert response.cookies.get("access_token")
 
 
 @pytest.mark.integration

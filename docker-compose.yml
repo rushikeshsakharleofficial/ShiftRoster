@@ -31,6 +31,7 @@ services:
       MONGO_URL: mongodb://${MONGO_USER:-shiftroster}:${MONGO_PASSWORD}@mongo:27017/?authSource=admin
       DB_NAME: shiftroster
       JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY: ${SECRET_KEY}
       SECURE_COOKIES: ${SECURE_COOKIES:-true}
       APP_URL: ${APP_URL:-http://localhost}
       MSG_ENCRYPT_KEY: ${MSG_ENCRYPT_KEY}

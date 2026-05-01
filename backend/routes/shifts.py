@@ -294,11 +294,39 @@ async def list_assignments(
     user_id: Optional[str] = None,
 ):
     current = await get_current_user(request)
-    query = {}
+    org_id = current.get("org_id")
+
+    # Scope assignments to shifts in caller's org (legacy-safe for rows without org_id).
     if shift_id:
-        query["shift_id"] = shift_id
-    if user_id:
+        try:
+            shift = await db.shifts.find_one({"_id": ObjectId(shift_id), "org_id": org_id}, {"_id": 1})
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid shift_id")
+        if not shift:
+            raise HTTPException(status_code=404, detail="Shift not found")
+        allowed_shift_ids = [shift_id]
+    else:
+        shift_docs = await db.shifts.find({"org_id": org_id}, {"_id": 1}).to_list(5000)
+        allowed_shift_ids = [str(s["_id"]) for s in shift_docs]
+
+    if not allowed_shift_ids:
+        return []
+
+    query = {"shift_id": {"$in": allowed_shift_ids}}
+
+    if current["system_role"] not in ("admin", "manager"):
+        if user_id and user_id != current["id"]:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        query["user_id"] = current["id"]
+    elif user_id:
+        try:
+            target_user = await db.users.find_one({"_id": ObjectId(user_id), "org_id": org_id}, {"_id": 1})
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid user_id")
+        if not target_user:
+            return []
         query["user_id"] = user_id
+
     assignments = await db.shift_assignments.find(query).to_list(500)
     return serialize_list(assignments)
 
@@ -309,12 +337,27 @@ async def create_assignment(data: AssignmentCreate, request: Request):
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
+    try:
+        shift = await db.shifts.find_one({"_id": ObjectId(data.shift_id), "org_id": current.get("org_id")})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid shift_id")
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    try:
+        assignee = await db.users.find_one({"_id": ObjectId(data.user_id), "org_id": current.get("org_id")})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid user_id")
+    if not assignee:
+        raise HTTPException(status_code=404, detail="User not found")
+
     # Check for existing assignment
     existing = await db.shift_assignments.find_one({"shift_id": data.shift_id, "user_id": data.user_id})
     if existing:
         raise HTTPException(status_code=400, detail="User already assigned to this shift")
 
     doc = {
+        "org_id": current.get("org_id"),
         "shift_id": data.shift_id,
         "user_id": data.user_id,
         "status": "assigned",
@@ -325,13 +368,11 @@ async def create_assignment(data: AssignmentCreate, request: Request):
     doc["_id"] = result.inserted_id
 
     # Notify assigned user
-    shift = await db.shifts.find_one({"_id": ObjectId(data.shift_id)})
-    if shift:
-        await create_notification(
-            data.user_id, "shift_assigned",
-            f"You have been assigned to: {shift.get('title', 'a shift')}",
-            link="/shifts"
-        )
+    await create_notification(
+        data.user_id, "shift_assigned",
+        f"You have been assigned to: {shift.get('title', 'a shift')}",
+        link="/shifts"
+    )
 
     return serialize_doc(doc)
 
@@ -342,11 +383,32 @@ async def delete_assignment(assignment_id: str, request: Request):
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    assignment = await db.shift_assignments.find_one({"_id": ObjectId(assignment_id)})
-    await db.shift_assignments.delete_one({"_id": ObjectId(assignment_id)})
+    try:
+        assignment_oid = ObjectId(assignment_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid assignment_id")
+
+    assignment = await db.shift_assignments.find_one({"_id": assignment_oid})
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    if assignment.get("org_id") and assignment.get("org_id") != current.get("org_id"):
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    shift = None
+    if assignment.get("shift_id"):
+        try:
+            shift = await db.shifts.find_one(
+                {"_id": ObjectId(assignment["shift_id"]), "org_id": current.get("org_id")}
+            )
+        except Exception:
+            shift = None
+    if not shift:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    await db.shift_assignments.delete_one({"_id": assignment_oid})
 
     if assignment:
-        shift = await db.shifts.find_one({"_id": ObjectId(assignment["shift_id"])}) if assignment.get("shift_id") else None
         title = shift.get("title", "a shift") if shift else "a shift"
         await create_notification(
             assignment["user_id"], "shift_unassigned",
@@ -362,9 +424,22 @@ async def delete_assignment(assignment_id: str, request: Request):
 @router.get("/open-shift-claims")
 async def list_claims(request: Request, shift_id: Optional[str] = None):
     current = await get_current_user(request)
-    query = {}
     if shift_id:
-        query["shift_id"] = shift_id
+        try:
+            shift = await db.shifts.find_one({"_id": ObjectId(shift_id), "org_id": current.get("org_id")}, {"_id": 1})
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid shift_id")
+        if not shift:
+            raise HTTPException(status_code=404, detail="Shift not found")
+        allowed_shift_ids = [shift_id]
+    else:
+        shift_docs = await db.shifts.find({"org_id": current.get("org_id")}, {"_id": 1}).to_list(5000)
+        allowed_shift_ids = [str(s["_id"]) for s in shift_docs]
+
+    if not allowed_shift_ids:
+        return []
+
+    query = {"shift_id": {"$in": allowed_shift_ids}}
     claims = await db.open_shift_claims.find(query).to_list(100)
     return serialize_list(claims)
 
@@ -377,7 +452,7 @@ async def move_shift(shift_id: str, data: ShiftMoveRequest, request: Request):
     if current["system_role"] not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    shift = await db.shifts.find_one({"_id": ObjectId(shift_id)})
+    shift = await db.shifts.find_one({"_id": ObjectId(shift_id), "org_id": current.get("org_id")})
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
 
@@ -509,7 +584,10 @@ async def claim_open_shift(request: Request):
     if not shift_id:
         raise HTTPException(status_code=400, detail="shift_id required")
 
-    shift = await db.shifts.find_one({"_id": ObjectId(shift_id)})
+    try:
+        shift = await db.shifts.find_one({"_id": ObjectId(shift_id), "org_id": current.get("org_id")})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid shift_id")
     if not shift or not shift.get("is_open"):
         raise HTTPException(status_code=400, detail="Shift is not open for claims")
 
@@ -518,6 +596,7 @@ async def claim_open_shift(request: Request):
         raise HTTPException(status_code=400, detail="Already claimed")
 
     doc = {
+        "org_id": current.get("org_id"),
         "shift_id": shift_id,
         "user_id": current["id"],
         "status": "pending",
