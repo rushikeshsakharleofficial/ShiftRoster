@@ -26,8 +26,9 @@ jobs:
         env:
           MONGO_URL: mongodb://localhost:27017
           DB_NAME: shift_roster_pr_checks
-          JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
-        run: python -m pytest tests/unit -q --override-ini="addopts=" --noconftest
+        run: |
+          export JWT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          python -m pytest tests/unit -q --override-ini="addopts=" --noconftest
 
   frontend-build:
     name: Frontend build
