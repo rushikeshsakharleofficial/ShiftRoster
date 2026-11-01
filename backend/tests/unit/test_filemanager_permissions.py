@@ -71,3 +71,14 @@ def test_unknown_scope_cannot_be_read(item):
     user = user_for(item, "admin")
     item["scope"] = "unexpected"
     assert not _can_read(item, user)
+
+
+@pytest.mark.parametrize("missing", ["both", "owner", "user"])
+def test_missing_ownership_identifiers_never_grant_access(item, missing):
+    user = user_for(item, "employee")
+    if missing in ("both", "owner"):
+        item.pop("owner_id")
+    if missing in ("both", "user"):
+        user.pop("id")
+    assert not _can_read(item, user)
+    assert not _can_mutate(item, user)
