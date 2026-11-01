@@ -83,16 +83,34 @@ def _items_response(docs: list) -> list:
 
 # ── Permission helpers ──
 
+def _same_org(item: dict, user: dict) -> bool:
+    """Never allow an item from another (or unknown) tenant."""
+    org_id = user.get("org_id")
+    item_org_id = item.get("org_id")
+    return bool(org_id and item_org_id and str(org_id) == str(item_org_id))
+
+
+def _is_owner(item: dict, user: dict) -> bool:
+    """Missing IDs must never grant ownership."""
+    owner_id = item.get("owner_id")
+    user_id = user.get("id")
+    return bool(owner_id and user_id and str(owner_id) == str(user_id))
+
+
 def _can_read(item: dict, user: dict) -> bool:
+    if not _same_org(item, user):
+        return False
     is_priv = user.get("system_role") in ("admin", "manager")
-    if item["scope"] == "private":
-        return str(item["owner_id"]) == user["id"] or is_priv
-    return str(item["org_id"]) == str(user.get("org_id"))
+    if item.get("scope") == "private":
+        return _is_owner(item, user) or is_priv
+    return item.get("scope") == "shared"
 
 
 def _can_mutate(item: dict, user: dict) -> bool:
+    if not _same_org(item, user):
+        return False
     is_priv = user.get("system_role") in ("admin", "manager")
-    return str(item["owner_id"]) == user["id"] or is_priv
+    return _is_owner(item, user) or is_priv
 
 
 async def _get_org_max_bytes(user: dict) -> int:
